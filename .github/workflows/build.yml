@@ -37,8 +37,15 @@ jobs:
           fi
 
       - name: Decode signing key
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/opencode.jks"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/opencode.jks"
+            echo "signing key ready"
+          else
+            echo "no signing key secret; release will fall back to debug signing"
+          fi
 
       - name: Unit tests
         run: |

@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     val keystorePath = System.getenv("OPENCODE_KEYSTORE")
-    val hasReleaseKey = keystorePath != null && file(keystorePath).exists()
+    val hasReleaseKey = keystorePath != null && file(keystorePath).let { it.exists() && it.length() > 0 }
 
     defaultConfig {
         applicationId = "com.opencode.mobile"
