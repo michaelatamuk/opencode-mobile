@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -69,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.R
+import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
 import java.time.Instant
@@ -107,6 +110,8 @@ fun SessionListScreen(
 ) {
     val vm: SessionListViewModel = viewModel(key = "sessions") { SessionListViewModel(repo) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val seenStore = remember { SeenStore(context) }
 
     var query by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -267,8 +272,13 @@ fun SessionListScreen(
 
                     items(sessions, key = { it.id }) { session ->
                         Box(Modifier.animateItem()) {
+                            val seen = remember(session.id, session.updated) {
+                                seenStore.lastSeen(session.id)
+                            }
                             SessionRow(
                                 session = session,
+                                preview = state.previews[session.id],
+                                unread = seen > 0L && session.updated > seen,
                                 onOpen = { onOpen(session) },
                                 onRename = { renaming = session },
                                 onDelete = { deleting = session }
@@ -356,9 +366,12 @@ private fun ActiveStrip(running: List<SessionItem>, onOpen: (SessionItem) -> Uni
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionRow(
     session: SessionItem,
+    preview: String?,
+    unread: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit
@@ -369,8 +382,11 @@ private fun SessionRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .padding(start = 20.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+            .combinedClickable(
+                onClick = onOpen,
+                onLongClick = { menuOpen = true }
+            )
+            .padding(start = 20.dp, end = 6.dp, top = 11.dp, bottom = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -378,23 +394,45 @@ private fun SessionRow(
                 if (session.running) {
                     PulsingDot(color = MaterialTheme.colorScheme.secondary, pulsing = true, size = 6)
                     Spacer(Modifier.width(7.dp))
+                } else if (unread) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    )
+                    Spacer(Modifier.width(7.dp))
                 }
                 Text(
                     session.title,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    relativeTime(session.updated),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                buildString {
-                    append(relativeTime(session.updated))
-                    if (cost.isNotBlank()) append("  ·  ").append(cost)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (!preview.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else if (cost.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    cost,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Box {

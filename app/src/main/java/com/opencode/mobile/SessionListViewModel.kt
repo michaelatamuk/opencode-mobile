@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 
 data class SessionListUiState(
     val sessions: List<SessionItem> = emptyList(),
+    val previews: Map<String, String> = emptyMap(),
     val loading: Boolean = true,
     val error: String? = null,
     val failures: Int = 0
@@ -22,6 +23,8 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
 
     private val _state = MutableStateFlow(SessionListUiState())
     val state: StateFlow<SessionListUiState> = _state.asStateFlow()
+
+    private val previewCache = mutableMapOf<String, Pair<Long, String>>()
 
     init {
         viewModelScope.launch {
@@ -36,12 +39,33 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
         viewModelScope.launch { refreshNow() }
     }
 
+    /**
+     * Fetch a preview only for sessions whose `updated` changed, capped so the
+     * poll stays cheap. Cached entries survive between refreshes.
+     */
+    private suspend fun loadPreviews(sessions: List<SessionItem>) {
+        val stale = sessions
+            .filter { previewCache[it.id]?.first != it.updated }
+            .take(12)
+        if (stale.isEmpty()) return
+
+        stale.forEach { session ->
+            val text = runCatching { repo.lastPreview(session.id) }.getOrNull()
+            previewCache[session.id] = session.updated to (text ?: "")
+        }
+
+        _state.update { current ->
+            current.copy(previews = previewCache.mapValues { it.value.second })
+        }
+    }
+
     private suspend fun refreshNow() {
         try {
             val sessions = repo.sessions()
             _state.update {
                 it.copy(sessions = sessions, loading = false, error = null, failures = 0)
             }
+            loadPreviews(sessions)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -190,6 +190,13 @@ class Api(server: String, private val password: String) {
         getJson("/api/session/$id").getJSONObject("data").toSession()
     }
 
+    /** One-line preview of the newest message, for the session list. */
+    suspend fun lastPreview(sessionID: String): String? {
+        val page = messages(sessionID, limit = 1)
+        val text = page.messages.lastOrNull()?.plainText.orEmpty()
+        return text.replace(Regex("\\s+"), " ").trim().take(120).ifBlank { null }
+    }
+
     suspend fun renameSession(id: String, title: String): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject().put("title", title).toString().toRequestBody(jsonType)
         client.newCall(request("/api/session/$id").patch(body).build()).execute().use { r ->

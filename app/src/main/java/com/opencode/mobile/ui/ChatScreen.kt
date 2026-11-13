@@ -117,6 +117,7 @@ import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.R
+import com.opencode.mobile.SeenStore
 import com.opencode.mobile.WatchState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -168,7 +169,13 @@ fun ChatScreen(
     val lastId = state.messages.lastOrNull()?.id
     val lastLength = state.messages.lastOrNull()?.plainText?.length
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
+    val seenStore = remember(context) { SeenStore(context) }
     var initialPositioned by remember(sessionID) { mutableStateOf(false) }
+
+    LaunchedEffect(lastId) {
+        val last = state.messages.lastOrNull() ?: return@LaunchedEffect
+        seenStore.markSeen(sessionID, if (last.created > 0) last.created else System.currentTimeMillis())
+    }
 
     // Jump straight to the newest message. Animating across dozens of items is what
     // left the view stranded mid-history on long sessions.

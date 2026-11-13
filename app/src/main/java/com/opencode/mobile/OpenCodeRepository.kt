@@ -12,6 +12,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun sessions(): List<SessionItem> = api.sessions()
 
+    suspend fun lastPreview(sessionID: String): String? = api.lastPreview(sessionID)
+
     suspend fun session(id: String): SessionItem = api.session(id)
 
     suspend fun createSession(): String = api.createSession()
