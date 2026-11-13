@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
@@ -81,12 +82,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -152,8 +156,21 @@ fun ChatScreen(
     val lastId = state.messages.lastOrNull()?.id
     val lastLength = state.messages.lastOrNull()?.plainText?.length
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
+    var initialPositioned by remember(sessionID) { mutableStateOf(false) }
+
+    // Jump straight to the newest message. Animating across dozens of items is what
+    // left the view stranded mid-history on long sessions.
+    LaunchedEffect(state.messages.size) {
+        if (!initialPositioned && state.messages.isNotEmpty()) {
+            listState.scrollToItem(state.messages.lastIndex)
+            initialPositioned = true
+        }
+    }
+
     LaunchedEffect(lastId, lastLength) {
-        if (state.messages.isNotEmpty()) {
+        if (!initialPositioned || state.messages.isEmpty()) return@LaunchedEffect
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (lastVisible >= state.messages.lastIndex - 2) {
             runCatching { listState.animateScrollToItem(state.messages.lastIndex) }
         }
     }
@@ -226,6 +243,18 @@ fun ChatScreen(
                     }
                 }
             }
+
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(MaterialTheme.colorScheme.background, Color.Transparent)
+                        )
+                    )
+            )
 
             if (listState.canScrollForward) {
                 FilledTonalIconButton(
@@ -513,6 +542,23 @@ private fun AssistantMessage(message: Msg) {
                 }
             }
             if (message.pending) TypingIndicator(compact = true)
+
+            if (!message.pending && message.plainText.isNotBlank()) {
+                val clipboard = LocalClipboardManager.current
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(
+                        onClick = { clipboard.setText(AnnotatedString(message.plainText)) },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.ContentCopy,
+                            contentDescription = stringResource(R.string.chat_copy_message),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

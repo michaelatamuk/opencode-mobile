@@ -14,7 +14,8 @@ import kotlinx.coroutines.launch
 data class SessionListUiState(
     val sessions: List<SessionItem> = emptyList(),
     val loading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val failures: Int = 0
 )
 
 class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
@@ -38,11 +39,21 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
     private suspend fun refreshNow() {
         try {
             val sessions = repo.sessions()
-            _state.update { it.copy(sessions = sessions, loading = false, error = null) }
+            _state.update {
+                it.copy(sessions = sessions, loading = false, error = null, failures = 0)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _state.update { it.copy(loading = false, error = friendlyError(e)) }
+            val failures = _state.value.failures + 1
+            // A single dropped poll is normal on mobile; only surface sustained failure.
+            _state.update {
+                it.copy(
+                    loading = false,
+                    failures = failures,
+                    error = if (failures >= 2) friendlyError(e) else it.error
+                )
+            }
         }
     }
 

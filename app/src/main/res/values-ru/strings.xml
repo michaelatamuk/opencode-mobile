@@ -21,6 +21,8 @@
     <string name="sessions_empty_body">Запустите сессию в TUI или создайте её здесь.</string>
     <string name="sessions_unreachable_title">Сервер недоступен</string>
     <string name="sessions_reconnecting">Переподключение. %1$s</string>
+    <string name="sessions_reconnecting_short">Переподключение</string>
+    <string name="sessions_running_header">Работает</string>
     <string name="session_running">работает</string>
     <string name="session_untitled">Без названия</string>
     <string name="session_new">Новая сессия</string>
@@ -58,6 +60,7 @@
     <string name="chat_show_thoughts">Показать размышления</string>
     <string name="chat_hide_thoughts">Скрыть размышления</string>
     <string name="chat_copy_code">Копировать код</string>
+    <string name="chat_copy_message">Копировать сообщение</string>
     <string name="chat_code_label">код</string>
     <string name="chat_input">Ввод</string>
     <string name="chat_output">Вывод</string>

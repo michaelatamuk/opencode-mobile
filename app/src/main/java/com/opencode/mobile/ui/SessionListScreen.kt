@@ -110,8 +110,9 @@ fun SessionListScreen(
         if (query.isBlank()) state.sessions
         else state.sessions.filter { it.title.contains(query, ignoreCase = true) }
     }
+    val running = remember(filtered) { filtered.filter { it.running } }
     val grouped = remember(filtered) {
-        filtered.groupBy { groupOf(it.updated) }
+        filtered.filterNot { it.running }.groupBy { groupOf(it.updated) }
     }
 
     val contentAlpha by animateFloatAsState(
@@ -205,19 +206,28 @@ fun SessionListScreen(
                 )
             )
 
-            AnimatedVisibility(visible = state.error != null && state.sessions.isNotEmpty()) {
+            if (state.error != null && state.sessions.isNotEmpty()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                    shape = CircleShape,
+                    modifier = Modifier.padding(start = 20.dp, top = 2.dp)
                 ) {
-                    Text(
-                        stringResource(R.string.sessions_reconnecting, state.error ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        maxLines = 2,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                    )
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PulsingDot(
+                            color = MaterialTheme.colorScheme.error,
+                            pulsing = true,
+                            size = 6
+                        )
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            stringResource(R.string.sessions_reconnecting_short),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
 
@@ -251,10 +261,52 @@ fun SessionListScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
+                        top = 4.dp,
                         bottom = 110.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (running.isNotEmpty()) {
+                        stickyHeader(key = "header-running") {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .padding(start = 4.dp, top = 10.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PulsingDot(
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    pulsing = true,
+                                    size = 6
+                                )
+                                Spacer(Modifier.width(7.dp))
+                                Text(
+                                    stringResource(R.string.sessions_running_header),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "${running.size}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        items(running, key = { it.id }) { session ->
+                            Box(Modifier.animateItem()) {
+                                SessionRow(
+                                    session = session,
+                                    onOpen = { onOpen(session) },
+                                    onRename = { renaming = session },
+                                    onDelete = { deleting = session }
+                                )
+                            }
+                        }
+                    }
+
                     SessionGroup.entries.forEach { group ->
                         val sessions = grouped[group].orEmpty()
                         if (sessions.isEmpty()) return@forEach
