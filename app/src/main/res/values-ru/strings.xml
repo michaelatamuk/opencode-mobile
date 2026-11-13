@@ -23,6 +23,9 @@
     <string name="sessions_reconnecting">Переподключение. %1$s</string>
     <string name="sessions_reconnecting_short">Переподключение</string>
     <string name="sessions_running_header">Работает</string>
+    <string name="sessions_more_running">Ещё выполняются: %1$d</string>
+    <string name="sessions_show_all">Показать все</string>
+    <string name="sessions_all_running">Работающие сессии</string>
     <string name="session_running">работает</string>
     <string name="session_untitled">Без названия</string>
     <string name="session_new">Новая сессия</string>
@@ -113,5 +116,7 @@
     <string name="notif_running">Работает: %1$d</string>
     <string name="notif_waiting">Ожидание запуска сессии</string>
     <string name="notif_finished">Завершено — нажмите, чтобы открыть</string>
+    <string name="notif_form_title">Вопрос от OpenCode</string>
+    <string name="notif_form_fallback">OpenCode ждёт ответа</string>
     <string name="notif_session_fallback">Сессия</string>
 </resources>

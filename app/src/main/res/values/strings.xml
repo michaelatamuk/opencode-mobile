@@ -25,6 +25,9 @@
     <string name="sessions_reconnecting">Reconnecting. %1$s</string>
     <string name="sessions_reconnecting_short">Reconnecting</string>
     <string name="sessions_running_header">Running</string>
+    <string name="sessions_more_running">%1$d more running</string>
+    <string name="sessions_show_all">Show all</string>
+    <string name="sessions_all_running">Running sessions</string>
     <string name="session_running">running</string>
     <string name="session_untitled">Untitled session</string>
     <string name="session_new">New session</string>
@@ -121,5 +124,7 @@
     <string name="notif_running">%1$d running</string>
     <string name="notif_waiting">Waiting for a session to run</string>
     <string name="notif_finished">Finished — tap to open</string>
+    <string name="notif_form_title">Question from OpenCode</string>
+    <string name="notif_form_fallback">OpenCode is waiting for an answer</string>
     <string name="notif_session_fallback">Session</string>
 </resources>

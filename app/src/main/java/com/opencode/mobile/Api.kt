@@ -190,10 +190,13 @@ class Api(server: String, private val password: String) {
         getJson("/api/session/$id").getJSONObject("data").toSession()
     }
 
-    /** One-line preview of the newest message, for the session list. */
+    /** One-line preview of the newest real message, for the session list. */
     suspend fun lastPreview(sessionID: String): String? {
-        val page = messages(sessionID, limit = 1)
-        val text = page.messages.lastOrNull()?.plainText.orEmpty()
+        val page = messages(sessionID, limit = 8)
+        val text = page.messages.asReversed()
+            .firstOrNull { it.plainText.isNotBlank() }
+            ?.plainText
+            .orEmpty()
         return text.replace(Regex("\\s+"), " ").trim().take(120).ifBlank { null }
     }
 
@@ -472,8 +475,8 @@ class Api(server: String, private val password: String) {
         }
     }
 
-    /** Emits once for every server-sent event; used as a "something changed" signal. */
-    fun events(): Flow<Unit> = callbackFlow {
+    /** Emits the JSON payload of every server-sent event. */
+    fun events(): Flow<String> = callbackFlow {
         val call = streamClient.newCall(
             request("/api/event").header("Accept", "text/event-stream").get().build()
         )
@@ -491,7 +494,7 @@ class Api(server: String, private val password: String) {
                     }
                     while (!source.exhausted()) {
                         val line = source.readUtf8Line() ?: break
-                        if (line.startsWith("data:")) trySend(Unit)
+                        if (line.startsWith("data:")) trySend(line.removePrefix("data:").trim())
                     }
                 }
                 close()

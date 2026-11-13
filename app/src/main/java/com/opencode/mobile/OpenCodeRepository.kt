@@ -50,7 +50,7 @@ class OpenCodeRepository(val api: Api) {
      * Event stream that reconnects with exponential backoff instead of dying on
      * the first network hiccup.
      */
-    fun events(): Flow<Unit> = api.events().retryWhen { _, attempt ->
+    fun events(): Flow<String> = api.events().retryWhen { _, attempt ->
         delay(backoffMillis(attempt))
         true
     }

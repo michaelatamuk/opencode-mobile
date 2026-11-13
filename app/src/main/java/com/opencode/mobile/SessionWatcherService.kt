@@ -1,8 +1,6 @@
 package com.opencode.mobile
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
@@ -19,7 +17,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 
 /** Which session is on screen right now, so we don't notify about it. */
 object WatchState {
@@ -28,18 +27,19 @@ object WatchState {
 }
 
 /**
- * Keeps one background poll against the OpenCode server and posts a notification
- * when a session that was running becomes idle.
+ * Event-driven watcher: subscribes to the server's SSE stream and reacts to
+ * `session.idle`, `permission.asked` and `form.created`, with a slow poll as a
+ * safety net if the stream drops.
  */
 class SessionWatcherService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.opencode.mobile.STOP_WATCHING"
         private const val ONGOING_ID = 1001
+        private const val FALLBACK_MS = 60_000L
         private const val CHANNEL_ONGOING = Notify.CHANNEL_WATCH
         private const val CHANNEL_SESSIONS = Notify.CHANNEL_SESSIONS
         private const val CHANNEL_PERMISSIONS = Notify.CHANNEL_PERMISSIONS
-        private const val POLL_MS = 10_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -47,6 +47,7 @@ class SessionWatcherService : Service() {
     private var lastActive: Set<String> = emptySet()
     private var titles: MutableMap<String, String> = mutableMapOf()
     private val notifiedPermissions = mutableSetOf<String>()
+    private val notifiedForms = mutableSetOf<String>()
     private var primed = false
     private var cachedApi: Api? = null
     private var cachedApiKey: String? = null
@@ -72,56 +73,107 @@ class SessionWatcherService : Service() {
             startForeground(ONGOING_ID, initial)
         }
 
-        if (job == null) job = scope.launch { watch() }
+        if (job == null) job = scope.launch { loop() }
         return START_STICKY
     }
 
-    private suspend fun watch() {
+    private fun api(): Api? {
+        val prefs = getSharedPreferences("opencode", MODE_PRIVATE)
+        val server = prefs.getString("server", "").orEmpty()
+        val password = prefs.getString("password", "").orEmpty()
+        if (server.isBlank()) return null
+
+        val key = "$server\u0000$password"
+        val existing = cachedApi
+        if (existing != null && cachedApiKey == key) return existing
+
+        return Api(server, password).also {
+            cachedApi = it
+            cachedApiKey = key
+        }
+    }
+
+    private suspend fun loop() {
         while (scope.isActive) {
+            val client = api()
+            if (client == null) {
+                stopSelf()
+                return
+            }
             try {
-                val prefs = getSharedPreferences("opencode", MODE_PRIVATE)
-                val server = prefs.getString("server", "").orEmpty()
-                val password = prefs.getString("password", "").orEmpty()
-                if (server.isBlank()) {
-                    stopSelf()
-                    return
+                if (!primed) {
+                    pollOnce(client)
                 }
-
-                val api = cachedApi.takeIf { cachedApiKey == "$server\u0000$password" }
-                    ?: Api(server, password).also {
-                        cachedApi = it
-                        cachedApiKey = "$server\u0000$password"
-                    }
-
-                val sessions = api.sessions()
-                val active = api.activeSessions()
-                sessions.forEach { titles[it.id] = it.title }
-
-                if (primed) {
-                    (lastActive - active).forEach { id ->
-                        if (id != WatchState.activeSessionID) notifyFinished(id)
-                    }
+                val repo = OpenCodeRepository(client)
+                withTimeoutOrNull(FALLBACK_MS) {
+                    repo.events().collect { raw -> handleEvent(client, raw) }
                 }
-                lastActive = active
-                primed = true
-
-                syncPermissions(api)
-                updateOngoing(active.size)
+                // Stream timed out or ended: re-prime state, then reconnect.
+                pollOnce(client)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // Server unreachable, tunnel down, etc. Keep watching.
+                delay(5_000)
             }
-            delay(POLL_MS)
         }
+    }
+
+    private suspend fun handleEvent(client: Api, raw: String) {
+        val event = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        val type = event.optString("type")
+        val data = event.optJSONObject("data")
+
+        when (type) {
+            "session.idle" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                if (id.isNotEmpty() && id != WatchState.activeSessionID) notifyFinished(id)
+            }
+
+            "permission.asked" -> syncPermissions(client)
+
+            "form.created" -> {
+                val form = data?.optJSONObject("form") ?: return
+                val id = form.optString("id")
+                val sessionID = form.optString("sessionID")
+                val title = form.optString("title")
+                    .ifBlank { getString(R.string.notif_form_fallback) }
+                if (id.isNotEmpty() && notifiedForms.add(id)) {
+                    notifyForm(id, sessionID, title)
+                }
+            }
+
+            "form.replied", "form.cancelled" -> {
+                val id = data?.optJSONObject("form")?.optString("id").orEmpty()
+                if (id.isNotEmpty()) {
+                    getSystemService(android.app.NotificationManager::class.java).cancel(id.hashCode())
+                    notifiedForms.remove(id)
+                }
+            }
+        }
+    }
+
+    private suspend fun pollOnce(client: Api) {
+        val sessions = client.sessions()
+        sessions.forEach { titles[it.id] = it.title }
+
+        val active = sessions.filter { it.running }.map { it.id }.toSet()
+        if (primed) {
+            (lastActive - active).forEach { id ->
+                if (id != WatchState.activeSessionID) notifyFinished(id)
+            }
+        }
+        lastActive = active
+        primed = true
+
+        syncPermissions(client)
+        updateOngoing(active.size)
     }
 
     private suspend fun syncPermissions(api: Api) {
         val pending = runCatching { api.permissions() }.getOrDefault(emptyList())
         val ids = pending.map { it.id }.toSet()
-        val manager = getSystemService(NotificationManager::class.java)
+        val manager = getSystemService(android.app.NotificationManager::class.java)
 
-        // Drop notifications for requests that were answered somewhere else.
         (notifiedPermissions - ids).forEach { id ->
             manager.cancel(id.hashCode())
             notifiedPermissions.remove(id)
@@ -134,16 +186,17 @@ class SessionWatcherService : Service() {
         }
     }
 
-    private fun permissionNotification(request: PendingPermission): Notification {
-        val open = PendingIntent.getActivity(
+    private fun sessionIntent(sessionID: String): PendingIntent =
+        PendingIntent.getActivity(
             this,
-            request.id.hashCode(),
+            sessionID.hashCode(),
             Intent(this, MainActivity::class.java)
-                .putExtra("session_id", request.sessionID)
+                .putExtra("session_id", sessionID)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+    private fun permissionNotification(request: PendingPermission): Notification {
         fun action(decision: String, label: String): NotificationCompat.Action {
             val intent = Intent(this, PermissionActionReceiver::class.java)
                 .setAction("com.opencode.mobile.PERMISSION_ACTION")
@@ -171,23 +224,29 @@ class SessionWatcherService : Service() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
-            .setContentIntent(open)
+            .setContentIntent(sessionIntent(request.sessionID))
             .addAction(action("once", getString(R.string.permission_allow_once)))
             .addAction(action("reject", getString(R.string.permission_reject)))
             .build()
     }
 
+    private fun notifyForm(formID: String, sessionID: String, title: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_PERMISSIONS)
+            .setSmallIcon(R.drawable.ic_stat_opencode)
+            .setContentTitle(getString(R.string.notif_form_title))
+            .setContentText(title)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(title))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(sessionIntent(sessionID))
+            .build()
+
+        getSystemService(android.app.NotificationManager::class.java)
+            .notify(formID.hashCode(), notification)
+    }
+
     private fun notifyFinished(sessionID: String) {
         val title = titles[sessionID] ?: getString(R.string.notif_session_fallback)
-        val open = Intent(this, MainActivity::class.java)
-            .putExtra("session_id", sessionID)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-        val pending = PendingIntent.getActivity(
-            this,
-            sessionID.hashCode(),
-            open,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
             .setSmallIcon(R.drawable.ic_stat_opencode)
@@ -195,15 +254,16 @@ class SessionWatcherService : Service() {
             .setContentText(getString(R.string.notif_finished))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setContentIntent(pending)
+            .setContentIntent(sessionIntent(sessionID))
             .build()
 
-        getSystemService(NotificationManager::class.java)
+        getSystemService(android.app.NotificationManager::class.java)
             .notify(sessionID.hashCode(), notification)
     }
 
     private fun updateOngoing(running: Int) {
-        getSystemService(NotificationManager::class.java).notify(ONGOING_ID, ongoingNotification(running))
+        getSystemService(android.app.NotificationManager::class.java)
+            .notify(ONGOING_ID, ongoingNotification(running))
     }
 
     private fun ongoingNotification(running: Int): Notification {
