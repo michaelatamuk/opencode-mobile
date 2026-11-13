@@ -25,6 +25,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun setAgent(sessionID: String, agentID: String) = api.setAgent(sessionID, agentID)
 
+    suspend fun sessionDiff(sessionID: String): List<FileDiff> = api.sessionDiff(sessionID)
+
     suspend fun createSession(): String = api.createSession()
 
     suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)

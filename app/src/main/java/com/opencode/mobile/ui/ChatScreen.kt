@@ -19,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -68,6 +70,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -115,6 +118,7 @@ import coil.compose.AsyncImage
 import com.opencode.mobile.AttachmentLoader
 import com.opencode.mobile.ChatUiState
 import com.opencode.mobile.ChatViewModel
+import com.opencode.mobile.FileDiff
 import com.opencode.mobile.Msg
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
@@ -122,6 +126,7 @@ import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.WatchState
+import com.opencode.mobile.friendlyError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -145,6 +150,7 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
     var showTune by remember { mutableStateOf(false) }
+    var showDiff by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -274,6 +280,16 @@ fun ChatScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
+            }
+            if (sessionID != null) {
+                IconButton(onClick = { showDiff = true }) {
+                    Icon(
+                        Icons.Rounded.Difference,
+                        contentDescription = stringResource(R.string.chat_changes),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
@@ -418,6 +434,134 @@ fun ChatScreen(
             onAgent = { vm.selectAgent(it) },
             onModel = { provider, model -> vm.selectModel(provider, model) }
         )
+    }
+
+    if (showDiff && sessionID != null) {
+        DiffSheet(
+            repo = repo,
+            sessionID = sessionID,
+            onDismiss = { showDiff = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DiffSheet(repo: OpenCodeRepository, sessionID: String, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var diffs by remember { mutableStateOf<List<FileDiff>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(sessionID) {
+        try {
+            diffs = repo.sessionDiff(sessionID)
+        } catch (e: Exception) {
+            error = friendlyError(e)
+            diffs = emptyList()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 700.dp)) {
+            Text(
+                stringResource(R.string.chat_changes),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)
+            )
+
+            when {
+                error != null -> Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                diffs == null -> CircularProgressIndicator(
+                    Modifier.padding(24.dp).size(28.dp)
+                )
+
+                diffs!!.isEmpty() -> Text(
+                    stringResource(R.string.chat_no_changes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(diffs!!) { diff ->
+                        DiffCard(diff)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiffCard(diff: FileDiff) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    diff.file,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "+${diff.additions}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF4CAF50)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "-${diff.deletions}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(Modifier.horizontalScroll(rememberScrollState())) {
+                    Column(Modifier.padding(8.dp)) {
+                        diff.patch.lines().take(150).forEach { line ->
+                            Text(
+                                line.ifEmpty { " " },
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.5.sp,
+                                lineHeight = 15.sp,
+                                maxLines = 1,
+                                color = when {
+                                    line.startsWith("+") -> Color(0xFF4CAF50)
+                                    line.startsWith("-") -> MaterialTheme.colorScheme.error
+                                    line.startsWith("@@") -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

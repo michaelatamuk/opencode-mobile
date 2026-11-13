@@ -106,6 +106,14 @@ data class QueuedMessage(
     val delivery: String
 )
 
+data class FileDiff(
+    val file: String,
+    val patch: String,
+    val additions: Int,
+    val deletions: Int,
+    val status: String
+)
+
 /**
  * Minimal client for the OpenCode V2 HTTP API.
  *
@@ -265,6 +273,20 @@ class Api(server: String, private val password: String) {
             JSONObject().put("agent", agentID).toString()
         )
         Unit
+    }
+
+    suspend fun sessionDiff(sessionID: String): List<FileDiff> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/session/$sessionID/diff").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            FileDiff(
+                file = o.optString("file"),
+                patch = o.optString("patch"),
+                additions = o.optInt("additions", 0),
+                deletions = o.optInt("deletions", 0),
+                status = o.optString("status")
+            )
+        }
     }
 
     suspend fun renameSession(id: String, title: String): Unit = withContext(Dispatchers.IO) {        val body = JSONObject().put("title", title).toString().toRequestBody(jsonType)

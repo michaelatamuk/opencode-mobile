@@ -57,6 +57,8 @@
     <string name="chat_model_agent">Модель и агент</string>
     <string name="chat_agents">Агент</string>
     <string name="chat_models">Модель</string>
+    <string name="chat_changes">Изменения</string>
+    <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_attach">Прикрепить скриншот</string>
     <string name="chat_remove_attachment">Удалить вложение</string>
     <string name="chat_attached_image">Прикреплённое изображение</string>
