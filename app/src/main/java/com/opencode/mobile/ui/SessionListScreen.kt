@@ -45,11 +45,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -290,14 +293,45 @@ fun SessionListScreen(
                             val seen = remember(session.id, session.updated) {
                                 seenStore.lastSeen(session.id)
                             }
-                            SessionRow(
-                                session = session,
-                                preview = state.previews[session.id],
-                                unread = seen > 0L && session.updated > seen,
-                                onOpen = { onOpen(session) },
-                                onRename = { renaming = session },
-                                onDelete = { deleting = session }
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        deleting = session
+                                    }
+                                    false
+                                }
                             )
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                backgroundContent = {
+                                    Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                MaterialTheme.colorScheme.errorContainer,
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.action_delete),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            ) {
+                                SessionRow(
+                                    session = session,
+                                    preview = state.previews[session.id],
+                                    unread = seen > 0L && session.updated > seen,
+                                    onOpen = { onOpen(session) },
+                                    onRename = { renaming = session },
+                                    onDelete = { deleting = session }
+                                )
+                            }
                         }
                     }
                 }
