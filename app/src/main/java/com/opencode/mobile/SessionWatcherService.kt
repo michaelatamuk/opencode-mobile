@@ -52,6 +52,9 @@ class SessionWatcherService : Service() {
     private var cachedApi: Api? = null
     private var cachedApiKey: String? = null
 
+    @Volatile
+    private var status: String? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -97,13 +100,16 @@ class SessionWatcherService : Service() {
         while (scope.isActive) {
             val client = api()
             if (client == null) {
-                stopSelf()
-                return
+                status = getString(R.string.notif_no_server)
+                updateOngoing(0)
+                delay(10_000)
+                continue
             }
             try {
                 if (!primed) {
                     pollOnce(client)
                 }
+                status = null
                 val repo = OpenCodeRepository(client)
                 withTimeoutOrNull(FALLBACK_MS) {
                     repo.events().collect { raw -> handleEvent(client, raw) }
@@ -113,6 +119,8 @@ class SessionWatcherService : Service() {
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
+                status = getString(R.string.notif_offline)
+                updateOngoing(lastActive.size)
                 delay(5_000)
             }
         }
@@ -281,6 +289,7 @@ class SessionWatcherService : Service() {
         )
 
         val text = when {
+            status != null -> status!!
             running > 0 -> getString(R.string.notif_running, running)
             else -> getString(R.string.notif_waiting)
         }

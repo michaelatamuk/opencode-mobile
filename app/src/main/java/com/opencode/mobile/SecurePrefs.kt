@@ -22,7 +22,7 @@ object SecurePrefs {
     fun get(context: Context): SharedPreferences {
         cached?.let { return it }
 
-        val prefs = try {
+        val encrypted = try {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
@@ -34,16 +34,21 @@ object SecurePrefs {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (_: Exception) {
-            context.getSharedPreferences(LEGACY_FILE, Context.MODE_PRIVATE)
+            null
         }
 
-        migrate(context, prefs)
+        val prefs = encrypted
+            ?: context.getSharedPreferences(LEGACY_FILE, Context.MODE_PRIVATE)
+
+        // Only clean the legacy file when the values really moved into the
+        // encrypted store; otherwise we would delete the fallback's own data.
+        migrate(context, prefs, cleanLegacy = encrypted != null)
         cached = prefs
         return prefs
     }
 
     /** Move values written by older builds into the encrypted store once. */
-    private fun migrate(context: Context, target: SharedPreferences) {
+    private fun migrate(context: Context, target: SharedPreferences, cleanLegacy: Boolean) {
         if (target.getBoolean("migrated", false)) return
 
         val legacy = context.getSharedPreferences(LEGACY_FILE, Context.MODE_PRIVATE)
@@ -58,6 +63,8 @@ object SecurePrefs {
             putBoolean("migrated", true)
         }.apply()
 
-        legacy.edit().remove("server").remove("password").apply()
+        if (cleanLegacy) {
+            legacy.edit().remove("server").remove("password").apply()
+        }
     }
 }

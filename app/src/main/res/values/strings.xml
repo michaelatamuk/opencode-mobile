@@ -131,6 +131,8 @@
     <string name="notif_watching_title">OpenCode</string>
     <string name="notif_running">%1$d running</string>
     <string name="notif_waiting">Waiting for a session to run</string>
+    <string name="notif_offline">Offline — can\'t reach the server</string>
+    <string name="notif_no_server">No server configured</string>
     <string name="notif_finished">Finished — tap to open</string>
     <string name="notif_form_title">Question from OpenCode</string>
     <string name="notif_form_fallback">OpenCode is waiting for an answer</string>

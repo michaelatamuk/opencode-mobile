@@ -123,6 +123,8 @@
     <string name="notif_watching_title">OpenCode</string>
     <string name="notif_running">Работает: %1$d</string>
     <string name="notif_waiting">Ожидание запуска сессии</string>
+    <string name="notif_offline">Нет связи — сервер недоступен</string>
+    <string name="notif_no_server">Сервер не настроен</string>
     <string name="notif_finished">Завершено — нажмите, чтобы открыть</string>
     <string name="notif_form_title">Вопрос от OpenCode</string>
     <string name="notif_form_fallback">OpenCode ждёт ответа</string>
