@@ -2,8 +2,6 @@ package com.opencode.mobile.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,69 +37,41 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.opencode.mobile.Api
-import com.opencode.mobile.AppScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.SessionItem
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.opencode.mobile.SessionListViewModel
 
 @Composable
 fun SessionListScreen(
-    api: Api,
+    repo: OpenCodeRepository,
     onOpen: (SessionItem) -> Unit,
     onSettings: () -> Unit,
-    onCreate: suspend () -> SessionItem?
+    modifier: Modifier = Modifier
 ) {
-    var sessions by remember { mutableStateOf<List<SessionItem>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var refreshes by remember { mutableIntStateOf(0) }
-    var refreshing by remember { mutableStateOf(false) }
-    val scope = AppScope
+    val vm: SessionListViewModel = viewModel(key = "sessions") { SessionListViewModel(repo) }
+    val state by vm.state.collectAsStateWithLifecycle()
 
-    suspend fun refresh() {
-        try {
-            sessions = api.sessions()
-            error = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message
-        }
-        loading = false
-        refreshing = false
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            refresh()
-            delay(3000)
-        }
-    }
-
-    val contentAlpha by animateFloatAsState(if (loading && sessions.isEmpty()) 0.55f else 1f, label = "alpha")
+    val contentAlpha by animateFloatAsState(
+        if (state.loading && state.sessions.isEmpty()) 0.55f else 1f,
+        label = "alpha"
+    )
 
     Box(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
         Column(Modifier.fillMaxSize()) {
-            // Header ---------------------------------------------------------
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -110,11 +80,7 @@ fun SessionListScreen(
             ) {
                 SectionLabel("OpenCode")
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = {
-                    refreshing = true
-                    refreshes++
-                    scope.launch { refresh() }
-                }) {
+                IconButton(onClick = { vm.refresh() }) {
                     Icon(
                         Icons.Rounded.Refresh,
                         contentDescription = "Refresh",
@@ -138,9 +104,9 @@ fun SessionListScreen(
             ) {
                 Text("Sessions", style = MaterialTheme.typography.displaySmall)
                 Spacer(Modifier.weight(1f))
-                if (sessions.isNotEmpty()) {
+                if (state.sessions.isNotEmpty()) {
                     Text(
-                        "${sessions.size}",
+                        "${state.sessions.size}",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -148,14 +114,14 @@ fun SessionListScreen(
                 }
             }
 
-            AnimatedVisibility(visible = error != null && sessions.isNotEmpty()) {
+            AnimatedVisibility(visible = state.error != null && state.sessions.isNotEmpty()) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        "Reconnecting… $error",
+                        "Reconnecting. ${state.error}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         maxLines = 2,
@@ -167,15 +133,15 @@ fun SessionListScreen(
             Spacer(Modifier.height(12.dp))
 
             when {
-                loading && sessions.isEmpty() -> Column(
+                state.loading && state.sessions.isEmpty() -> Column(
                     Modifier.fillMaxWidth().graphicsLayer { alpha = contentAlpha }
                 ) {
                     repeat(6) { SessionSkeleton() }
                 }
 
-                sessions.isEmpty() -> EmptySessions(
-                    error = error,
-                    onRetry = { scope.launch { refresh() } },
+                state.sessions.isEmpty() -> EmptySessions(
+                    error = state.error,
+                    onRetry = { vm.refresh() },
                     onSettings = onSettings
                 )
 
@@ -189,23 +155,17 @@ fun SessionListScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(sessions, key = { it.id }) { session ->
-                        SessionRow(session) { onOpen(session) }
+                    items(state.sessions, key = { it.id }) { session ->
+                        Box(Modifier.animateItem()) {
+                            SessionRow(session) { onOpen(session) }
+                        }
                     }
                 }
             }
         }
 
         ExtendedFloatingActionButton(
-            onClick = {
-                scope.launch {
-                    val created = onCreate()
-                    if (created != null) {
-                        refresh()
-                        onOpen(created)
-                    }
-                }
-            },
+            onClick = { vm.create { onOpen(it) } },
             icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
             text = { Text("New session") },
             containerColor = MaterialTheme.colorScheme.primary,
@@ -331,7 +291,7 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
             error ?: "Start a session from the TUI, or create one here.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -22,7 +22,10 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - High-priority permission notifications with Allow / Reject actions
 - Share target: send an image or text from any app into a session
 - Paginated history (loads older messages while scrolling up)
-- Light and dark themes, edge-to-edge, Material 3
+- Material You dynamic color on Android 12+, light and dark themes, edge-to-edge
+- Architecture: repository + ViewModels with `StateFlow`, typed API errors,
+  reconnecting event stream
+- Unit tests for message merging and error mapping
 
 ## Requirements
 

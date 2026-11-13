@@ -1,7 +1,12 @@
 package com.opencode.mobile.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -10,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,17 +34,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -60,67 +70,58 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.opencode.mobile.Api
-import com.opencode.mobile.AppScope
-import com.opencode.mobile.WatchState
-import com.opencode.mobile.Attachment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.opencode.mobile.AttachmentLoader
+import com.opencode.mobile.ChatViewModel
 import com.opencode.mobile.Msg
+import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
-import com.opencode.mobile.SessionItem
+import com.opencode.mobile.WatchState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    api: Api,
-    session: SessionItem,
+    repo: OpenCodeRepository,
+    sessionID: String,
+    showBack: Boolean,
     onBack: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var messages by remember { mutableStateOf<List<Msg>>(emptyList()) }
-    var olderCursor by remember { mutableStateOf<String?>(null) }
-    var loadingOlder by remember { mutableStateOf(false) }
-    var permissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
+    val vm: ChatViewModel = viewModel(key = "chat:$sessionID") {
+        ChatViewModel(repo, sessionID)
+    }
+    val state by vm.state.collectAsStateWithLifecycle()
+
     var input by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var tick by remember { mutableIntStateOf(0) }
-    val scope = AppScope
-    val haptics = LocalHapticFeedback.current
-    val listState = rememberLazyListState()
-    val context = LocalContext.current
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -130,104 +131,45 @@ fun ChatScreen(
                         AttachmentLoader.load(context, uri)
                     }
                     if (picked.size < 4) picked = picked + PickedAttachment(attachment, uri)
-                } catch (e: Exception) {
-                    error = e.message
+                } catch (_: Exception) {
                 }
             }
         }
     }
 
-    suspend fun refresh() {
-        try {
-            val page = api.messages(session.id, 50)
-            val byId = LinkedHashMap<String, Msg>()
-            messages.forEach { byId[it.id] = it }
-            page.messages.forEach { byId[it.id] = it }
-            messages = byId.values.sortedBy { it.created }
-            if (olderCursor == null) olderCursor = page.olderCursor
-            permissions = api.permissions().filter { it.sessionID == session.id }
-            error = null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message
-        }
-    }
-
-    suspend fun loadOlder() {
-        val cursor = olderCursor ?: return
-        if (loadingOlder) return
-        loadingOlder = true
-        try {
-            val before = messages.size
-            val page = api.messages(session.id, 50, cursor)
-            val byId = LinkedHashMap<String, Msg>()
-            page.messages.forEach { byId[it.id] = it }
-            messages.forEach { byId[it.id] = it }
-            messages = byId.values.sortedBy { it.created }
-            olderCursor = page.olderCursor
-            val added = messages.size - before
-            if (added > 0) {
-                listState.scrollToItem(listState.firstVisibleItemIndex + added)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            error = e.message
-        } finally {
-            loadingOlder = false
-        }
-    }
-
-    LaunchedEffect(session.id) {
-        while (true) {
-            refresh()
-            delay(1500)
-        }
-    }
-
-    LaunchedEffect(session.id) {
-        try {
-            api.events().collect { tick++ }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // Polling above keeps the screen current if the stream drops.
-        }
-    }
-
-    LaunchedEffect(tick) { refresh() }
-
-    LaunchedEffect(messages.lastOrNull()?.id, messages.lastOrNull()?.plainText?.length) {
-        if (messages.isNotEmpty()) {
-            runCatching { listState.animateScrollToItem(messages.lastIndex) }
-        }
-    }
-
-    LaunchedEffect(listState.firstVisibleItemIndex, olderCursor) {
-        if (olderCursor != null && listState.firstVisibleItemIndex <= 2) {
-            loadOlder()
-        }
-    }
-
-    val busy = messages.lastOrNull()?.pending == true
-    val pending = permissions.firstOrNull()
-
-    // Suppress "finished" notifications for the session currently on screen.
-    DisposableEffect(session.id) {
-        WatchState.activeSessionID = session.id
+    DisposableEffect(sessionID) {
+        WatchState.activeSessionID = sessionID
         onDispose {
-            if (WatchState.activeSessionID == session.id) WatchState.activeSessionID = null
+            if (WatchState.activeSessionID == sessionID) WatchState.activeSessionID = null
+        }
+    }
+
+    val lastId = state.messages.lastOrNull()?.id
+    val lastLength = state.messages.lastOrNull()?.plainText?.length
+    LaunchedEffect(lastId, lastLength) {
+        if (state.messages.isNotEmpty()) {
+            runCatching { listState.animateScrollToItem(state.messages.lastIndex) }
+        }
+    }
+
+    LaunchedEffect(listState.firstVisibleItemIndex, state.olderCursor) {
+        if (state.olderCursor != null && listState.firstVisibleItemIndex <= 2 && !state.loadingOlder) {
+            vm.loadOlder { added ->
+                if (added > 0) {
+                    scope.launch {
+                        listState.scrollToItem(listState.firstVisibleItemIndex + added)
+                    }
+                }
+            }
         }
     }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .imePadding()
     ) {
-        // Header -------------------------------------------------------------
         Row(
             Modifier
                 .fillMaxWidth()
@@ -235,35 +177,36 @@ fun ChatScreen(
                 .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                }
+            } else {
+                Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    session.title,
+                    state.title,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    session.id.take(12),
+                    sessionID.take(12),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             AnimatedContent(
-                targetState = busy,
+                targetState = state.busy,
                 transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
                 label = "actions"
             ) { running ->
                 if (running) {
                     IconButton(onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        scope.launch {
-                            runCatching { api.interrupt(session.id) }
-                            refresh()
-                        }
+                        vm.interrupt()
                     }) {
                         Icon(
                             Icons.Rounded.Stop,
@@ -284,24 +227,24 @@ fun ChatScreen(
             }
         }
 
-        // Messages -----------------------------------------------------------
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(messages, key = { it.id }) { message ->
-                when (message.role) {
-                    "user" -> UserMessage(message)
-                    else -> AssistantMessage(message)
+            items(state.messages, key = { it.id }) { message ->
+                Box(Modifier.animateItem()) {
+                    when (message.role) {
+                        "user" -> UserMessage(message)
+                        else -> AssistantMessage(message)
+                    }
                 }
             }
         }
 
-        // Composer -----------------------------------------------------------
         Column(Modifier.navigationBarsPadding()) {
-            error?.let {
+            state.error?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.bodySmall,
@@ -358,13 +301,11 @@ fun ChatScreen(
                         Modifier.padding(start = 2.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        IconButton(
-                            onClick = {
-                                picker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
-                        ) {
+                        IconButton(onClick = {
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }) {
                             Icon(
                                 Icons.Rounded.AddPhotoAlternate,
                                 contentDescription = "Attach screenshot",
@@ -378,7 +319,7 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f),
                             placeholder = {
                                 Text(
-                                    if (busy) "Steer OpenCode…" else "Message OpenCode",
+                                    if (state.busy) "Steer OpenCode…" else "Message OpenCode",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             },
@@ -392,15 +333,12 @@ fun ChatScreen(
                                 disabledIndicatorColor = Color.Transparent
                             )
                         )
-                        if (busy) {
+                        if (state.busy) {
                             Spacer(Modifier.width(2.dp))
                             FilledTonalIconButton(
                                 onClick = {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    scope.launch {
-                                        runCatching { api.interrupt(session.id) }
-                                        refresh()
-                                    }
+                                    vm.interrupt()
                                 },
                                 modifier = Modifier.size(44.dp)
                             ) {
@@ -416,25 +354,12 @@ fun ChatScreen(
                             onClick = {
                                 val text = input.trim()
                                 val files = picked.map { it.attachment }
-                                if (text.isNotEmpty() || files.isNotEmpty()) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    input = ""
-                                    picked = emptyList()
-                                    scope.launch {
-                                        try {
-                                            api.send(
-                                                session.id,
-                                                text.ifBlank { "Screenshot attached." },
-                                                files,
-                                                // While a turn is running, steer it instead of blocking.
-                                                if (busy) "steer" else null
-                                            )
-                                            refresh()
-                                        } catch (e: Exception) {
-                                            error = e.message
-                                            input = text
-                                        }
-                                    }
+                                if (text.isEmpty() && files.isEmpty()) return@FilledIconButton
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                input = ""
+                                picked = emptyList()
+                                vm.send(text.ifBlank { "Screenshot attached." }, files) { ok ->
+                                    if (!ok) input = text
                                 }
                             },
                             enabled = input.isNotBlank() || picked.isNotEmpty(),
@@ -456,16 +381,8 @@ fun ChatScreen(
         }
     }
 
-    if (pending != null) {
-        PermissionSheet(
-            permission = pending,
-            onDecision = { decision ->
-                scope.launch {
-                    runCatching { api.reply(pending.sessionID, pending.id, decision) }
-                    refresh()
-                }
-            }
-        )
+    state.pendingPermission?.let { p ->
+        PermissionSheet(permission = p, onDecision = vm::reply)
     }
 }
 
@@ -523,9 +440,7 @@ private fun AssistantMessage(message: Msg) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (!message.hasVisibleContent) {
-            if (message.pending) {
-                TypingIndicator()
-            }
+            if (message.pending) TypingIndicator()
         } else {
             message.parts.forEach { part ->
                 when (part) {
@@ -553,9 +468,7 @@ private fun AssistantMessage(message: Msg) {
                     is Part.Image -> Unit
                 }
             }
-            if (message.pending) {
-                TypingIndicator(compact = true)
-            }
+            if (message.pending) TypingIndicator(compact = true)
         }
     }
 }
@@ -574,7 +487,7 @@ private fun TypingIndicator(compact: Boolean = false) {
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     tween(600, delayMillis = index * 160, easing = LinearEasing),
-                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                    repeatMode = RepeatMode.Reverse
                 ),
                 label = "dot$index"
             )
@@ -596,10 +509,10 @@ private fun PermissionSheet(
     permission: PendingPermission,
     onDecision: (String) -> Unit
 ) {
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = {},
-        sheetState = state,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(Modifier.padding(start = 22.dp, end = 22.dp, bottom = 12.dp)) {
@@ -672,4 +585,4 @@ private fun PermissionSheet(
     }
 }
 
-private data class PickedAttachment(val attachment: Attachment, val uri: Uri)
+private data class PickedAttachment(val attachment: com.opencode.mobile.Attachment, val uri: Uri)

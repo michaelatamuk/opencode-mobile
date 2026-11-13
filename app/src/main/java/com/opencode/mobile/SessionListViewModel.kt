@@ -1,0 +1,70 @@
+package com.opencode.mobile
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+data class SessionListUiState(
+    val sessions: List<SessionItem> = emptyList(),
+    val loading: Boolean = true,
+    val error: String? = null
+)
+
+class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
+
+    private val _state = MutableStateFlow(SessionListUiState())
+    val state: StateFlow<SessionListUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            while (isActive) {
+                refreshNow()
+                delay(3_000)
+            }
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch { refreshNow() }
+    }
+
+    private suspend fun refreshNow() {
+        try {
+            val sessions = repo.sessions()
+            _state.update { it.copy(sessions = sessions, loading = false, error = null) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(loading = false, error = friendlyError(e)) }
+        }
+    }
+
+    fun create(onCreated: (SessionItem) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val id = repo.createSession()
+                onCreated(
+                    SessionItem(
+                        id = id,
+                        title = "New session",
+                        updated = System.currentTimeMillis(),
+                        created = System.currentTimeMillis(),
+                        cost = 0.0
+                    )
+                )
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+}

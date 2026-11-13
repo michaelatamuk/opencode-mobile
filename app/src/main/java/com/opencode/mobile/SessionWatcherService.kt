@@ -48,6 +48,8 @@ class SessionWatcherService : Service() {
     private var titles: MutableMap<String, String> = mutableMapOf()
     private val notifiedPermissions = mutableSetOf<String>()
     private var primed = false
+    private var cachedApi: Api? = null
+    private var cachedApiKey: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -109,7 +111,12 @@ class SessionWatcherService : Service() {
                     return
                 }
 
-                val api = Api(server, password)
+                val api = cachedApi.takeIf { cachedApiKey == "$server\u0000$password" }
+                    ?: Api(server, password).also {
+                        cachedApi = it
+                        cachedApiKey = "$server\u0000$password"
+                    }
+
                 val sessions = api.sessions()
                 val active = api.activeSessions()
                 sessions.forEach { titles[it.id] = it.title }

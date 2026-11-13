@@ -74,6 +74,45 @@ data class PendingPermission(
  *
  * Auth is HTTP Basic with the fixed user "opencode" and the server password.
  */
+/** HTTP-level failure from the OpenCode server. */
+class ApiException(val status: Int, body: String) :
+    Exception(if (body.isBlank()) "HTTP $status" else "HTTP $status: $body")
+
+private fun JSONObject.toSession(): SessionItem {
+    val time = optJSONObject("time")
+    return SessionItem(
+        id = getString("id"),
+        title = optString("title").ifBlank { "Untitled session" },
+        updated = time?.optLong("updated") ?: 0L,
+        created = time?.optLong("created") ?: 0L,
+        cost = optDouble("cost", 0.0)
+    )
+}
+
+/** Merge a freshly fetched page into already loaded history, newest wins. */
+internal fun mergeMessages(existing: List<Msg>, incoming: List<Msg>): List<Msg> {
+    if (incoming.isEmpty()) return existing
+    val byId = LinkedHashMap<String, Msg>(existing.size + incoming.size)
+    existing.forEach { byId[it.id] = it }
+    incoming.forEach { byId[it.id] = it }
+    return byId.values.sortedBy { it.created }
+}
+
+/** A user-facing message for any failure from the API. */
+fun friendlyError(error: Throwable): String = when (error) {
+    is ApiException -> when (error.status) {
+        401, 403 -> "Wrong or missing server password"
+        404 -> "Not found on this server"
+        in 500..599 -> "Server error (${error.status})"
+        else -> error.message ?: "Request failed"
+    }
+
+    is java.net.UnknownHostException -> "Server address not found"
+    is java.net.ConnectException -> "Cannot connect — is the server running?"
+    is java.net.SocketTimeoutException -> "Server took too long to answer"
+    else -> error.message ?: "Something went wrong"
+}
+
 class Api(server: String, private val password: String) {
 
     private val root = server.trim().trimEnd('/')
@@ -96,7 +135,7 @@ class Api(server: String, private val password: String) {
     private fun getJson(path: String): JSONObject {
         client.newCall(request(path).get().build()).execute().use { r ->
             val body = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw IOException("HTTP ${r.code} ${body.take(200)}")
+            if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
             return JSONObject(body)
         }
     }
@@ -105,7 +144,7 @@ class Api(server: String, private val password: String) {
         val req = request(path).post(payload.toRequestBody(jsonType)).build()
         client.newCall(req).execute().use { r ->
             val body = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw IOException("HTTP ${r.code} ${body.take(200)}")
+            if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
             return JSONObject(body)
         }
     }
@@ -117,19 +156,13 @@ class Api(server: String, private val password: String) {
     suspend fun sessions(): List<SessionItem> = withContext(Dispatchers.IO) {
         val active = runCatching { activeSessions() }.getOrDefault(emptySet())
         val data = getJson("/api/session").optJSONArray("data") ?: JSONArray()
-        (0 until data.length()).map { i ->
-            val o = data.getJSONObject(i)
-            val time = o.optJSONObject("time")
-            val id = o.getString("id")
-            SessionItem(
-                id = id,
-                title = o.optString("title").ifBlank { "Untitled session" },
-                updated = time?.optLong("updated") ?: 0L,
-                created = time?.optLong("created") ?: 0L,
-                cost = o.optDouble("cost", 0.0),
-                running = id in active
-            )
-        }.sortedByDescending { it.updated }
+        (0 until data.length())
+            .map { i -> data.getJSONObject(i).toSession().copy(running = data.getJSONObject(i).getString("id") in active) }
+            .sortedByDescending { it.updated }
+    }
+
+    suspend fun session(id: String): SessionItem = withContext(Dispatchers.IO) {
+        getJson("/api/session/$id").getJSONObject("data").toSession()
     }
 
     suspend fun createSession(): String = withContext(Dispatchers.IO) {
