@@ -32,8 +32,14 @@ android {
 
     buildTypes {
         release {
+            // R8 was tried (APK 1.7 MB) but cannot be verified on-device here;
+            // shipping an unverified shrink is riskier than the size win.
             isMinifyEnabled = false
-            // CI passes a keystore; local builds without it fall back to debug signing.
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (hasReleaseKey) {
                 signingConfigs.getByName("release")
             } else {
