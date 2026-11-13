@@ -8,18 +8,37 @@ android {
     namespace = "com.opencode.mobile"
     compileSdk = 35
 
+    val keystorePath = System.getenv("OPENCODE_KEYSTORE")
+    val hasReleaseKey = keystorePath != null && file(keystorePath).exists()
+
     defaultConfig {
         applicationId = "com.opencode.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 3
+        versionName = (project.findProperty("appVersionName") as String?) ?: "0.3.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("OPENCODE_STORE_PASSWORD")
+                keyAlias = System.getenv("OPENCODE_KEY_ALIAS")
+                keyPassword = System.getenv("OPENCODE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            // CI passes a keystore; local builds without it fall back to debug signing.
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
