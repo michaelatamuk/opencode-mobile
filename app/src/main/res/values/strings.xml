@@ -50,6 +50,7 @@
     <string name="chat_placeholder">Message OpenCode</string>
     <string name="chat_placeholder_busy">Steer OpenCode…</string>
     <string name="chat_working">Working</string>
+    <string name="chat_jump_latest">Jump to latest</string>
     <string name="chat_attach">Attach screenshot</string>
     <string name="chat_remove_attachment">Remove attachment</string>
     <string name="chat_attached_image">Attached image</string>

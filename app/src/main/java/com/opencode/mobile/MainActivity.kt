@@ -236,7 +236,6 @@ private fun Root() {
                         sessionID = openSessionID!!,
                         showBack = false,
                         onBack = { openSessionID = null },
-                        onSettings = { settingsOpen = true },
                         modifier = Modifier.weight(0.58f)
                     )
                 } else {
@@ -269,8 +268,7 @@ private fun Root() {
                         repo = repo,
                         sessionID = id,
                         showBack = true,
-                        onBack = { openSessionID = null },
-                        onSettings = { settingsOpen = true }
+                        onBack = { openSessionID = null }
                     )
                 }
             }

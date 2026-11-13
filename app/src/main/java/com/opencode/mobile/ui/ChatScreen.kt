@@ -46,6 +46,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Send
@@ -113,7 +114,6 @@ fun ChatScreen(
     sessionID: String,
     showBack: Boolean,
     onBack: () -> Unit,
-    onSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val vm: ChatViewModel = viewModel(key = "chat:$sessionID") {
@@ -135,7 +135,7 @@ fun ChatScreen(
                     val attachment = withContext(Dispatchers.IO) {
                         AttachmentLoader.load(context, uri)
                     }
-                    if (picked.size < 4) picked = picked + PickedAttachment(attachment, uri)
+                    if (picked.size < 8) picked = picked + PickedAttachment(attachment, uri)
                 } catch (_: Exception) {
                 }
             }
@@ -207,35 +207,45 @@ fun ChatScreen(
                         Row(Modifier.padding(start = 8.dp)) { WorkingPill() }
                     }
                 }
-                Text(
-                    sessionID.take(12),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    Icons.Rounded.Settings,
-                    contentDescription = stringResource(R.string.action_settings),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
             }
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(state.messages, key = { it.id }) { message ->
-                Box(Modifier.animateItem()) {
-                    when (message.role) {
-                        "user" -> UserMessage(message)
-                        else -> AssistantMessage(message)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(state.messages, key = { it.id }) { message ->
+                    Box(Modifier.animateItem()) {
+                        when (message.role) {
+                            "user" -> UserMessage(message)
+                            else -> AssistantMessage(message)
+                        }
                     }
+                }
+            }
+
+            if (listState.canScrollForward) {
+                FilledTonalIconButton(
+                    onClick = {
+                        if (state.messages.isNotEmpty()) {
+                            scope.launch {
+                                listState.animateScrollToItem(state.messages.lastIndex)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(14.dp)
+                        .size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowDownward,
+                        contentDescription = stringResource(R.string.chat_jump_latest),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
@@ -255,7 +265,7 @@ fun ChatScreen(
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Column {
                     if (picked.isNotEmpty()) {
