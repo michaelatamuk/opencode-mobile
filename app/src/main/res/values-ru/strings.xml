@@ -24,6 +24,19 @@
     <string name="session_running">работает</string>
     <string name="session_untitled">Без названия</string>
     <string name="session_new">Новая сессия</string>
+    <string name="sessions_search">Поиск по сессиям</string>
+    <string name="sessions_no_match">Ничего не найдено.</string>
+    <string name="sessions_today">Сегодня</string>
+    <string name="sessions_yesterday">Вчера</string>
+    <string name="sessions_week">Последние 7 дней</string>
+    <string name="sessions_earlier">Ранее</string>
+    <string name="session_more">Действия с сессией</string>
+    <string name="action_rename">Переименовать</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="session_rename_title">Переименовать сессию</string>
+    <string name="session_delete_title">Удалить сессию?</string>
+    <string name="session_delete_body">Сессия будет удалена с сервера.</string>
 
     <string name="time_just_now">только что</string>
     <string name="time_minutes_ago">%1$d мин назад</string>

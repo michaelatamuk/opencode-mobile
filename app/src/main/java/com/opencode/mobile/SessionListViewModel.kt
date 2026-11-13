@@ -67,4 +67,32 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
             }
         }
     }
+
+    fun rename(id: String, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repo.renameSession(id, title.trim())
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
+    fun delete(id: String) {
+        viewModelScope.launch {
+            try {
+                repo.deleteSession(id)
+                _state.update { st -> st.copy(sessions = st.sessions.filterNot { it.id == id }) }
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
 }

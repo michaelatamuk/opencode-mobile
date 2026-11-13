@@ -165,6 +165,19 @@ class Api(server: String, private val password: String) {
         getJson("/api/session/$id").getJSONObject("data").toSession()
     }
 
+    suspend fun renameSession(id: String, title: String): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("title", title).toString().toRequestBody(jsonType)
+        client.newCall(request("/api/session/$id").patch(body).build()).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
+    suspend fun deleteSession(id: String): Unit = withContext(Dispatchers.IO) {
+        client.newCall(request("/api/session/$id").delete().build()).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
     suspend fun createSession(): String = withContext(Dispatchers.IO) {
         postJson("/api/session", "{}").getJSONObject("data").getString("id")
     }

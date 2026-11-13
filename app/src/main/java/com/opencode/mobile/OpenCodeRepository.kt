@@ -16,6 +16,10 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun createSession(): String = api.createSession()
 
+    suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)
+
+    suspend fun deleteSession(id: String) = api.deleteSession(id)
+
     suspend fun messages(sessionID: String, olderCursor: String? = null): Api.MessagePage =
         api.messages(sessionID, limit = 50, olderCursor = olderCursor)
 

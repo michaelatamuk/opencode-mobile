@@ -26,6 +26,19 @@
     <string name="session_running">running</string>
     <string name="session_untitled">Untitled session</string>
     <string name="session_new">New session</string>
+    <string name="sessions_search">Search sessions</string>
+    <string name="sessions_no_match">No sessions match your search.</string>
+    <string name="sessions_today">Today</string>
+    <string name="sessions_yesterday">Yesterday</string>
+    <string name="sessions_week">Previous 7 days</string>
+    <string name="sessions_earlier">Earlier</string>
+    <string name="session_more">Session actions</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="session_rename_title">Rename session</string>
+    <string name="session_delete_title">Delete session?</string>
+    <string name="session_delete_body">This removes the session from your server.</string>
 
     <!-- Relative time -->
     <string name="time_just_now">just now</string>
