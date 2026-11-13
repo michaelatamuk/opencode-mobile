@@ -34,6 +34,13 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun permissions(): List<PendingPermission> = api.permissions()
 
+    suspend fun forms(sessionID: String): List<FormRequest> = api.forms(sessionID)
+
+    suspend fun answerForm(sessionID: String, formID: String, answers: Map<String, Any>) =
+        api.answerForm(sessionID, formID, answers)
+
+    suspend fun inbox(sessionID: String): List<QueuedMessage> = api.inbox(sessionID)
+
     suspend fun reply(sessionID: String, requestID: String, decision: String) =
         api.reply(sessionID, requestID, decision)
 

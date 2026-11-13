@@ -9,12 +9,16 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 ## Features
 
 - Session list with live refresh, cost and relative timestamps
-- Chat with streaming updates (SSE `/api/event`, polling fallback)
+- Session history: search, date groups, running section, rename and delete
+- Chat with streaming updates (SSE `/api/event` with reconnect, polling fallback)
 - Markdown rendering: headings, lists, bold, inline code, fenced code blocks
-  with copy, and tables
+  with copy, tables, and clickable links (markdown and bare URLs)
 - Expandable tool-call cards: full input JSON, output text, and errors
 - Collapsible reasoning ("Thought for Ns") blocks
-- Image attachments from the photo picker, sent inline
+- Agent forms rendered as a sheet (text, number, switch, single/multi-select)
+  so the agent never stalls waiting for an answer
+- Queued / steered message indicator above the composer
+- Image attachments from the photo picker, sent inline (up to 8)
 - Permission prompts: allow once / always / reject
 - Send while a turn is running (`delivery: "steer"`) and a separate stop button
 - Background notifications when a session finishes, via a foreground service

@@ -18,6 +18,8 @@ data class ChatUiState(
     val title: String = "Session",
     val messages: List<Msg> = emptyList(),
     val permissions: List<PendingPermission> = emptyList(),
+    val forms: List<FormRequest> = emptyList(),
+    val queued: List<QueuedMessage> = emptyList(),
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
@@ -25,6 +27,7 @@ data class ChatUiState(
 ) {
     val busy: Boolean get() = messages.lastOrNull()?.pending == true
     val pendingPermission: PendingPermission? get() = permissions.firstOrNull()
+    val pendingForm: FormRequest? get() = forms.firstOrNull()
 }
 
 class ChatViewModel(
@@ -79,6 +82,12 @@ class ChatViewModel(
                 }
                 val pending = repo.permissions().filter { it.sessionID == sessionID }
                 _state.update { it.copy(permissions = pending) }
+
+                val forms = runCatching { repo.forms(sessionID) }.getOrDefault(emptyList())
+                _state.update { it.copy(forms = forms) }
+
+                val queued = runCatching { repo.inbox(sessionID) }.getOrDefault(emptyList())
+                _state.update { it.copy(queued = queued) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -153,6 +162,19 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 repo.reply(request.sessionID, request.id, decision)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+            refreshNow()
+        }
+    }
+
+    fun answerForm(formID: String, answers: Map<String, Any>) {
+        viewModelScope.launch {
+            try {
+                repo.answerForm(sessionID, formID, answers)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

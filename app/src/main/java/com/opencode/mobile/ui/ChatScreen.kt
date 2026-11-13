@@ -29,6 +29,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.text.input.KeyboardType
+import com.opencode.mobile.FormField
+import com.opencode.mobile.FormRequest
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -65,6 +76,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -221,10 +233,25 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     AnimatedVisibility(visible = state.busy) {
-                        Row(Modifier.padding(start = 8.dp)) { WorkingPill() }
+                        Row(
+                            Modifier.padding(start = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ActivityBars()
+                            Spacer(Modifier.width(7.dp))
+                            Text(
+                                stringResource(R.string.chat_working),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 }
             }
+        }
+
+        if (state.busy) {
+            StreamingHairline()
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -280,6 +307,32 @@ fun ChatScreen(
         }
 
         Column(Modifier.navigationBarsPadding()) {
+            if (state.queued.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PulsingDot(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        pulsing = true,
+                        size = 6
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.chat_queued, state.queued.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        state.queued.first().text.replace('\n', ' ').take(60),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             state.error?.let {
                 Text(
                     it,
@@ -289,173 +342,186 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
             }
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(28.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Column {
-                    if (picked.isNotEmpty()) {
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(picked) { item ->
-                                Box {
-                                    AsyncImage(
-                                        model = item.uri,
-                                        contentDescription = item.attachment.name,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                    )
-                                    Box(
-                                        Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(3.dp)
-                                            .size(18.dp)
-                                            .background(Color.Black.copy(alpha = 0.62f), CircleShape)
-                                            .clickable { picked = picked - item },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Close,
-                                            contentDescription = stringResource(R.string.chat_remove_attachment),
-                                            tint = Color.White,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                    }
-                                }
-                            }
+            Composer(
+                value = input,
+                onValueChange = { input = it },
+                attachments = picked.map { AttachmentPreview(it.uri, it.attachment.name) },
+                busy = state.busy,
+                onAttach = {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onRemove = { preview ->
+                    picked = picked.filterNot { it.uri == preview.uri }
+                },
+                onSend = {
+                    val text = input.trim()
+                    val files = picked.map { it.attachment }
+                    if (text.isNotEmpty() || files.isNotEmpty()) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        input = ""
+                        picked = emptyList()
+                        vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
+                            if (!ok) input = text
                         }
                     }
-                    Row(
-                        Modifier.padding(start = 2.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        IconButton(onClick = {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }) {
-                            Icon(
-                                Icons.Rounded.AddPhotoAlternate,
-                                contentDescription = stringResource(R.string.chat_attach),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(21.dp)
-                            )
-                        }
-                        TextField(
-                            value = input,
-                            onValueChange = { input = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = {
-                                Text(
-                                    stringResource(if (state.busy) R.string.chat_placeholder_busy else R.string.chat_placeholder),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            maxLines = 6,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent
-                            )
-                        )
-                        Spacer(Modifier.width(6.dp))
-
-                        val hasContent = input.isNotBlank() || picked.isNotEmpty()
-                        val primaryIsStop = state.busy && !hasContent
-
-                        // A second, quiet stop appears only when send and stop are both useful.
-                        AnimatedVisibility(visible = state.busy && hasContent) {
-                            IconButton(
-                                onClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    vm.interrupt()
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Stop,
-                                    contentDescription = stringResource(R.string.action_stop),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-
-                        AnimatedContent(
-                            targetState = primaryIsStop,
-                            transitionSpec = {
-                                (scaleIn(initialScale = 0.82f) + fadeIn(tween(120))) togetherWith
-                                    (scaleOut(targetScale = 0.82f) + fadeOut(tween(90)))
-                            },
-                            label = "primaryAction"
-                        ) { stop ->
-                            if (stop) {
-                                FilledIconButton(
-                                    onClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        vm.interrupt()
-                                    },
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Stop,
-                                        contentDescription = stringResource(R.string.action_stop),
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            } else {
-                                FilledIconButton(
-                                    onClick = {
-                                        val text = input.trim()
-                                        val files = picked.map { it.attachment }
-                                        if (text.isEmpty() && files.isEmpty()) return@FilledIconButton
-                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        input = ""
-                                        picked = emptyList()
-                                        vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
-                                            if (!ok) input = text
-                                        }
-                                    },
-                                    enabled = hasContent,
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Send,
-                                        contentDescription = stringResource(R.string.action_send),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                },
+                onStop = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    vm.interrupt()
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
         }
     }
 
     state.pendingPermission?.let { p ->
         PermissionSheet(permission = p, onDecision = vm::reply)
+    }
+
+    state.pendingForm?.let { form ->
+        FormSheet(form = form, onSubmit = { answers -> vm.answerForm(form.id, answers) })
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val values = remember(form.id) { mutableStateMapOf<String, Any>() }
+
+    LaunchedEffect(form.id) {
+        form.fields.forEach { field ->
+            if (values.containsKey(field.key)) return@forEach
+            when (val fallback = field.default) {
+                is Boolean -> values[field.key] = fallback
+                is Number -> values[field.key] = fallback.toString()
+                is String -> values[field.key] = fallback
+                is org.json.JSONArray -> values[field.key] =
+                    (0 until fallback.length()).map { fallback.optString(it) }
+
+                else -> Unit
+            }
+        }
+    }
+
+    fun answerOf(field: FormField, raw: Any): Any = when (field.type) {
+        "integer" -> (raw as? String)?.toIntOrNull() ?: raw
+        "number" -> (raw as? String)?.toDoubleOrNull() ?: raw
+        else -> raw
+    }
+
+    val complete = form.fields.all { field ->
+        if (!field.required) return@all true
+        val value = values[field.key] ?: return@all false
+        when (value) {
+            is String -> value.isNotBlank()
+            is Collection<*> -> value.isNotEmpty()
+            else -> true
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = {},
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(form.title, style = MaterialTheme.typography.headlineSmall)
+
+            form.fields.forEach { field ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(field.title, style = MaterialTheme.typography.titleSmall)
+                    if (field.description.isNotBlank()) {
+                        Text(
+                            field.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    when {
+                        field.type == "boolean" -> {
+                            Switch(
+                                checked = values[field.key] as? Boolean ?: false,
+                                onCheckedChange = { values[field.key] = it }
+                            )
+                        }
+
+                        field.type == "multiselect" -> {
+                            val selected = (values[field.key] as? List<*>)?.filterIsInstance<String>()
+                                ?: emptyList()
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                field.options.forEach { option ->
+                                    FilterChip(
+                                        selected = option.value in selected,
+                                        onClick = {
+                                            values[field.key] = if (option.value in selected) {
+                                                selected - option.value
+                                            } else {
+                                                selected + option.value
+                                            }
+                                        },
+                                        label = { Text(option.label) }
+                                    )
+                                }
+                            }
+                        }
+
+                        field.options.isNotEmpty() -> {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                field.options.forEach { option ->
+                                    FilterChip(
+                                        selected = values[field.key] == option.value,
+                                        onClick = { values[field.key] = option.value },
+                                        label = { Text(option.label) }
+                                    )
+                                }
+                            }
+                        }
+
+                        else -> {
+                            OutlinedTextField(
+                                value = values[field.key] as? String ?: "",
+                                onValueChange = { values[field.key] = it },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                keyboardOptions = if (field.type == "integer" || field.type == "number") {
+                                    KeyboardOptions(keyboardType = KeyboardType.Number)
+                                } else {
+                                    KeyboardOptions.Default
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = {
+                    val answers = form.fields
+                        .mapNotNull { field ->
+                            val raw = values[field.key] ?: return@mapNotNull null
+                            field.key to answerOf(field, raw)
+                        }
+                        .toMap()
+                    onSubmit(answers)
+                },
+                enabled = complete,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.form_submit)) }
+        }
     }
 }
 

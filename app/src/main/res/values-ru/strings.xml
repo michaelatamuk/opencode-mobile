@@ -49,6 +49,8 @@
     <string name="chat_placeholder_busy">Направить OpenCode…</string>
     <string name="chat_working">Работает</string>
     <string name="chat_jump_latest">К последнему сообщению</string>
+    <string name="chat_queued">В очереди: %1$d</string>
+    <string name="form_submit">Отправить</string>
     <string name="chat_attach">Прикрепить скриншот</string>
     <string name="chat_remove_attachment">Удалить вложение</string>
     <string name="chat_attached_image">Прикреплённое изображение</string>

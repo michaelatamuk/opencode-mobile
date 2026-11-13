@@ -69,6 +69,31 @@ data class PendingPermission(
     val detail: String
 )
 
+data class FormOption(val value: String, val label: String)
+
+data class FormField(
+    val key: String,
+    val title: String,
+    val description: String,
+    val type: String,
+    val required: Boolean,
+    val options: List<FormOption>,
+    val default: Any?
+)
+
+data class FormRequest(
+    val id: String,
+    val sessionID: String,
+    val title: String,
+    val fields: List<FormField>
+)
+
+data class QueuedMessage(
+    val id: String,
+    val text: String,
+    val delivery: String
+)
+
 /**
  * Minimal client for the OpenCode V2 HTTP API.
  *
@@ -380,6 +405,65 @@ class Api(server: String, private val password: String) {
             )
             Unit
         }
+
+    suspend fun forms(sessionID: String): List<FormRequest> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/session/$sessionID/form").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { index ->
+            val form = data.getJSONObject(index)
+            val fieldsJson = form.optJSONArray("fields") ?: JSONArray()
+            val fields = (0 until fieldsJson.length()).map { i ->
+                val field = fieldsJson.getJSONObject(i)
+                val optionsJson = field.optJSONArray("options") ?: JSONArray()
+                FormField(
+                    key = field.optString("key"),
+                    title = field.optString("title").ifBlank { field.optString("key") },
+                    description = field.optString("description"),
+                    type = field.optString("type", "string"),
+                    required = field.optBoolean("required", false),
+                    options = (0 until optionsJson.length()).map { o ->
+                        val option = optionsJson.getJSONObject(o)
+                        FormOption(option.optString("value"), option.optString("label"))
+                    },
+                    default = if (field.has("default") && !field.isNull("default")) {
+                        field.get("default")
+                    } else {
+                        null
+                    }
+                )
+            }
+            FormRequest(
+                id = form.getString("id"),
+                sessionID = form.optString("sessionID", sessionID),
+                title = form.optString("title").ifBlank { "Question" },
+                fields = fields
+            )
+        }
+    }
+
+    suspend fun answerForm(sessionID: String, formID: String, answers: Map<String, Any>): Unit =
+        withContext(Dispatchers.IO) {
+            val answer = JSONObject()
+            answers.forEach { (key, value) -> answer.put(key, value) }
+            postJson(
+                "/api/session/$sessionID/form/$formID/reply",
+                JSONObject().put("answer", answer).toString()
+            )
+            Unit
+        }
+
+    suspend fun inbox(sessionID: String): List<QueuedMessage> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/session/$sessionID/inbox").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { index ->
+            val item = data.getJSONObject(index)
+            if (item.optString("type") != "user") return@mapNotNull null
+            val payload = item.optJSONObject("payload")
+            QueuedMessage(
+                id = item.optString("id"),
+                text = payload?.optString("text").orEmpty(),
+                delivery = item.optString("delivery")
+            )
+        }
+    }
 
     /** Emits once for every server-sent event; used as a "something changed" signal. */
     fun events(): Flow<Unit> = callbackFlow {

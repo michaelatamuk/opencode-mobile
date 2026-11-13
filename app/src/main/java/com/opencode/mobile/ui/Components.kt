@@ -53,6 +53,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -148,23 +152,34 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
                 }
             }
 
-            text.startsWith("](", i) -> {
-                val close = text.indexOf(')', i + 2)
-                val end = if (close > 0) close else i
-                append(text.substring(i + 2, end))
-                i = if (close > 0) close + 1 else i + 2
-            }
-
             text[i] == '[' -> {
-                val mid = text.indexOf("](", i + 1)
-                if (mid > i) {
-                    withStyle(SpanStyle(color = linkColor)) {
-                        append(text.substring(i + 1, mid))
+                val close = text.indexOf("](", i + 1)
+                val end = if (close > i) text.indexOf(')', close + 2) else -1
+                if (close > i && end > close) {
+                    val label = text.substring(i + 1, close)
+                    val url = text.substring(close + 2, end).trim()
+                    withLink(LinkAnnotation.Url(url, linkStyles(linkColor))) {
+                        append(label.ifBlank { url })
                     }
-                    i = mid
+                    i = end + 1
                 } else {
                     append(text[i])
                     i++
+                }
+            }
+
+            text.startsWith("http://", i) || text.startsWith("https://", i) -> {
+                var end = i
+                while (end < text.length && !text[end].isWhitespace()) end++
+                val raw = text.substring(i, end)
+                val url = raw.trimEnd('.', ',', ')', ']', '"', '\'', '>')
+                withLink(LinkAnnotation.Url(url, linkStyles(linkColor))) {
+                    append(url)
+                }
+                i += url.length
+                if (url.length < raw.length) {
+                    append(raw.substring(url.length))
+                    i += raw.length - url.length
                 }
             }
 
@@ -194,6 +209,10 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
         }
     }
 }
+
+private fun linkStyles(color: Color) = TextLinkStyles(
+    style = SpanStyle(color = color, textDecoration = TextDecoration.Underline)
+)
 
 @Composable
 private fun proseAnnotated(src: String): AnnotatedString {
