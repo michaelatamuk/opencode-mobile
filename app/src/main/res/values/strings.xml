@@ -1,4 +1,105 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OpenCode</string>
+
+    <!-- Common actions -->
+    <string name="action_back">Back</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_save">Save</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_test">Test connection</string>
+    <string name="action_testing">Testing…</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_change_server">Change server</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_send">Send</string>
+    <string name="action_new_session">New session</string>
+    <string name="action_stop_watching">Stop watching</string>
+
+    <!-- Sessions -->
+    <string name="sessions_title">Sessions</string>
+    <string name="sessions_empty_title">No sessions yet</string>
+    <string name="sessions_empty_body">Start a session from the TUI, or create one here.</string>
+    <string name="sessions_unreachable_title">Can\'t reach your server</string>
+    <string name="sessions_reconnecting">Reconnecting. %1$s</string>
+    <string name="session_running">running</string>
+    <string name="session_untitled">Untitled session</string>
+    <string name="session_new">New session</string>
+
+    <!-- Relative time -->
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes_ago">%1$d min ago</string>
+    <string name="time_hours_ago">%1$d h ago</string>
+    <string name="time_days_ago">%1$d d ago</string>
+
+    <!-- Chat -->
+    <string name="chat_placeholder">Message OpenCode</string>
+    <string name="chat_placeholder_busy">Steer OpenCode…</string>
+    <string name="chat_attach">Attach screenshot</string>
+    <string name="chat_remove_attachment">Remove attachment</string>
+    <string name="chat_attached_image">Attached image</string>
+    <string name="chat_screenshot_only">Screenshot attached.</string>
+    <string name="chat_pick_session">Pick a session</string>
+    <string name="chat_thought">Thought</string>
+    <string name="chat_thought_for">Thought for %1$ds</string>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_show_thoughts">Show thoughts</string>
+    <string name="chat_hide_thoughts">Hide thoughts</string>
+    <string name="chat_copy_code">Copy code</string>
+    <string name="chat_code_label">code</string>
+    <string name="chat_input">Input</string>
+    <string name="chat_output">Output</string>
+    <string name="chat_error">Error</string>
+
+    <!-- Permissions -->
+    <string name="permission_title">Permission requested</string>
+    <string name="permission_subtitle">OpenCode wants to run an action</string>
+    <string name="permission_allow_once">Allow once</string>
+    <string name="permission_always">Always allow</string>
+    <string name="permission_reject">Reject</string>
+    <string name="permission_notification_title">Permission needed</string>
+    <string name="permission_notification_body">A tool needs approval</string>
+
+    <!-- Settings -->
+    <string name="settings_section_connection">Connection</string>
+    <string name="settings_title">Your server</string>
+    <string name="settings_hint">Use the LAN address on the same Wi-Fi, or the tunnel URL when you are away.</string>
+    <string name="settings_server_url">Server URL</string>
+    <string name="settings_password">Password</string>
+    <string name="settings_show_password">Show password</string>
+    <string name="settings_hide_password">Hide password</string>
+    <string name="settings_connected">Connected</string>
+    <string name="settings_not_reachable">Not reachable</string>
+    <string name="settings_checking">Checking…</string>
+    <string name="settings_not_tested">Not tested yet</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_body">OpenCode Mobile talks to your OpenCode server over its HTTP API. The username is always \"opencode\"; only the password is needed.</string>
+    <string name="settings_about_storage">Credentials are stored on this device only.</string>
+    <string name="settings_background_title">Background notifications</string>
+    <string name="settings_background_body">Notify me when a session finishes while I\'m elsewhere. Keeps a low-priority notification while watching.</string>
+    <string name="settings_test_notification">Send a test notification</string>
+    <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
+    <string name="notif_test_title">Test notification</string>
+    <string name="notif_test_body">If you can see this, notifications work. The watcher still needs a running session to report.</string>
+
+    <!-- Share -->
+    <string name="share_title">Send to a session</string>
+    <string name="share_body_image">The image and your note go to the session you choose.</string>
+    <string name="share_body_text">Your text goes to the session you choose.</string>
+    <string name="share_empty">No sessions available. Is the server reachable?</string>
+    <string name="share_failed">Could not send</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_watch">Watcher</string>
+    <string name="notif_channel_watch_desc">Keeps the app connected while it watches your sessions</string>
+    <string name="notif_channel_sessions">Session finished</string>
+    <string name="notif_channel_sessions_desc">Tells you when a session stops working</string>
+    <string name="notif_channel_permissions">Permission requests</string>
+    <string name="notif_channel_permissions_desc">A session is waiting for your approval</string>
+    <string name="notif_watching_title">OpenCode</string>
+    <string name="notif_running">%1$d running</string>
+    <string name="notif_waiting">Waiting for a session to run</string>
+    <string name="notif_finished">Finished — tap to open</string>
+    <string name="notif_session_fallback">Session</string>
 </resources>

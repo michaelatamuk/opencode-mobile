@@ -83,6 +83,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,6 +96,7 @@ import com.opencode.mobile.Msg
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
+import com.opencode.mobile.R
 import com.opencode.mobile.WatchState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -146,6 +148,7 @@ fun ChatScreen(
 
     val lastId = state.messages.lastOrNull()?.id
     val lastLength = state.messages.lastOrNull()?.plainText?.length
+    val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
     LaunchedEffect(lastId, lastLength) {
         if (state.messages.isNotEmpty()) {
             runCatching { listState.animateScrollToItem(state.messages.lastIndex) }
@@ -179,7 +182,7 @@ fun ChatScreen(
         ) {
             if (showBack) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             } else {
                 Spacer(Modifier.width(12.dp))
@@ -210,7 +213,7 @@ fun ChatScreen(
                     }) {
                         Icon(
                             Icons.Rounded.Stop,
-                            contentDescription = "Stop",
+                            contentDescription = stringResource(R.string.action_stop),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -218,7 +221,7 @@ fun ChatScreen(
                     IconButton(onClick = onSettings) {
                         Icon(
                             Icons.Rounded.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.action_settings),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
@@ -288,7 +291,7 @@ fun ChatScreen(
                                     ) {
                                         Icon(
                                             Icons.Rounded.Close,
-                                            contentDescription = "Remove attachment",
+                                            contentDescription = stringResource(R.string.chat_remove_attachment),
                                             tint = Color.White,
                                             modifier = Modifier.size(12.dp)
                                         )
@@ -308,7 +311,7 @@ fun ChatScreen(
                         }) {
                             Icon(
                                 Icons.Rounded.AddPhotoAlternate,
-                                contentDescription = "Attach screenshot",
+                                contentDescription = stringResource(R.string.chat_attach),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(21.dp)
                             )
@@ -319,7 +322,7 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f),
                             placeholder = {
                                 Text(
-                                    if (state.busy) "Steer OpenCode…" else "Message OpenCode",
+                                    stringResource(if (state.busy) R.string.chat_placeholder_busy else R.string.chat_placeholder),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             },
@@ -344,7 +347,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Rounded.Stop,
-                                    contentDescription = "Stop",
+                                    contentDescription = stringResource(R.string.action_stop),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -358,7 +361,7 @@ fun ChatScreen(
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 input = ""
                                 picked = emptyList()
-                                vm.send(text.ifBlank { "Screenshot attached." }, files) { ok ->
+                                vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
                                     if (!ok) input = text
                                 }
                             },
@@ -371,7 +374,7 @@ fun ChatScreen(
                         ) {
                             Icon(
                                 Icons.Rounded.Send,
-                                contentDescription = "Send",
+                                contentDescription = stringResource(R.string.action_send),
                                 modifier = Modifier.size(19.dp)
                             )
                         }
@@ -397,7 +400,7 @@ private fun UserMessage(message: Msg) {
                 when (part) {
                     is Part.Image -> AsyncImage(
                         model = "data:${part.mime};base64,${part.base64}",
-                        contentDescription = "Attached image",
+                        contentDescription = stringResource(R.string.chat_attached_image),
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .widthIn(max = 260.dp)
@@ -532,9 +535,9 @@ private fun PermissionSheet(
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text("Permission requested", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.permission_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "OpenCode wants to run an action",
+                        stringResource(R.string.permission_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -566,18 +569,18 @@ private fun PermissionSheet(
                 onClick = { onDecision("once") },
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Allow once") }
+            ) { Text(stringResource(R.string.permission_allow_once)) }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { onDecision("always") },
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f)
-                ) { Text("Always allow") }
+                ) { Text(stringResource(R.string.permission_always)) }
                 TextButton(
                     onClick = { onDecision("reject") },
                     modifier = Modifier.weight(1f)
-                ) { Text("Reject", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.permission_reject), color = MaterialTheme.colorScheme.error) }
             }
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

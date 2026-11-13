@@ -34,7 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.opencode.mobile.ui.ChatScreen
 import com.opencode.mobile.ui.OpenCodeTheme
@@ -163,6 +165,7 @@ private fun Root() {
     }
 
     val showSettings = repo == null || settingsOpen
+    val notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     BackHandler(enabled = showSettings && repo != null) { settingsOpen = false }
     BackHandler(enabled = repo != null && openSessionID != null && !showSettings) {
@@ -178,7 +181,9 @@ private fun Root() {
                 initialPassword = password,
                 canCancel = false,
                 watching = false,
+                notificationsEnabled = notificationsEnabled,
                 onWatchingChange = {},
+                onTestNotification = { Notify.test(context) },
                 onCancel = {},
                 onSave = { s, p ->
                     server = s.trim()
@@ -192,6 +197,7 @@ private fun Root() {
                 initialPassword = password,
                 canCancel = true,
                 watching = watching,
+                notificationsEnabled = notificationsEnabled,
                 onWatchingChange = { enabled ->
                     if (!enabled) {
                         stopWatching()
@@ -206,6 +212,7 @@ private fun Root() {
                         startWatching()
                     }
                 },
+                onTestNotification = { Notify.test(context) },
                 onCancel = { settingsOpen = false },
                 onSave = { s, p ->
                     server = s.trim()
@@ -238,7 +245,7 @@ private fun Root() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "Pick a session",
+                            stringResource(R.string.chat_pick_session),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

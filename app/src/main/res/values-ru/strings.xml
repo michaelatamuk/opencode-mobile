@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenCode</string>
+
+    <string name="action_back">Назад</string>
+    <string name="action_settings">Настройки</string>
+    <string name="action_refresh">Обновить</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_connect">Подключиться</string>
+    <string name="action_test">Проверить подключение</string>
+    <string name="action_testing">Проверка…</string>
+    <string name="action_retry">Повторить</string>
+    <string name="action_change_server">Сменить сервер</string>
+    <string name="action_stop">Остановить</string>
+    <string name="action_send">Отправить</string>
+    <string name="action_new_session">Новая сессия</string>
+    <string name="action_stop_watching">Прекратить наблюдение</string>
+
+    <string name="sessions_title">Сессии</string>
+    <string name="sessions_empty_title">Сессий пока нет</string>
+    <string name="sessions_empty_body">Запустите сессию в TUI или создайте её здесь.</string>
+    <string name="sessions_unreachable_title">Сервер недоступен</string>
+    <string name="sessions_reconnecting">Переподключение. %1$s</string>
+    <string name="session_running">работает</string>
+    <string name="session_untitled">Без названия</string>
+    <string name="session_new">Новая сессия</string>
+
+    <string name="time_just_now">только что</string>
+    <string name="time_minutes_ago">%1$d мин назад</string>
+    <string name="time_hours_ago">%1$d ч назад</string>
+    <string name="time_days_ago">%1$d дн назад</string>
+
+    <string name="chat_placeholder">Сообщение OpenCode</string>
+    <string name="chat_placeholder_busy">Направить OpenCode…</string>
+    <string name="chat_attach">Прикрепить скриншот</string>
+    <string name="chat_remove_attachment">Удалить вложение</string>
+    <string name="chat_attached_image">Прикреплённое изображение</string>
+    <string name="chat_screenshot_only">Скриншот прикреплён.</string>
+    <string name="chat_pick_session">Выберите сессию</string>
+    <string name="chat_thought">Размышление</string>
+    <string name="chat_thought_for">Размышлял %1$d с</string>
+    <string name="chat_thinking">Думает…</string>
+    <string name="chat_show_thoughts">Показать размышления</string>
+    <string name="chat_hide_thoughts">Скрыть размышления</string>
+    <string name="chat_copy_code">Копировать код</string>
+    <string name="chat_code_label">код</string>
+    <string name="chat_input">Ввод</string>
+    <string name="chat_output">Вывод</string>
+    <string name="chat_error">Ошибка</string>
+
+    <string name="permission_title">Требуется разрешение</string>
+    <string name="permission_subtitle">OpenCode хочет выполнить действие</string>
+    <string name="permission_allow_once">Разрешить один раз</string>
+    <string name="permission_always">Всегда разрешать</string>
+    <string name="permission_reject">Отклонить</string>
+    <string name="permission_notification_title">Требуется разрешение</string>
+    <string name="permission_notification_body">Инструменту нужно одобрение</string>
+
+    <string name="settings_section_connection">Подключение</string>
+    <string name="settings_title">Ваш сервер</string>
+    <string name="settings_hint">Используйте адрес в локальной сети или URL туннеля вне дома.</string>
+    <string name="settings_server_url">Адрес сервера</string>
+    <string name="settings_password">Пароль</string>
+    <string name="settings_show_password">Показать пароль</string>
+    <string name="settings_hide_password">Скрыть пароль</string>
+    <string name="settings_connected">Подключено</string>
+    <string name="settings_not_reachable">Недоступен</string>
+    <string name="settings_checking">Проверка…</string>
+    <string name="settings_not_tested">Ещё не проверено</string>
+    <string name="settings_about_title">О приложении</string>
+    <string name="settings_about_body">OpenCode Mobile общается с вашим сервером OpenCode по HTTP API. Имя пользователя всегда \"opencode\", нужен только пароль.</string>
+    <string name="settings_about_storage">Учётные данные хранятся только на этом устройстве.</string>
+    <string name="settings_background_title">Фоновые уведомления</string>
+    <string name="settings_background_body">Сообщать, когда сессия завершится, пока вы в другом месте. Пока наблюдение включено, висит уведомление низкого приоритета.</string>
+    <string name="settings_test_notification">Отправить тестовое уведомление</string>
+    <string name="settings_notifications_off">Уведомления для этого приложения отключены в настройках Android, поэтому ничего не появится. Разрешите их и отправьте тестовое.</string>
+    <string name="notif_test_title">Тестовое уведомление</string>
+    <string name="notif_test_body">Если вы это видите, уведомления работают. Для отчёта наблюдателю всё ещё нужна работающая сессия.</string>
+
+    <string name="share_title">Отправить в сессию</string>
+    <string name="share_body_image">Изображение и заметка уйдут в выбранную сессию.</string>
+    <string name="share_body_text">Текст уйдёт в выбранную сессию.</string>
+    <string name="share_empty">Нет доступных сессий. Сервер доступен?</string>
+    <string name="share_failed">Не удалось отправить</string>
+
+    <string name="notif_channel_watch">Наблюдение</string>
+    <string name="notif_channel_watch_desc">Поддерживает соединение, пока приложение следит за сессиями</string>
+    <string name="notif_channel_sessions">Сессия завершена</string>
+    <string name="notif_channel_sessions_desc">Сообщает, когда сессия перестала работать</string>
+    <string name="notif_channel_permissions">Запросы разрешений</string>
+    <string name="notif_channel_permissions_desc">Сессия ждёт вашего подтверждения</string>
+    <string name="notif_watching_title">OpenCode</string>
+    <string name="notif_running">Работает: %1$d</string>
+    <string name="notif_waiting">Ожидание запуска сессии</string>
+    <string name="notif_finished">Завершено — нажмите, чтобы открыть</string>
+    <string name="notif_session_fallback">Сессия</string>
+</resources>

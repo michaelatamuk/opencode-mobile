@@ -36,9 +36,9 @@ class SessionWatcherService : Service() {
     companion object {
         const val ACTION_STOP = "com.opencode.mobile.STOP_WATCHING"
         private const val ONGOING_ID = 1001
-        private const val CHANNEL_ONGOING = "watch"
-        private const val CHANNEL_SESSIONS = "sessions"
-        private const val CHANNEL_PERMISSIONS = "permissions"
+        private const val CHANNEL_ONGOING = Notify.CHANNEL_WATCH
+        private const val CHANNEL_SESSIONS = Notify.CHANNEL_SESSIONS
+        private const val CHANNEL_PERMISSIONS = Notify.CHANNEL_PERMISSIONS
         private const val POLL_MS = 10_000L
     }
 
@@ -55,31 +55,7 @@ class SessionWatcherService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val manager = getSystemService(NotificationManager::class.java)
-
-        val ongoing = NotificationChannel(
-            CHANNEL_ONGOING,
-            "Watcher",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Keeps the app connected while it watches your sessions"
-            setShowBadge(false)
-        }
-        val sessions = NotificationChannel(
-            CHANNEL_SESSIONS,
-            "Session finished",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply { description = "Tells you when a session stops working" }
-
-        val permissions = NotificationChannel(
-            CHANNEL_PERMISSIONS,
-            "Permission requests",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply { description = "A session is waiting for your approval" }
-
-        manager.createNotificationChannel(ongoing)
-        manager.createNotificationChannel(sessions)
-        manager.createNotificationChannel(permissions)
+        Notify.ensureChannels(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -184,25 +160,25 @@ class SessionWatcherService : Service() {
         }
 
         val body = buildString {
-            append(request.action.ifBlank { "A tool needs approval" })
+            append(request.action.ifBlank { getString(R.string.permission_notification_body) })
             if (request.detail.isNotBlank()) append('\n').append(request.detail.take(140))
         }
 
         return NotificationCompat.Builder(this, CHANNEL_PERMISSIONS)
             .setSmallIcon(R.drawable.ic_stat_opencode)
-            .setContentTitle(titles[request.sessionID] ?: "Permission needed")
-            .setContentText(request.action.ifBlank { "A tool needs approval" })
+            .setContentTitle(titles[request.sessionID] ?: getString(R.string.permission_notification_title))
+            .setContentText(request.action.ifBlank { getString(R.string.permission_notification_body) })
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(action("once", "Allow"))
-            .addAction(action("reject", "Reject"))
+            .addAction(action("once", getString(R.string.permission_allow_once)))
+            .addAction(action("reject", getString(R.string.permission_reject)))
             .build()
     }
 
     private fun notifyFinished(sessionID: String) {
-        val title = titles[sessionID] ?: "Session"
+        val title = titles[sessionID] ?: getString(R.string.notif_session_fallback)
         val open = Intent(this, MainActivity::class.java)
             .putExtra("session_id", sessionID)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -216,7 +192,7 @@ class SessionWatcherService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
             .setSmallIcon(R.drawable.ic_stat_opencode)
             .setContentTitle(title)
-            .setContentText("Finished — tap to open")
+            .setContentText(getString(R.string.notif_finished))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(pending)
@@ -245,19 +221,19 @@ class SessionWatcherService : Service() {
         )
 
         val text = when {
-            running > 0 -> "$running session${if (running == 1) "" else "s"} running"
-            else -> "Waiting for a session to run"
+            running > 0 -> getString(R.string.notif_running, running)
+            else -> getString(R.string.notif_waiting)
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_stat_opencode)
-            .setContentTitle("OpenCode")
+            .setContentTitle(getString(R.string.notif_watching_title))
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Stop watching", stop)
+            .addAction(0, getString(R.string.action_stop_watching), stop)
             .build()
     }
 

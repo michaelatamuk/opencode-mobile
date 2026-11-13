@@ -62,6 +62,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.opencode.mobile.R
 import java.util.Locale
 import kotlin.math.abs
 
@@ -263,7 +265,7 @@ fun CodeBlock(lang: String, code: String) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    lang.ifBlank { "code" }.uppercase(Locale.getDefault()),
+                    lang.ifBlank { stringResource(R.string.chat_code_label) }.uppercase(Locale.getDefault()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -277,7 +279,7 @@ fun CodeBlock(lang: String, code: String) {
                 ) {
                     Icon(
                         Icons.Rounded.ContentCopy,
-                        contentDescription = "Copy code",
+                        contentDescription = stringResource(R.string.chat_copy_code),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -414,10 +416,10 @@ fun ToolCallCard(
             }
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (input.isNotBlank()) ToolDetail("input", input)
-                    if (output.isNotBlank()) ToolDetail("output", output)
+                    if (input.isNotBlank()) ToolDetail(stringResource(R.string.chat_input), input)
+                    if (output.isNotBlank()) ToolDetail(stringResource(R.string.chat_output), output)
                     if (error.isNotBlank()) {
-                        ToolDetail("error", error, MaterialTheme.colorScheme.error)
+                        ToolDetail(stringResource(R.string.chat_error), error, MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -435,9 +437,9 @@ fun ReasoningBlock(
     var expanded by remember { mutableStateOf(false) }
     val chevron by animateFloatAsState(if (expanded) 180f else 0f, label = "reasoningChevron")
     val label = when {
-        pending -> "Thinking…"
-        durationMs >= 1000 -> "Thought for ${durationMs / 1000}s"
-        else -> "Thought"
+        pending -> stringResource(R.string.chat_thinking)
+        durationMs >= 1000 -> stringResource(R.string.chat_thought_for, (durationMs / 1000).toInt())
+        else -> stringResource(R.string.chat_thought)
     }
 
     Column(modifier) {
@@ -462,7 +464,8 @@ fun ReasoningBlock(
             Spacer(Modifier.width(2.dp))
             Icon(
                 Icons.Rounded.ExpandMore,
-                contentDescription = if (expanded) "Hide thoughts" else "Show thoughts",
+                contentDescription = if (expanded) stringResource(R.string.chat_hide_thoughts)
+                else stringResource(R.string.chat_show_thoughts),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(14.dp).rotate(chevron)
             )
@@ -583,16 +586,17 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+@Composable
 fun relativeTime(millis: Long): String {
     if (millis <= 0L) return ""
     val delta = System.currentTimeMillis() - millis
-    if (delta < 60_000) return "just now"
+    if (delta < 60_000) return stringResource(R.string.time_just_now)
     val minutes = delta / 60_000
-    if (minutes < 60) return "${minutes}m ago"
+    if (minutes < 60) return stringResource(R.string.time_minutes_ago, minutes.toInt())
     val hours = minutes / 60
-    if (hours < 24) return "${hours}h ago"
+    if (hours < 24) return stringResource(R.string.time_hours_ago, hours.toInt())
     val days = hours / 24
-    if (days < 7) return "${days}d ago"
+    if (days < 7) return stringResource(R.string.time_days_ago, days.toInt())
     return String.format(Locale.getDefault(), "%tY-%<tm-%<td", java.util.Date(millis))
 }
 

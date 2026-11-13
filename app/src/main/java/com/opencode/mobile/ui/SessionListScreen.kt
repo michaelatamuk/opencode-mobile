@@ -42,11 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.OpenCodeRepository
+import com.opencode.mobile.R
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
 
@@ -78,12 +80,12 @@ fun SessionListScreen(
                     .padding(start = 20.dp, end = 6.dp, top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SectionLabel("OpenCode")
+                SectionLabel(stringResource(R.string.app_name))
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { vm.refresh() }) {
                     Icon(
                         Icons.Rounded.Refresh,
-                        contentDescription = "Refresh",
+                        contentDescription = stringResource(R.string.action_refresh),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(19.dp)
                     )
@@ -91,7 +93,7 @@ fun SessionListScreen(
                 IconButton(onClick = onSettings) {
                     Icon(
                         Icons.Rounded.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.action_settings),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(19.dp)
                     )
@@ -102,7 +104,7 @@ fun SessionListScreen(
                 Modifier.padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                Text("Sessions", style = MaterialTheme.typography.displaySmall)
+                Text(stringResource(R.string.sessions_title), style = MaterialTheme.typography.displaySmall)
                 Spacer(Modifier.weight(1f))
                 if (state.sessions.isNotEmpty()) {
                     Text(
@@ -121,7 +123,7 @@ fun SessionListScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        "Reconnecting. ${state.error}",
+                        stringResource(R.string.sessions_reconnecting, state.error ?: ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         maxLines = 2,
@@ -167,7 +169,7 @@ fun SessionListScreen(
         ExtendedFloatingActionButton(
             onClick = { vm.create { onOpen(it) } },
             icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-            text = { Text("New session") },
+            text = { Text(stringResource(R.string.action_new_session)) },
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = RoundedCornerShape(18.dp),
@@ -227,7 +229,7 @@ private fun SessionRow(session: SessionItem, onClick: () -> Unit) {
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "running",
+                            stringResource(R.string.session_running),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -283,12 +285,12 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            if (error != null) "Can't reach your server" else "No sessions yet",
+            if (error != null) stringResource(R.string.sessions_unreachable_title) else stringResource(R.string.sessions_empty_title),
             style = MaterialTheme.typography.headlineSmall
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            error ?: "Start a session from the TUI, or create one here.",
+            error ?: stringResource(R.string.sessions_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -296,8 +298,8 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (error != null) {
-                TextButton(onClick = onRetry) { Text("Retry") }
-                TextButton(onClick = onSettings) { Text("Change server") }
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
+                TextButton(onClick = onSettings) { Text(stringResource(R.string.action_change_server)) }
             }
         }
         Spacer(Modifier.height(70.dp))

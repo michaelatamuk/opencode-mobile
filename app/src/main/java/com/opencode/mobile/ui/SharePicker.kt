@@ -32,9 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opencode.mobile.Api
+import com.opencode.mobile.R
 import com.opencode.mobile.SessionItem
 
 /** Shown when content is shared into the app: pick the session to send it to. */
@@ -66,11 +68,11 @@ fun SharePickerSheet(
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 4.dp)
         ) {
-            Text("Send to a session", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.share_title), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             Text(
-                if (hasImage) "The image and your note go to the session you choose."
-                else "Your text goes to the session you choose.",
+                if (hasImage) stringResource(R.string.share_body_image)
+                else stringResource(R.string.share_body_text),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -79,7 +81,7 @@ fun SharePickerSheet(
             when {
                 loading -> CircularProgressIndicator(Modifier.padding(24.dp))
                 sessions.isEmpty() -> Text(
-                    "No sessions available. Is the server reachable?",
+                    stringResource(R.string.share_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

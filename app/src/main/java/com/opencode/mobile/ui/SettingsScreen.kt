@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -62,6 +64,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencode.mobile.Api
+import com.opencode.mobile.R
 import com.opencode.mobile.AppScope
 import kotlinx.coroutines.launch
 
@@ -73,7 +76,9 @@ fun SettingsScreen(
     initialPassword: String,
     canCancel: Boolean,
     watching: Boolean,
+    notificationsEnabled: Boolean,
     onWatchingChange: (Boolean) -> Unit,
+    onTestNotification: () -> Unit,
     onCancel: () -> Unit,
     onSave: (String, String) -> Unit
 ) {
@@ -111,14 +116,14 @@ fun SettingsScreen(
         ) {
             if (canCancel) {
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             } else {
                 Spacer(Modifier.width(12.dp))
             }
             Spacer(Modifier.weight(1f))
             if (canCancel) {
-                TextButton(onClick = { onSave(server, password) }) { Text("Save") }
+                TextButton(onClick = { onSave(server, password) }) { Text(stringResource(R.string.action_save)) }
             }
         }
 
@@ -129,12 +134,12 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(8.dp))
-            SectionLabel("Connection")
+            SectionLabel(stringResource(R.string.settings_section_connection))
             Spacer(Modifier.height(6.dp))
-            Text("Your server", style = MaterialTheme.typography.displaySmall)
+            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(10.dp))
             Text(
-                "Use the LAN address on the same Wi-Fi, or the tunnel URL when you are away.",
+                stringResource(R.string.settings_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -144,7 +149,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = server,
                     onValueChange = { server = it; state = ConnState.Unknown },
-                    label = { Text("Server URL") },
+                    label = { Text(stringResource(R.string.settings_server_url)) },
                     placeholder = { Text("http://192.168.1.10:28894") },
                     singleLine = true,
                     leadingIcon = {
@@ -162,7 +167,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it; state = ConnState.Unknown },
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.settings_password)) },
                     singleLine = true,
                     leadingIcon = {
                         Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -171,7 +176,7 @@ fun SettingsScreen(
                         IconButton(onClick = { reveal = !reveal }) {
                             Icon(
                                 if (reveal) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                contentDescription = if (reveal) "Hide password" else "Show password",
+                                contentDescription = stringResource(if (reveal) R.string.settings_hide_password else R.string.settings_show_password),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -197,12 +202,12 @@ fun SettingsScreen(
                     onClick = { test() },
                     enabled = server.isNotBlank() && state != ConnState.Testing,
                     shape = RoundedCornerShape(14.dp)
-                ) { Text(if (state == ConnState.Testing) "Testing…" else "Test connection") }
+                ) { Text(stringResource(if (state == ConnState.Testing) R.string.action_testing else R.string.action_test)) }
                 Button(
                     onClick = { onSave(server, password) },
                     enabled = server.isNotBlank(),
                     shape = RoundedCornerShape(14.dp)
-                ) { Text(if (canCancel) "Save" else "Connect") }
+                ) { Text(stringResource(if (canCancel) R.string.action_save else R.string.action_connect)) }
             }
 
             Spacer(Modifier.height(28.dp))
@@ -211,22 +216,40 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Background notifications", style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(4.dp))
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_background_title),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                stringResource(R.string.settings_background_body),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(checked = watching, onCheckedChange = onWatchingChange)
+                    }
+
+                    if (!notificationsEnabled) {
+                        Spacer(Modifier.height(10.dp))
                         Text(
-                            "Notify me when a session finishes while I'm elsewhere. " +
-                                "Keeps a low-priority notification while watching.",
+                            stringResource(R.string.settings_notifications_off),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Switch(checked = watching, onCheckedChange = onWatchingChange)
+
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        onClick = onTestNotification,
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                    ) {
+                        Text(stringResource(R.string.settings_test_notification))
+                    }
                 }
             }
 
@@ -237,15 +260,14 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("About", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.settings_about_title), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "OpenCode Mobile talks to your OpenCode server over its HTTP API. " +
-                            "The username is always \"opencode\"; only the password is needed.",
+                        stringResource(R.string.settings_about_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Credentials are stored on this device only.",
+                        stringResource(R.string.settings_about_storage),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -287,10 +309,10 @@ private fun StatusPill(state: ConnState, detail: String?) {
         ConnState.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val label = when (state) {
-        ConnState.Ok -> "Connected"
-        ConnState.Failed -> "Not reachable"
-        ConnState.Testing -> "Checking…"
-        ConnState.Unknown -> "Not tested yet"
+        ConnState.Ok -> stringResource(R.string.settings_connected)
+        ConnState.Failed -> stringResource(R.string.settings_not_reachable)
+        ConnState.Testing -> stringResource(R.string.settings_checking)
+        ConnState.Unknown -> stringResource(R.string.settings_not_tested)
     }
     AnimatedVisibility(
         visible = true,
