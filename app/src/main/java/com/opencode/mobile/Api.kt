@@ -1,6 +1,7 @@
 package com.opencode.mobile
 
 import kotlinx.coroutines.Dispatchers
+import android.net.Uri
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -20,7 +21,8 @@ data class SessionItem(
     val title: String,
     val updated: Long,
     val created: Long,
-    val cost: Double
+    val cost: Double,
+    val running: Boolean = false
 )
 
 sealed interface Part {
@@ -41,7 +43,8 @@ data class Msg(
     val id: String,
     val role: String,
     val parts: List<Part>,
-    val pending: Boolean
+    val pending: Boolean,
+    val created: Long = 0L
 ) {
     val plainText: String
         get() = parts.filterIsInstance<Part.Text>().joinToString("\n\n") { it.text }
@@ -112,16 +115,19 @@ class Api(server: String, private val password: String) {
     }
 
     suspend fun sessions(): List<SessionItem> = withContext(Dispatchers.IO) {
+        val active = runCatching { activeSessions() }.getOrDefault(emptySet())
         val data = getJson("/api/session").optJSONArray("data") ?: JSONArray()
         (0 until data.length()).map { i ->
             val o = data.getJSONObject(i)
             val time = o.optJSONObject("time")
+            val id = o.getString("id")
             SessionItem(
-                id = o.getString("id"),
+                id = id,
                 title = o.optString("title").ifBlank { "Untitled session" },
                 updated = time?.optLong("updated") ?: 0L,
                 created = time?.optLong("created") ?: 0L,
-                cost = o.optDouble("cost", 0.0)
+                cost = o.optDouble("cost", 0.0),
+                running = id in active
             )
         }.sortedByDescending { it.updated }
     }
@@ -136,12 +142,25 @@ class Api(server: String, private val password: String) {
         data.keys().asSequence().toSet()
     }
 
-    suspend fun messages(sessionID: String): List<Msg> = withContext(Dispatchers.IO) {
-        val data = getJson("/api/session/$sessionID/message").optJSONArray("data") ?: JSONArray()
-        // The API returns newest-first; the UI needs chronological order.
-        (0 until data.length())
+    data class MessagePage(val messages: List<Msg>, val olderCursor: String?)
+
+    suspend fun messages(
+        sessionID: String,
+        limit: Int = 50,
+        olderCursor: String? = null
+    ): MessagePage = withContext(Dispatchers.IO) {
+        val query = buildString {
+            append("/api/session/").append(sessionID).append("/message?limit=").append(limit)
+            append("&order=desc")
+            if (olderCursor != null) append("&cursor=").append(Uri.encode(olderCursor))
+        }
+        val page = getJson(query)
+        val data = page.optJSONArray("data") ?: JSONArray()
+        val messages = (0 until data.length())
             .mapNotNull { i -> parseMessage(data.getJSONObject(i)) }
             .reversed()
+        val next = page.optJSONObject("cursor")?.optString("next")
+        MessagePage(messages, next?.takeIf { it.isNotBlank() })
     }
 
     private fun parseMessage(o: JSONObject): Msg? {
@@ -162,7 +181,13 @@ class Api(server: String, private val password: String) {
                 }
                 val text = o.optString("text")
                 if (text.isNotBlank()) parts += Part.Text(text)
-                Msg(id, "user", parts, pending = false)
+                Msg(
+                    id = id,
+                    role = "user",
+                    parts = parts,
+                    pending = false,
+                    created = o.optJSONObject("time")?.optLong("created") ?: 0L
+                )
             }
 
             "assistant" -> {
@@ -226,7 +251,13 @@ class Api(server: String, private val password: String) {
                     }
                 }
                 val done = o.optJSONObject("time")?.has("completed") == true
-                Msg(id, "assistant", parts, pending = !done)
+                Msg(
+                    id = id,
+                    role = "assistant",
+                    parts = parts,
+                    pending = !done,
+                    created = o.optJSONObject("time")?.optLong("created") ?: 0L
+                )
             }
 
             else -> null

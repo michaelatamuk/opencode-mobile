@@ -38,6 +38,7 @@ class SessionWatcherService : Service() {
         private const val ONGOING_ID = 1001
         private const val CHANNEL_ONGOING = "watch"
         private const val CHANNEL_SESSIONS = "sessions"
+        private const val CHANNEL_PERMISSIONS = "permissions"
         private const val POLL_MS = 10_000L
     }
 
@@ -45,6 +46,7 @@ class SessionWatcherService : Service() {
     private var job: Job? = null
     private var lastActive: Set<String> = emptySet()
     private var titles: MutableMap<String, String> = mutableMapOf()
+    private val notifiedPermissions = mutableSetOf<String>()
     private var primed = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -67,8 +69,15 @@ class SessionWatcherService : Service() {
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply { description = "Tells you when a session stops working" }
 
+        val permissions = NotificationChannel(
+            CHANNEL_PERMISSIONS,
+            "Permission requests",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply { description = "A session is waiting for your approval" }
+
         manager.createNotificationChannel(ongoing)
         manager.createNotificationChannel(sessions)
+        manager.createNotificationChannel(permissions)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -113,6 +122,7 @@ class SessionWatcherService : Service() {
                 lastActive = active
                 primed = true
 
+                syncPermissions(api)
                 updateOngoing(active.size)
             } catch (e: CancellationException) {
                 throw e
@@ -121,6 +131,67 @@ class SessionWatcherService : Service() {
             }
             delay(POLL_MS)
         }
+    }
+
+    private suspend fun syncPermissions(api: Api) {
+        val pending = runCatching { api.permissions() }.getOrDefault(emptyList())
+        val ids = pending.map { it.id }.toSet()
+        val manager = getSystemService(NotificationManager::class.java)
+
+        // Drop notifications for requests that were answered somewhere else.
+        (notifiedPermissions - ids).forEach { id ->
+            manager.cancel(id.hashCode())
+            notifiedPermissions.remove(id)
+        }
+
+        pending.forEach { request ->
+            if (notifiedPermissions.add(request.id)) {
+                manager.notify(request.id.hashCode(), permissionNotification(request))
+            }
+        }
+    }
+
+    private fun permissionNotification(request: PendingPermission): Notification {
+        val open = PendingIntent.getActivity(
+            this,
+            request.id.hashCode(),
+            Intent(this, MainActivity::class.java)
+                .putExtra("session_id", request.sessionID)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        fun action(decision: String, label: String): NotificationCompat.Action {
+            val intent = Intent(this, PermissionActionReceiver::class.java)
+                .setAction("com.opencode.mobile.PERMISSION_ACTION")
+                .putExtra("session_id", request.sessionID)
+                .putExtra("request_id", request.id)
+                .putExtra("decision", decision)
+            val pending = PendingIntent.getBroadcast(
+                this,
+                (request.id + decision).hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            return NotificationCompat.Action(0, label, pending)
+        }
+
+        val body = buildString {
+            append(request.action.ifBlank { "A tool needs approval" })
+            if (request.detail.isNotBlank()) append('\n').append(request.detail.take(140))
+        }
+
+        return NotificationCompat.Builder(this, CHANNEL_PERMISSIONS)
+            .setSmallIcon(R.drawable.ic_stat_opencode)
+            .setContentTitle(titles[request.sessionID] ?: "Permission needed")
+            .setContentText(request.action.ifBlank { "A tool needs approval" })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
+            .setContentIntent(open)
+            .addAction(action("once", "Allow"))
+            .addAction(action("reject", "Reject"))
+            .build()
     }
 
     private fun notifyFinished(sessionID: String) {

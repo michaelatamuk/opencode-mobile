@@ -19,6 +19,9 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Send while a turn is running (`delivery: "steer"`) and a separate stop button
 - Background notifications when a session finishes, via a foreground service
   watching `/api/session/active`
+- High-priority permission notifications with Allow / Reject actions
+- Share target: send an image or text from any app into a session
+- Paginated history (loads older messages while scrolling up)
 - Light and dark themes, edge-to-edge, Material 3
 
 ## Requirements

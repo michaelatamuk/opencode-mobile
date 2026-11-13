@@ -29,7 +29,11 @@ import com.opencode.mobile.ui.ChatScreen
 import com.opencode.mobile.ui.OpenCodeTheme
 import com.opencode.mobile.ui.SessionListScreen
 import com.opencode.mobile.ui.SettingsScreen
+import com.opencode.mobile.ui.SharePickerSheet
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private sealed interface Route {
     data object Sessions : Route
@@ -40,6 +44,13 @@ private sealed interface Route {
 /** Deep link target coming from a notification tap. */
 object Navigation {
     val openSession = MutableStateFlow<String?>(null)
+}
+
+data class SharePayload(val text: String?, val uri: android.net.Uri?)
+
+/** Content shared into the app from another application. */
+object ShareTarget {
+    val payload = MutableStateFlow<SharePayload?>(null)
 }
 
 class MainActivity : ComponentActivity() {
@@ -61,7 +72,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        intent?.getStringExtra("session_id")?.let { Navigation.openSession.value = it }
+        if (intent == null) return
+        intent.getStringExtra("session_id")?.let { Navigation.openSession.value = it }
+
+        if (intent.action == Intent.ACTION_SEND) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            @Suppress("DEPRECATION")
+            val uri: android.net.Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            } else {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            }
+            if (text != null || uri != null) {
+                ShareTarget.payload.value = SharePayload(text, uri)
+            }
+        }
     }
 }
 
@@ -74,6 +99,8 @@ private fun App() {
     var password by remember { mutableStateOf(prefs.getString("password", "").orEmpty()) }
     var route by remember { mutableStateOf<Route>(Route.Sessions) }
     var watching by remember { mutableStateOf(prefs.getBoolean("watch", false)) }
+    var share by remember { mutableStateOf<SharePayload?>(null) }
+    val scope = AppScope
 
     val api = remember(server, password) {
         if (server.isBlank()) null else Api(server, password)
@@ -137,7 +164,47 @@ private fun App() {
         }
     }
 
+    // Incoming shared content.
+    LaunchedEffect(Unit) {
+        ShareTarget.payload.collect { payload ->
+            if (payload != null) share = payload
+        }
+    }
+
     val showSettings = api == null || route is Route.Settings
+
+    if (share != null && api != null) {
+        SharePickerSheet(
+            api = api,
+            hasImage = share?.uri != null,
+            onDismiss = {
+                share = null
+                ShareTarget.payload.value = null
+            },
+            onPick = { session ->
+                val payload = share
+                share = null
+                ShareTarget.payload.value = null
+                scope.launch {
+                    try {
+                        val attachment = payload?.uri?.let { uri ->
+                            withContext(Dispatchers.IO) { AttachmentLoader.load(context, uri) }
+                        }
+                        val text = payload?.text?.takeIf { it.isNotBlank() }
+                            ?: if (attachment != null) "Shared image." else "Shared."
+                        api.send(session.id, text, listOfNotNull(attachment))
+                        route = Route.Chat(session)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(
+                            context,
+                            e.message ?: "Could not send",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        )
+    }
 
     BackHandler(enabled = showSettings && api != null) { route = Route.Sessions }
     BackHandler(enabled = api != null && route is Route.Chat) { route = Route.Sessions }

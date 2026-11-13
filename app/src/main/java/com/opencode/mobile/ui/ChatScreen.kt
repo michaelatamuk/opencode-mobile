@@ -110,6 +110,8 @@ fun ChatScreen(
     onSettings: () -> Unit
 ) {
     var messages by remember { mutableStateOf<List<Msg>>(emptyList()) }
+    var olderCursor by remember { mutableStateOf<String?>(null) }
+    var loadingOlder by remember { mutableStateOf(false) }
     var permissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -137,13 +139,43 @@ fun ChatScreen(
 
     suspend fun refresh() {
         try {
-            messages = api.messages(session.id)
+            val page = api.messages(session.id, 50)
+            val byId = LinkedHashMap<String, Msg>()
+            messages.forEach { byId[it.id] = it }
+            page.messages.forEach { byId[it.id] = it }
+            messages = byId.values.sortedBy { it.created }
+            if (olderCursor == null) olderCursor = page.olderCursor
             permissions = api.permissions().filter { it.sessionID == session.id }
             error = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message
+        }
+    }
+
+    suspend fun loadOlder() {
+        val cursor = olderCursor ?: return
+        if (loadingOlder) return
+        loadingOlder = true
+        try {
+            val before = messages.size
+            val page = api.messages(session.id, 50, cursor)
+            val byId = LinkedHashMap<String, Msg>()
+            page.messages.forEach { byId[it.id] = it }
+            messages.forEach { byId[it.id] = it }
+            messages = byId.values.sortedBy { it.created }
+            olderCursor = page.olderCursor
+            val added = messages.size - before
+            if (added > 0) {
+                listState.scrollToItem(listState.firstVisibleItemIndex + added)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            loadingOlder = false
         }
     }
 
@@ -166,9 +198,15 @@ fun ChatScreen(
 
     LaunchedEffect(tick) { refresh() }
 
-    LaunchedEffect(messages.size, messages.lastOrNull()?.plainText?.length) {
+    LaunchedEffect(messages.lastOrNull()?.id, messages.lastOrNull()?.plainText?.length) {
         if (messages.isNotEmpty()) {
             runCatching { listState.animateScrollToItem(messages.lastIndex) }
+        }
+    }
+
+    LaunchedEffect(listState.firstVisibleItemIndex, olderCursor) {
+        if (olderCursor != null && listState.firstVisibleItemIndex <= 2) {
+            loadOlder()
         }
     }
 

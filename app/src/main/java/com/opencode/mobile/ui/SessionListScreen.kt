@@ -259,6 +259,24 @@ private fun SessionRow(session: SessionItem, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (session.running) {
+                        PulsingDot(
+                            color = MaterialTheme.colorScheme.secondary,
+                            pulsing = true,
+                            size = 6
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "running",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            "  ·  ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         relativeTime(session.updated),
                         style = MaterialTheme.typography.bodySmall,
