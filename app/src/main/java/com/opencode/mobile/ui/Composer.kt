@@ -181,21 +181,8 @@ fun Composer(
                 )
 
                 if (busy && hasContent) {
-                    Spacer(Modifier.width(4.dp))
-                    FilledTonalIconButton(
-                        onClick = onStop,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Stop,
-                            contentDescription = stringResource(R.string.action_stop),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
+                    // One control only: while typing, the primary morphs to Send.
+                    Spacer(Modifier.width(2.dp))
                 }
 
                 Spacer(Modifier.width(6.dp))

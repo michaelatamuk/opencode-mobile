@@ -1,10 +1,13 @@
 package com.opencode.mobile.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,28 +17,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,9 +55,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -103,6 +109,7 @@ fun SessionListScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     var query by rememberSaveable { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
 
@@ -111,245 +118,166 @@ fun SessionListScreen(
         else state.sessions.filter { it.title.contains(query, ignoreCase = true) }
     }
     val running = remember(filtered) { filtered.filter { it.running } }
-    val grouped = remember(filtered) {
-        filtered.filterNot { it.running }.groupBy { groupOf(it.updated) }
+    val history = remember(filtered) { filtered.filterNot { it.running } }
+    val grouped = remember(history) { history.groupBy { groupOf(it.updated) } }
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(searchOpen) {
+        if (searchOpen) runCatching { focusRequester.requestFocus() }
     }
 
-    val contentAlpha by animateFloatAsState(
-        if (state.loading && state.sessions.isEmpty()) 0.55f else 1f,
-        label = "alpha"
-    )
-
-    Box(
+    Column(
         modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 6.dp, top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SectionLabel(stringResource(R.string.app_name))
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { vm.refresh() }) {
-                    Icon(
-                        Icons.Rounded.Refresh,
-                        contentDescription = stringResource(R.string.action_refresh),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-                IconButton(onClick = onSettings) {
-                    Icon(
-                        Icons.Rounded.Settings,
-                        contentDescription = stringResource(R.string.action_settings),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-            }
-
-            Row(
-                Modifier.padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(stringResource(R.string.sessions_title), style = MaterialTheme.typography.displaySmall)
-                Spacer(Modifier.weight(1f))
-                if (state.sessions.isNotEmpty()) {
-                    Text(
-                        "${filtered.size}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-            }
-
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                placeholder = { Text(stringResource(R.string.sessions_search)) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Rounded.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.action_cancel),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
-            )
-
-            if (state.error != null && state.sessions.isNotEmpty()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-                    shape = CircleShape,
-                    modifier = Modifier.padding(start = 20.dp, top = 2.dp)
+        // Compact bar: title and actions, or an expanding search field.
+        AnimatedContent(
+            targetState = searchOpen,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "topbar"
+        ) { searching ->
+            if (searching) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        PulsingDot(
-                            color = MaterialTheme.colorScheme.error,
-                            pulsing = true,
-                            size = 6
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                        placeholder = { Text(stringResource(R.string.sessions_search)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
                         )
-                        Spacer(Modifier.width(7.dp))
+                    )
+                    IconButton(onClick = {
+                        searchOpen = false
+                        query = ""
+                    }) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.action_cancel))
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            stringResource(R.string.sessions_reconnecting_short),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            stringResource(R.string.sessions_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        val subtitle = when {
+                            state.error != null -> stringResource(R.string.sessions_reconnecting_short)
+                            running.isNotEmpty() ->
+                                "${running.size} ${stringResource(R.string.session_running)}"
+
+                            else -> "${filtered.size}"
+                        }
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (state.error != null) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            }
-
-            when {
-                state.loading && state.sessions.isEmpty() -> Column(
-                    Modifier.fillMaxWidth().graphicsLayer { alpha = contentAlpha }
-                ) {
-                    repeat(6) { SessionSkeleton() }
-                }
-
-                state.sessions.isEmpty() -> EmptySessions(
-                    error = state.error,
-                    onRetry = { vm.refresh() },
-                    onSettings = onSettings
-                )
-
-                filtered.isEmpty() -> Column(
-                    Modifier.fillMaxSize().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        stringResource(R.string.sessions_no_match),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                else -> LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 4.dp,
-                        bottom = 110.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (running.isNotEmpty()) {
-                        stickyHeader(key = "header-running") {
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                                    .padding(start = 4.dp, top = 10.dp, bottom = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                PulsingDot(
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    pulsing = true,
-                                    size = 6
-                                )
-                                Spacer(Modifier.width(7.dp))
-                                Text(
-                                    stringResource(R.string.sessions_running_header),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "${running.size}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        items(running, key = { it.id }) { session ->
-                            Box(Modifier.animateItem()) {
-                                SessionRow(
-                                    session = session,
-                                    onOpen = { onOpen(session) },
-                                    onRename = { renaming = session },
-                                    onDelete = { deleting = session }
-                                )
-                            }
-                        }
+                    IconButton(onClick = { searchOpen = true }) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = stringResource(R.string.sessions_search),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-
-                    SessionGroup.entries.forEach { group ->
-                        val sessions = grouped[group].orEmpty()
-                        if (sessions.isEmpty()) return@forEach
-
-                        stickyHeader(key = "header-$group") {
-                            Text(
-                                stringResource(labelOf(group)),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                                    .padding(start = 4.dp, top = 10.dp, bottom = 6.dp)
-                            )
-                        }
-
-                        items(sessions, key = { it.id }) { session ->
-                            Box(Modifier.animateItem()) {
-                                SessionRow(
-                                    session = session,
-                                    onOpen = { onOpen(session) },
-                                    onRename = { renaming = session },
-                                    onDelete = { deleting = session }
-                                )
-                            }
-                        }
+                    IconButton(onClick = onSettings) {
+                        Icon(
+                            Icons.Rounded.Settings,
+                            contentDescription = stringResource(R.string.action_settings),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    FilledIconButton(
+                        onClick = { vm.create { onOpen(it) } },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.action_new_session),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
         }
 
-        ExtendedFloatingActionButton(
-            onClick = { vm.create { onOpen(it) } },
-            icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-            text = { Text(stringResource(R.string.action_new_session)) },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 20.dp, bottom = 20.dp)
-        )
+        when {
+            state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
+                repeat(6) { SessionSkeleton() }
+            }
+
+            state.sessions.isEmpty() -> EmptySessions(
+                error = state.error,
+                onRetry = { vm.refresh() },
+                onSettings = onSettings
+            )
+
+            filtered.isEmpty() -> Text(
+                stringResource(R.string.sessions_no_match),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(32.dp)
+            )
+
+            else -> LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 28.dp)
+            ) {
+                if (running.isNotEmpty()) {
+                    item(key = "active-strip") {
+                        ActiveStrip(running, onOpen)
+                    }
+                }
+
+                SessionGroup.entries.forEach { group ->
+                    val sessions = grouped[group].orEmpty()
+                    if (sessions.isEmpty()) return@forEach
+
+                    stickyHeader(key = "header-$group") {
+                        Text(
+                            stringResource(labelOf(group)),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.background)
+                                .padding(start = 20.dp, top = 18.dp, bottom = 6.dp)
+                        )
+                    }
+
+                    items(sessions, key = { it.id }) { session ->
+                        Box(Modifier.animateItem()) {
+                            SessionRow(
+                                session = session,
+                                onOpen = { onOpen(session) },
+                                onRename = { renaming = session },
+                                onDelete = { deleting = session }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     renaming?.let { session ->
@@ -373,10 +301,7 @@ fun SessionListScreen(
                     vm.delete(session.id)
                     deleting = null
                 }) {
-                    Text(
-                        stringResource(R.string.action_delete),
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -385,6 +310,129 @@ fun SessionListScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * Live work is state, not history: one horizontal strip of active cards instead of
+ * a fake "Running" date group.
+ */
+@Composable
+private fun ActiveStrip(running: List<SessionItem>, onOpen: (SessionItem) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(running, key = { it.id }) { session ->
+            Surface(
+                onClick = { onOpen(session) },
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.width(260.dp)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ActivityBars(color = MaterialTheme.colorScheme.secondary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            session.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            stringResource(R.string.session_running),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionRow(
+    session: SessionItem,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val cost = formatCost(session.cost)
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(start = 20.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (session.running) {
+                    PulsingDot(color = MaterialTheme.colorScheme.secondary, pulsing = true, size = 6)
+                    Spacer(Modifier.width(7.dp))
+                }
+                Text(
+                    session.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                buildString {
+                    append(relativeTime(session.updated))
+                    if (cost.isNotBlank()) append("  ·  ").append(cost)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Box {
+            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = stringResource(R.string.session_more),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                shape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_rename)) },
+                    onClick = {
+                        menuOpen = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(R.string.action_delete),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -404,122 +452,14 @@ private fun RenameDialog(initial: String, onDismiss: () -> Unit, onConfirm: (Str
             )
         },
         confirmButton = {
-            TextButton(
-                onClick = { onConfirm(value) },
-                enabled = value.isNotBlank()
-            ) { Text(stringResource(R.string.action_save)) }
+            TextButton(onClick = { onConfirm(value) }, enabled = value.isNotBlank()) {
+                Text(stringResource(R.string.action_save))
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
-}
-
-@Composable
-private fun SessionRow(
-    session: SessionItem,
-    onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val cost = formatCost(session.cost)
-    var menuOpen by remember { mutableStateOf(false) }
-
-    Surface(
-        onClick = onOpen,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier.padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.Terminal,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    session.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(3.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (session.running) {
-                        PulsingDot(color = MaterialTheme.colorScheme.secondary, pulsing = true, size = 6)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(R.string.session_running),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            "  ·  ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        relativeTime(session.updated),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (cost.isNotBlank()) {
-                        Text(
-                            "  ·  $cost",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            Box {
-                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(R.string.session_more),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_rename)) },
-                        onClick = {
-                            menuOpen = false
-                            onRename()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(R.string.action_delete),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        },
-                        onClick = {
-                            menuOpen = false
-                            onDelete()
-                        }
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -532,15 +472,18 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
         Box(
             Modifier
                 .size(64.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
+                        )
+                    ),
+                    CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                if (error != null) Icons.Rounded.CloudOff else Icons.Rounded.Terminal,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(26.dp)
-            )
+            ActivityBars(color = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(18.dp))
         Text(
@@ -556,12 +499,11 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (error != null) {
+        if (error != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                 TextButton(onClick = onSettings) { Text(stringResource(R.string.action_change_server)) }
             }
         }
-        Spacer(Modifier.height(70.dp))
     }
 }

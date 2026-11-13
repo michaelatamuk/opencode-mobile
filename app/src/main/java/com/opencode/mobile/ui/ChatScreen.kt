@@ -224,27 +224,24 @@ fun ChatScreen(
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        state.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    AnimatedVisibility(visible = state.busy) {
-                        Row(
-                            Modifier.padding(start = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ActivityBars()
-                            Spacer(Modifier.width(7.dp))
-                            Text(
-                                stringResource(R.string.chat_working),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
+                Text(
+                    state.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                AnimatedVisibility(visible = state.busy) {
+                    Row(
+                        Modifier.padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ActivityBars()
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            stringResource(R.string.chat_working),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 }
             }
