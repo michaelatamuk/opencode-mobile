@@ -28,6 +28,7 @@
     <string name="sessions_more_running">%1$d more running</string>
     <string name="sessions_show_all">Show all</string>
     <string name="sessions_all_running">Running sessions</string>
+    <string name="sessions_all_projects">All projects</string>
     <string name="session_running">running</string>
     <string name="session_untitled">Untitled session</string>
     <string name="session_new">New session</string>

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -121,13 +123,18 @@ fun SessionListScreen(
     val seenStore = remember { SeenStore(context) }
 
     var query by rememberSaveable { mutableStateOf("") }
+    var projectFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
 
-    val filtered = remember(state.sessions, query) {
-        if (query.isBlank()) state.sessions
-        else state.sessions.filter { it.title.contains(query, ignoreCase = true) }
+    val scoped = remember(state.sessions, projectFilter) {
+        if (projectFilter == null) state.sessions
+        else state.sessions.filter { it.projectID == projectFilter }
+    }
+    val filtered = remember(scoped, query) {
+        if (query.isBlank()) scoped
+        else scoped.filter { it.title.contains(query, ignoreCase = true) }
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
@@ -228,6 +235,30 @@ fun SessionListScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+            }
+        }
+
+        if (state.projects.size > 1) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = projectFilter == null,
+                        onClick = { projectFilter = null },
+                        label = { Text(stringResource(R.string.sessions_all_projects)) }
+                    )
+                }
+                items(state.projects, key = { it.id }) { project ->
+                    FilterChip(
+                        selected = projectFilter == project.id,
+                        onClick = {
+                            projectFilter = if (projectFilter == project.id) null else project.id
+                        },
+                        label = { Text(project.name) }
+                    )
                 }
             }
         }
@@ -563,6 +594,7 @@ private fun SessionRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
             .combinedClickable(
                 onClick = onOpen,
                 onLongClick = { menuOpen = true }

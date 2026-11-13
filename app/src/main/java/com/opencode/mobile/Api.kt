@@ -25,8 +25,11 @@ data class SessionItem(
     val running: Boolean = false,
     val modelID: String = "",
     val modelProviderID: String = "",
-    val agentID: String = ""
+    val agentID: String = "",
+    val projectID: String = ""
 )
+
+data class ProjectOption(val id: String, val name: String)
 
 data class AgentOption(val id: String, val name: String, val description: String)
 
@@ -134,7 +137,8 @@ private fun JSONObject.toSession(): SessionItem {
         cost = optDouble("cost", 0.0),
         modelID = model?.optString("id").orEmpty(),
         modelProviderID = model?.optString("providerID").orEmpty(),
-        agentID = optString("agent")
+        agentID = optString("agent"),
+        projectID = optString("projectID")
     )
 }
 
@@ -242,8 +246,28 @@ class Api(server: String, private val password: String) {
         }
     }
 
-    suspend fun models(): List<ModelOption> = withContext(Dispatchers.IO) {
-        val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
+    suspend fun projects(): List<ProjectOption> = withContext(Dispatchers.IO) {
+        val arr = try {
+            client.newCall(request("/api/project").get().build()).execute().use { r ->
+                val body = r.body?.string().orEmpty()
+                if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
+                org.json.JSONArray(body)
+            }
+        } catch (e: Exception) {
+            JSONArray()
+        }
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            ProjectOption(
+                id = o.optString("id"),
+                name = o.optString("name").ifBlank {
+                    o.optString("canonical").substringAfterLast('\\').substringAfterLast('/')
+                }
+            )
+        }
+    }
+
+    suspend fun models(): List<ModelOption> = withContext(Dispatchers.IO) {        val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
         (0 until data.length()).mapNotNull { i ->
             val o = data.getJSONObject(i)
             if (!o.optBoolean("enabled", true)) return@mapNotNull null

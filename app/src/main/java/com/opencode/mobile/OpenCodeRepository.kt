@@ -20,6 +20,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun models(): List<ModelOption> = api.models()
 
+    suspend fun projects(): List<ProjectOption> = api.projects()
+
     suspend fun setModel(sessionID: String, providerID: String, modelID: String) =
         api.setModel(sessionID, providerID, modelID)
 

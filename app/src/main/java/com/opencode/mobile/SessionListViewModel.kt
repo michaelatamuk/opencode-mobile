@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class SessionListUiState(
     val sessions: List<SessionItem> = emptyList(),
     val previews: Map<String, String> = emptyMap(),
+    val projects: List<ProjectOption> = emptyList(),
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
@@ -28,6 +29,11 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
     private val previewCache = mutableMapOf<String, Pair<Long, String>>()
 
     init {
+        viewModelScope.launch {
+            runCatching { repo.projects() }.getOrNull()?.let { list ->
+                _state.update { it.copy(projects = list) }
+            }
+        }
         viewModelScope.launch {
             while (isActive) {
                 refreshNow()
