@@ -5,12 +5,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -188,12 +191,18 @@ fun ChatScreen(
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(
-                    state.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        state.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    AnimatedVisibility(visible = state.busy) {
+                        Row(Modifier.padding(start = 8.dp)) { WorkingPill() }
+                    }
+                }
                 Text(
                     sessionID.take(12),
                     style = MaterialTheme.typography.bodySmall,
@@ -201,32 +210,13 @@ fun ChatScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            AnimatedContent(
-                targetState = state.busy,
-                transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
-                label = "actions"
-            ) { running ->
-                if (running) {
-                    IconButton(onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        vm.interrupt()
-                    }) {
-                        Icon(
-                            Icons.Rounded.Stop,
-                            contentDescription = stringResource(R.string.action_stop),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                } else {
-                    IconButton(onClick = onSettings) {
-                        Icon(
-                            Icons.Rounded.Settings,
-                            contentDescription = stringResource(R.string.action_settings),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+            IconButton(onClick = onSettings) {
+                Icon(
+                    Icons.Rounded.Settings,
+                    contentDescription = stringResource(R.string.action_settings),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
@@ -336,47 +326,84 @@ fun ChatScreen(
                                 disabledIndicatorColor = Color.Transparent
                             )
                         )
-                        if (state.busy) {
-                            Spacer(Modifier.width(2.dp))
-                            FilledTonalIconButton(
+                        Spacer(Modifier.width(6.dp))
+
+                        val hasContent = input.isNotBlank() || picked.isNotEmpty()
+                        val primaryIsStop = state.busy && !hasContent
+
+                        // A second, quiet stop appears only when send and stop are both useful.
+                        AnimatedVisibility(visible = state.busy && hasContent) {
+                            IconButton(
                                 onClick = {
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     vm.interrupt()
                                 },
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     Icons.Rounded.Stop,
                                     contentDescription = stringResource(R.string.action_stop),
-                                    modifier = Modifier.size(18.dp)
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
-                        Spacer(Modifier.width(6.dp))
-                        FilledIconButton(
-                            onClick = {
-                                val text = input.trim()
-                                val files = picked.map { it.attachment }
-                                if (text.isEmpty() && files.isEmpty()) return@FilledIconButton
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                input = ""
-                                picked = emptyList()
-                                vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
-                                    if (!ok) input = text
-                                }
+
+                        AnimatedContent(
+                            targetState = primaryIsStop,
+                            transitionSpec = {
+                                (scaleIn(initialScale = 0.82f) + fadeIn(tween(120))) togetherWith
+                                    (scaleOut(targetScale = 0.82f) + fadeOut(tween(90)))
                             },
-                            enabled = input.isNotBlank() || picked.isNotEmpty(),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Send,
-                                contentDescription = stringResource(R.string.action_send),
-                                modifier = Modifier.size(19.dp)
-                            )
+                            label = "primaryAction"
+                        ) { stop ->
+                            if (stop) {
+                                FilledIconButton(
+                                    onClick = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        vm.interrupt()
+                                    },
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                    ),
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Stop,
+                                        contentDescription = stringResource(R.string.action_stop),
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            } else {
+                                FilledIconButton(
+                                    onClick = {
+                                        val text = input.trim()
+                                        val files = picked.map { it.attachment }
+                                        if (text.isEmpty() && files.isEmpty()) return@FilledIconButton
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        input = ""
+                                        picked = emptyList()
+                                        vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
+                                            if (!ok) input = text
+                                        }
+                                    },
+                                    enabled = hasContent,
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                    ),
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Send,
+                                        contentDescription = stringResource(R.string.action_send),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -584,6 +611,31 @@ private fun PermissionSheet(
             }
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+@Composable
+private fun WorkingPill() {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = CircleShape
+    ) {
+        Row(
+            Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PulsingDot(
+                color = MaterialTheme.colorScheme.secondary,
+                pulsing = true,
+                size = 6
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.chat_working),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
     }
 }
