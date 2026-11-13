@@ -80,6 +80,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
+import com.opencode.mobile.SessionCache
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
 import java.time.Instant
@@ -117,9 +118,11 @@ fun SessionListScreen(
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val vm: SessionListViewModel = viewModel(key = "sessions") { SessionListViewModel(repo) }
-    val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val vm: SessionListViewModel = viewModel(key = "sessions") {
+        SessionListViewModel(repo, SessionCache(context))
+    }
+    val state by vm.state.collectAsStateWithLifecycle()
     val seenStore = remember { SeenStore(context) }
 
     var query by rememberSaveable { mutableStateOf("") }

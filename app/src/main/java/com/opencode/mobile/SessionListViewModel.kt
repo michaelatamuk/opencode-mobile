@@ -21,7 +21,10 @@ data class SessionListUiState(
     val failures: Int = 0
 )
 
-class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
+class SessionListViewModel(
+    private val repo: OpenCodeRepository,
+    private val cache: SessionCache? = null
+) : ViewModel() {
 
     private val _state = MutableStateFlow(SessionListUiState())
     val state: StateFlow<SessionListUiState> = _state.asStateFlow()
@@ -29,6 +32,9 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
     private val previewCache = mutableMapOf<String, Pair<Long, String>>()
 
     init {
+        cache?.read()?.takeIf { it.isNotEmpty() }?.let { cached ->
+            _state.update { it.copy(sessions = cached, loading = false) }
+        }
         viewModelScope.launch {
             runCatching { repo.projects() }.getOrNull()?.let { list ->
                 _state.update { it.copy(projects = list) }
@@ -77,6 +83,7 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
     private suspend fun refreshNow() {
         try {
             val sessions = repo.sessions()
+            cache?.write(sessions)
             _state.update {
                 it.copy(sessions = sessions, loading = false, error = null, failures = 0)
             }
