@@ -39,6 +39,7 @@
     <string name="session_more">Действия с сессией</string>
     <string name="action_rename">Переименовать</string>
     <string name="action_delete">Удалить</string>
+    <string name="action_copy_id">Копировать ID сессии</string>
     <string name="action_cancel">Отмена</string>
     <string name="session_rename_title">Переименовать сессию</string>
     <string name="session_delete_title">Удалить сессию?</string>

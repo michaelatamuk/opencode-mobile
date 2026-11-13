@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -593,6 +594,7 @@ private fun SessionRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val cost = formatCost(session.cost)
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
 
     Row(
         Modifier
@@ -671,6 +673,13 @@ private fun SessionRow(
                     onClick = {
                         menuOpen = false
                         onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_copy_id)) },
+                    onClick = {
+                        menuOpen = false
+                        clipboard.setText(AnnotatedString(session.id))
                     }
                 )
                 DropdownMenuItem(
