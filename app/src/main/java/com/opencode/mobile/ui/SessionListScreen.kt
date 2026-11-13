@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -101,7 +103,7 @@ private fun labelOf(group: SessionGroup): Int = when (group) {
     SessionGroup.Earlier -> R.string.sessions_earlier
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SessionListScreen(
     repo: OpenCodeRepository,
@@ -246,10 +248,15 @@ fun SessionListScreen(
                 modifier = Modifier.fillMaxWidth().padding(32.dp)
             )
 
-            else -> LazyColumn(
-                Modifier.fillMaxSize().navigationBarsPadding(),
-                contentPadding = PaddingValues(bottom = 24.dp)
+            else -> PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = { vm.refresh() },
+                modifier = Modifier.fillMaxSize().navigationBarsPadding()
             ) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
                         ActiveCards(
@@ -296,6 +303,7 @@ fun SessionListScreen(
                 }
             }
         }
+    }
     }
 
     renaming?.let { session ->

@@ -15,6 +15,7 @@ data class SessionListUiState(
     val sessions: List<SessionItem> = emptyList(),
     val previews: Map<String, String> = emptyMap(),
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val error: String? = null,
     val failures: Int = 0
 )
@@ -36,7 +37,15 @@ class SessionListViewModel(private val repo: OpenCodeRepository) : ViewModel() {
     }
 
     fun refresh() {
-        viewModelScope.launch { refreshNow() }
+        if (_state.value.refreshing) return
+        _state.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            try {
+                refreshNow()
+            } finally {
+                _state.update { it.copy(refreshing = false) }
+            }
+        }
     }
 
     /**
