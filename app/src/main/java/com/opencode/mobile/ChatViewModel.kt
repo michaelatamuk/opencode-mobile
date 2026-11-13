@@ -3,6 +3,7 @@ package com.opencode.mobile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,11 @@ data class ChatUiState(
     val permissions: List<PendingPermission> = emptyList(),
     val forms: List<FormRequest> = emptyList(),
     val queued: List<QueuedMessage> = emptyList(),
+    val agents: List<AgentOption> = emptyList(),
+    val models: List<ModelOption> = emptyList(),
+    val agentID: String = "",
+    val modelID: String = "",
+    val modelProviderID: String = "",
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
@@ -32,36 +38,91 @@ data class ChatUiState(
 
 class ChatViewModel(
     private val repo: OpenCodeRepository,
-    private val sessionID: String
+    sessionID: String?
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ChatUiState(sessionID))
+    private var activeID: String? = sessionID
+    private var pollJob: Job? = null
+
+    private val _state = MutableStateFlow(ChatUiState(sessionID.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val refreshMutex = Mutex()
 
     init {
-        viewModelScope.launch {
-            loadSession()
+        viewModelScope.launch { loadOptions() }
+        if (sessionID != null) {
+            viewModelScope.launch { loadSession() }
+            startPolling()
+            viewModelScope.launch {
+                repo.events().collect { refreshNow() }
+            }
+        }
+    }
+
+    private fun startPolling() {
+        if (pollJob != null) return
+        pollJob = viewModelScope.launch {
             while (isActive) {
                 refreshNow()
                 delay(5_000)
             }
         }
-        viewModelScope.launch {
-            // Reconnecting event stream; each event triggers a prompt refresh.
-            repo.events().collect { refreshNow() }
-        }
     }
 
     private suspend fun loadSession() {
+        val id = activeID ?: return
         try {
-            val session = repo.session(sessionID)
-            _state.update { it.copy(title = session.title) }
+            val session = repo.session(id)
+            _state.update {
+                it.copy(
+                    title = session.title,
+                    modelID = session.modelID,
+                    modelProviderID = session.modelProviderID,
+                    agentID = session.agentID
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             // Header keeps the placeholder title; refresh() reports real errors.
+        }
+    }
+
+    private suspend fun loadOptions() {
+        runCatching { repo.agents() }.getOrNull()?.let { list ->
+            _state.update { it.copy(agents = list) }
+        }
+        runCatching { repo.models() }.getOrNull()?.let { list ->
+            _state.update { it.copy(models = list) }
+        }
+    }
+
+    fun selectAgent(agentID: String) {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.setAgent(id, agentID)
+                loadSession()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
+    fun selectModel(providerID: String, modelID: String) {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.setModel(id, providerID, modelID)
+                loadSession()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
         }
     }
 
@@ -70,9 +131,10 @@ class ChatViewModel(
     }
 
     private suspend fun refreshNow() {
+        val id = activeID ?: return
         refreshMutex.withLock {
             try {
-                val page = repo.messages(sessionID)
+                val page = repo.messages(id)
                 _state.update {
                     it.copy(
                         messages = mergeMessages(it.messages, page.messages),
@@ -80,13 +142,13 @@ class ChatViewModel(
                         error = null
                     )
                 }
-                val pending = repo.permissions().filter { it.sessionID == sessionID }
+                val pending = repo.permissions().filter { it.sessionID == id }
                 _state.update { it.copy(permissions = pending) }
 
-                val forms = runCatching { repo.forms(sessionID) }.getOrDefault(emptyList())
+                val forms = runCatching { repo.forms(id) }.getOrDefault(emptyList())
                 _state.update { it.copy(forms = forms) }
 
-                val queued = runCatching { repo.inbox(sessionID) }.getOrDefault(emptyList())
+                val queued = runCatching { repo.inbox(id) }.getOrDefault(emptyList())
                 _state.update { it.copy(queued = queued) }
             } catch (e: CancellationException) {
                 throw e
@@ -97,13 +159,14 @@ class ChatViewModel(
     }
 
     fun loadOlder(onAdded: (Int) -> Unit) {
+        val id = activeID ?: return
         val cursor = _state.value.olderCursor ?: return
         if (_state.value.loadingOlder) return
         viewModelScope.launch {
             _state.update { it.copy(loadingOlder = true) }
             try {
                 val before = _state.value.messages.size
-                val page = repo.messages(sessionID, cursor)
+                val page = repo.messages(id, cursor)
                 _state.update {
                     it.copy(
                         messages = mergeMessages(it.messages, page.messages),
@@ -126,8 +189,15 @@ class ChatViewModel(
             _state.update { it.copy(sending = true) }
             var ok = false
             try {
+                // Draft sessions are created on the first message, like any modern
+                // chat app: tapping "+" must not leave empty sessions behind.
+                val id = activeID ?: repo.createSession().also { created ->
+                    activeID = created
+                    _state.update { it.copy(sessionID = created) }
+                    startPolling()
+                }
                 repo.send(
-                    sessionID = sessionID,
+                    sessionID = id,
                     text = text,
                     files = files,
                     delivery = if (_state.value.busy) "steer" else null
@@ -146,9 +216,10 @@ class ChatViewModel(
     }
 
     fun interrupt() {
+        val id = activeID ?: return
         viewModelScope.launch {
             try {
-                repo.interrupt(sessionID)
+                repo.interrupt(id)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -172,9 +243,10 @@ class ChatViewModel(
     }
 
     fun answerForm(formID: String, answers: Map<String, Any>) {
+        val id = activeID ?: return
         viewModelScope.launch {
             try {
-                repo.answerForm(sessionID, formID, answers)
+                repo.answerForm(id, formID, answers)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

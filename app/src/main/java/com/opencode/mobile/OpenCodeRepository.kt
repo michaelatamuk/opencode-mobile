@@ -16,6 +16,15 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun session(id: String): SessionItem = api.session(id)
 
+    suspend fun agents(): List<AgentOption> = api.agents()
+
+    suspend fun models(): List<ModelOption> = api.models()
+
+    suspend fun setModel(sessionID: String, providerID: String, modelID: String) =
+        api.setModel(sessionID, providerID, modelID)
+
+    suspend fun setAgent(sessionID: String, agentID: String) = api.setAgent(sessionID, agentID)
+
     suspend fun createSession(): String = api.createSession()
 
     suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)

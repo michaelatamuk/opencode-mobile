@@ -22,7 +22,19 @@ data class SessionItem(
     val updated: Long,
     val created: Long,
     val cost: Double,
-    val running: Boolean = false
+    val running: Boolean = false,
+    val modelID: String = "",
+    val modelProviderID: String = "",
+    val agentID: String = ""
+)
+
+data class AgentOption(val id: String, val name: String, val description: String)
+
+data class ModelOption(
+    val id: String,
+    val providerID: String,
+    val name: String,
+    val family: String
 )
 
 sealed interface Part {
@@ -105,12 +117,16 @@ class ApiException(val status: Int, body: String) :
 
 private fun JSONObject.toSession(): SessionItem {
     val time = optJSONObject("time")
+    val model = optJSONObject("model")
     return SessionItem(
         id = getString("id"),
         title = optString("title").ifBlank { "Untitled session" },
         updated = time?.optLong("updated") ?: 0L,
         created = time?.optLong("created") ?: 0L,
-        cost = optDouble("cost", 0.0)
+        cost = optDouble("cost", 0.0),
+        modelID = model?.optString("id").orEmpty(),
+        modelProviderID = model?.optString("providerID").orEmpty(),
+        agentID = optString("agent")
     )
 }
 
@@ -193,15 +209,65 @@ class Api(server: String, private val password: String) {
     /** One-line preview of the newest real message, for the session list. */
     suspend fun lastPreview(sessionID: String): String? {
         val page = messages(sessionID, limit = 8)
-        val text = page.messages.asReversed()
+        val raw = page.messages.asReversed()
             .firstOrNull { it.plainText.isNotBlank() }
             ?.plainText
             .orEmpty()
-        return text.replace(Regex("\\s+"), " ").trim().take(120).ifBlank { null }
+        // Strip markdown markers so the list shows prose, not syntax.
+        val cleaned = raw
+            .replace(Regex("[#*_`>]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return cleaned.take(120).ifBlank { null }
     }
 
-    suspend fun renameSession(id: String, title: String): Unit = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("title", title).toString().toRequestBody(jsonType)
+    suspend fun agents(): List<AgentOption> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/agent").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.getJSONObject(i)
+            if (o.optBoolean("hidden", false)) return@mapNotNull null
+            AgentOption(
+                id = o.optString("id"),
+                name = o.optString("name").ifBlank { o.optString("id") },
+                description = o.optString("description")
+            )
+        }
+    }
+
+    suspend fun models(): List<ModelOption> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.getJSONObject(i)
+            if (!o.optBoolean("enabled", true)) return@mapNotNull null
+            ModelOption(
+                id = o.optString("modelID").ifBlank { o.optString("id") },
+                providerID = o.optString("providerID"),
+                name = o.optString("name").ifBlank { o.optString("modelID") },
+                family = o.optString("family")
+            )
+        }
+    }
+
+    suspend fun setModel(sessionID: String, providerID: String, modelID: String): Unit =
+        withContext(Dispatchers.IO) {
+            postJson(
+                "/api/session/$sessionID/model",
+                JSONObject()
+                    .put("model", JSONObject().put("id", modelID).put("providerID", providerID))
+                    .toString()
+            )
+            Unit
+        }
+
+    suspend fun setAgent(sessionID: String, agentID: String): Unit = withContext(Dispatchers.IO) {
+        postJson(
+            "/api/session/$sessionID/agent",
+            JSONObject().put("agent", agentID).toString()
+        )
+        Unit
+    }
+
+    suspend fun renameSession(id: String, title: String): Unit = withContext(Dispatchers.IO) {        val body = JSONObject().put("title", title).toString().toRequestBody(jsonType)
         client.newCall(request("/api/session/$id").patch(body).build()).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }

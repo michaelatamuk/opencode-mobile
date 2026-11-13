@@ -58,6 +58,9 @@
     <string name="chat_jump_latest">Jump to latest</string>
     <string name="chat_queued">%1$d queued</string>
     <string name="form_submit">Submit</string>
+    <string name="chat_model_agent">Model &amp; agent</string>
+    <string name="chat_agents">Agent</string>
+    <string name="chat_models">Model</string>
     <string name="chat_attach">Attach screenshot</string>
     <string name="chat_remove_attachment">Remove attachment</string>
     <string name="chat_attached_image">Attached image</string>

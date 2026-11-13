@@ -107,6 +107,7 @@ fun SessionListScreen(
     repo: OpenCodeRepository,
     onOpen: (SessionItem) -> Unit,
     onSettings: () -> Unit,
+    onNewSession: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val vm: SessionListViewModel = viewModel(key = "sessions") { SessionListViewModel(repo) }
@@ -213,7 +214,7 @@ fun SessionListScreen(
                         )
                     }
                     FilledIconButton(
-                        onClick = { vm.create { onOpen(it) } },
+                        onClick = onNewSession,
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -251,7 +252,12 @@ fun SessionListScreen(
             ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
-                        ActiveCards(running, onOpen)
+                        ActiveCards(
+                            running = running,
+                            onOpen = onOpen,
+                            onRename = { renaming = it },
+                            onDelete = { deleting = it }
+                        )
                     }
                 }
 
@@ -330,7 +336,12 @@ fun SessionListScreen(
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ActiveCards(running: List<SessionItem>, onOpen: (SessionItem) -> Unit) {
+private fun ActiveCards(
+    running: List<SessionItem>,
+    onOpen: (SessionItem) -> Unit,
+    onRename: (SessionItem) -> Unit,
+    onDelete: (SessionItem) -> Unit
+) {
     var showAll by remember { mutableStateOf(false) }
     val visible = running.take(2)
 
@@ -341,7 +352,12 @@ private fun ActiveCards(running: List<SessionItem>, onOpen: (SessionItem) -> Uni
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         visible.forEach { session ->
-            ActiveCard(session) { onOpen(session) }
+            ActiveCard(
+                session = session,
+                onClick = { onOpen(session) },
+                onRename = { onRename(session) },
+                onDelete = { onDelete(session) }
+            )
         }
 
         if (running.size > visible.size) {
@@ -385,10 +401,21 @@ private fun ActiveCards(running: List<SessionItem>, onOpen: (SessionItem) -> Uni
                     modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
                 )
                 running.forEach { session ->
-                    ActiveCard(session) {
-                        showAll = false
-                        onOpen(session)
-                    }
+                    ActiveCard(
+                        session = session,
+                        onClick = {
+                            showAll = false
+                            onOpen(session)
+                        },
+                        onRename = {
+                            showAll = false
+                            onRename(session)
+                        },
+                        onDelete = {
+                            showAll = false
+                            onDelete(session)
+                        }
+                    )
                     Spacer(Modifier.height(8.dp))
                 }
             }
@@ -397,7 +424,14 @@ private fun ActiveCards(running: List<SessionItem>, onOpen: (SessionItem) -> Uni
 }
 
 @Composable
-private fun ActiveCard(session: SessionItem, onClick: () -> Unit) {
+private fun ActiveCard(
+    session: SessionItem,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
@@ -405,7 +439,7 @@ private fun ActiveCard(session: SessionItem, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            Modifier.padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ActivityBars(color = MaterialTheme.colorScheme.secondary)
@@ -423,6 +457,42 @@ private fun ActiveCard(session: SessionItem, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
+            }
+            Box {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(R.string.session_more),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    shape = RoundedCornerShape(14.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_rename)) },
+                        onClick = {
+                            menuOpen = false
+                            onRename()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(R.string.action_delete),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onDelete()
+                        }
+                    )
+                }
             }
         }
     }

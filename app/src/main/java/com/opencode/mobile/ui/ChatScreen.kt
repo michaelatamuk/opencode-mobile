@@ -58,6 +58,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Lock
@@ -111,6 +113,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.opencode.mobile.AttachmentLoader
+import com.opencode.mobile.ChatUiState
 import com.opencode.mobile.ChatViewModel
 import com.opencode.mobile.Msg
 import com.opencode.mobile.OpenCodeRepository
@@ -128,18 +131,20 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ChatScreen(
     repo: OpenCodeRepository,
-    sessionID: String,
+    sessionID: String?,
     showBack: Boolean,
     onBack: () -> Unit,
+    onSessionCreated: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val vm: ChatViewModel = viewModel(key = "chat:$sessionID") {
+    val vm: ChatViewModel = viewModel(key = "chat:${sessionID ?: "draft"}") {
         ChatViewModel(repo, sessionID)
     }
     val state by vm.state.collectAsStateWithLifecycle()
 
     var input by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
+    var showTune by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -160,9 +165,18 @@ fun ChatScreen(
     }
 
     DisposableEffect(sessionID) {
-        WatchState.activeSessionID = sessionID
+        if (sessionID != null) WatchState.activeSessionID = sessionID
         onDispose {
-            if (WatchState.activeSessionID == sessionID) WatchState.activeSessionID = null
+            if (sessionID != null && WatchState.activeSessionID == sessionID) {
+                WatchState.activeSessionID = null
+            }
+        }
+    }
+
+    // A draft becomes a real session on first send; follow it.
+    LaunchedEffect(state.sessionID) {
+        if (sessionID == null && state.sessionID.isNotBlank()) {
+            onSessionCreated(state.sessionID)
         }
     }
 
@@ -173,6 +187,7 @@ fun ChatScreen(
     var initialPositioned by remember(sessionID) { mutableStateOf(false) }
 
     LaunchedEffect(lastId) {
+        if (sessionID == null) return@LaunchedEffect
         val last = state.messages.lastOrNull() ?: return@LaunchedEffect
         seenStore.markSeen(sessionID, if (last.created > 0) last.created else System.currentTimeMillis())
     }
@@ -232,7 +247,7 @@ fun ChatScreen(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    state.title,
+                    if (sessionID == null) stringResource(R.string.session_new) else state.title,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -251,6 +266,14 @@ fun ChatScreen(
                         )
                     }
                 }
+            }
+            IconButton(onClick = { showTune = true }) {
+                Icon(
+                    Icons.Rounded.Tune,
+                    contentDescription = stringResource(R.string.chat_model_agent),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
@@ -386,6 +409,106 @@ fun ChatScreen(
 
     state.pendingForm?.let { form ->
         FormSheet(form = form, onSubmit = { answers -> vm.answerForm(form.id, answers) })
+    }
+
+    if (showTune) {
+        TuneSheet(
+            state = state,
+            onDismiss = { showTune = false },
+            onAgent = { vm.selectAgent(it) },
+            onModel = { provider, model -> vm.selectModel(provider, model) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun TuneSheet(
+    state: ChatUiState,
+    onDismiss: () -> Unit,
+    onAgent: (String) -> Unit,
+    onModel: (String, String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(stringResource(R.string.chat_model_agent), style = MaterialTheme.typography.headlineSmall)
+
+            if (state.agents.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_agents),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.agents.forEach { agent ->
+                        FilterChip(
+                            selected = agent.id == state.agentID,
+                            onClick = { onAgent(agent.id) },
+                            label = { Text(agent.name) }
+                        )
+                    }
+                }
+            }
+
+            if (state.models.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_models),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                state.models.forEach { model ->
+                    val selected = model.id == state.modelID &&
+                        model.providerID == state.modelProviderID
+                    Surface(
+                        onClick = { onModel(model.providerID, model.id) },
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(model.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "${model.providerID} · ${model.id}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (selected) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

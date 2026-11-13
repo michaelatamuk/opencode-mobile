@@ -105,6 +105,7 @@ private fun Root() {
     var server by remember { mutableStateOf(prefs.getString("server", "").orEmpty()) }
     var password by remember { mutableStateOf(prefs.getString("password", "").orEmpty()) }
     var openSessionID by rememberSaveable { mutableStateOf<String?>(null) }
+    var draft by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var watching by remember { mutableStateOf(prefs.getBoolean("watch", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
@@ -168,8 +169,9 @@ private fun Root() {
     val notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     BackHandler(enabled = showSettings && repo != null) { settingsOpen = false }
-    BackHandler(enabled = repo != null && openSessionID != null && !showSettings) {
+    BackHandler(enabled = repo != null && (openSessionID != null || draft) && !showSettings) {
         openSessionID = null
+        draft = false
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -225,17 +227,19 @@ private fun Root() {
             wide -> Row(Modifier.fillMaxSize()) {
                 SessionListScreen(
                     repo = repo,
-                    onOpen = { openSessionID = it.id },
+                    onOpen = { openSessionID = it.id; draft = false },
                     onSettings = { settingsOpen = true },
+                    onNewSession = { openSessionID = null; draft = true },
                     modifier = Modifier.weight(0.42f)
                 )
                 VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                if (openSessionID != null) {
+                if (openSessionID != null || draft) {
                     ChatScreen(
                         repo = repo,
-                        sessionID = openSessionID!!,
+                        sessionID = if (draft) null else openSessionID,
                         showBack = false,
-                        onBack = { openSessionID = null },
+                        onBack = { openSessionID = null; draft = false },
+                        onSessionCreated = { id -> draft = false; openSessionID = id },
                         modifier = Modifier.weight(0.58f)
                     )
                 } else {
@@ -253,22 +257,24 @@ private fun Root() {
             }
 
             else -> Crossfade(
-                targetState = openSessionID,
+                targetState = if (draft) "draft" else openSessionID,
                 animationSpec = tween(220),
                 label = "screen"
-            ) { id ->
-                if (id == null) {
+            ) { key ->
+                if (key == null) {
                     SessionListScreen(
                         repo = repo,
-                        onOpen = { openSessionID = it.id },
-                        onSettings = { settingsOpen = true }
+                        onOpen = { openSessionID = it.id; draft = false },
+                        onSettings = { settingsOpen = true },
+                        onNewSession = { openSessionID = null; draft = true }
                     )
                 } else {
                     ChatScreen(
                         repo = repo,
-                        sessionID = id,
+                        sessionID = if (key == "draft") null else key.toString(),
                         showBack = true,
-                        onBack = { openSessionID = null }
+                        onBack = { openSessionID = null; draft = false },
+                        onSessionCreated = { id -> draft = false; openSessionID = id }
                     )
                 }
             }
@@ -295,6 +301,7 @@ private fun Root() {
                         val text = payload?.text?.takeIf { it.isNotBlank() }
                             ?: if (attachment != null) "Shared image." else "Shared."
                         repo.send(session.id, text, listOfNotNull(attachment))
+                        draft = false
                         openSessionID = session.id
                     } catch (e: Exception) {
                         android.widget.Toast.makeText(
