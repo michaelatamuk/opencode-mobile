@@ -63,6 +63,7 @@
     <string name="chat_models">Model</string>
     <string name="chat_changes">Changes</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
+    <string name="chat_search">Search in session</string>
     <string name="chat_attach">Attach screenshot</string>
     <string name="chat_remove_attachment">Remove attachment</string>
     <string name="chat_attached_image">Attached image</string>

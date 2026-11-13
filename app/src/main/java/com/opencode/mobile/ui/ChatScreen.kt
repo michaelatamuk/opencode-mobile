@@ -61,6 +61,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Difference
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -151,6 +152,8 @@ fun ChatScreen(
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
     var showTune by remember { mutableStateOf(false) }
     var showDiff by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -184,6 +187,11 @@ fun ChatScreen(
         if (sessionID == null && state.sessionID.isNotBlank()) {
             onSessionCreated(state.sessionID)
         }
+    }
+
+    val displayMessages = remember(state.messages, query) {
+        if (query.isBlank()) state.messages
+        else state.messages.filter { it.plainText.contains(query, ignoreCase = true) }
     }
 
     val lastId = state.messages.lastOrNull()?.id
@@ -251,6 +259,32 @@ fun ChatScreen(
             } else {
                 Spacer(Modifier.width(12.dp))
             }
+            if (searchOpen) {
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.chat_search)) },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    )
+                )
+                Text(
+                    "${displayMessages.size}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(onClick = { searchOpen = false; query = "" }) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel)
+                    )
+                }
+            } else {
             Column(Modifier.weight(1f)) {
                 Text(
                     if (sessionID == null) stringResource(R.string.session_new) else state.title,
@@ -273,6 +307,14 @@ fun ChatScreen(
                     }
                 }
             }
+            IconButton(onClick = { searchOpen = true }) {
+                Icon(
+                    Icons.Rounded.Search,
+                    contentDescription = stringResource(R.string.chat_search),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             IconButton(onClick = { showTune = true }) {
                 Icon(
                     Icons.Rounded.Tune,
@@ -291,6 +333,7 @@ fun ChatScreen(
                     )
                 }
             }
+            }
         }
 
         if (state.busy) {
@@ -304,7 +347,7 @@ fun ChatScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(state.messages, key = { it.id }) { message ->
+                items(displayMessages, key = { it.id }) { message ->
                     Box(Modifier.animateItem()) {
                         when (message.role) {
                             "user" -> UserMessage(message)
