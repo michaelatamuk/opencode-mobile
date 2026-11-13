@@ -82,6 +82,14 @@ class MainActivity : ComponentActivity() {
         if (intent == null) return
         intent.getStringExtra("session_id")?.let { Navigation.openSession.value = it }
 
+        if (intent.getBooleanExtra("new_session", false)) {
+            Navigation.openSession.value = "new"
+        }
+
+        if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme == "opencode") {
+            intent.data?.pathSegments?.firstOrNull()?.let { Navigation.openSession.value = it }
+        }
+
         if (intent.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             @Suppress("DEPRECATION")
@@ -155,7 +163,15 @@ private fun Root() {
     LaunchedEffect(Unit) {
         Navigation.openSession.collect { id ->
             if (id != null) {
-                if (repo != null) openSessionID = id
+                if (repo != null) {
+                    if (id == "new") {
+                        openSessionID = null
+                        draft = true
+                    } else {
+                        draft = false
+                        openSessionID = id
+                    }
+                }
                 Navigation.openSession.value = null
             }
         }
