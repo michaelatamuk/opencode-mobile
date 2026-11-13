@@ -254,6 +254,7 @@ fun SessionListScreen(
                     item(key = "active-strip") {
                         ActiveCards(
                             running = running,
+                            previews = state.previews,
                             onOpen = onOpen,
                             onRename = { renaming = it },
                             onDelete = { deleting = it }
@@ -338,6 +339,7 @@ fun SessionListScreen(
 @Composable
 private fun ActiveCards(
     running: List<SessionItem>,
+    previews: Map<String, String>,
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
     onDelete: (SessionItem) -> Unit
@@ -354,6 +356,7 @@ private fun ActiveCards(
         visible.forEach { session ->
             ActiveCard(
                 session = session,
+                preview = previews[session.id],
                 onClick = { onOpen(session) },
                 onRename = { onRename(session) },
                 onDelete = { onDelete(session) }
@@ -403,6 +406,7 @@ private fun ActiveCards(
                 running.forEach { session ->
                     ActiveCard(
                         session = session,
+                        preview = previews[session.id],
                         onClick = {
                             showAll = false
                             onOpen(session)
@@ -426,6 +430,7 @@ private fun ActiveCards(
 @Composable
 private fun ActiveCard(
     session: SessionItem,
+    preview: String?,
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit
@@ -453,9 +458,11 @@ private fun ActiveCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    stringResource(R.string.session_running),
+                    preview?.takeIf { it.isNotBlank() } ?: stringResource(R.string.session_running),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Box {
