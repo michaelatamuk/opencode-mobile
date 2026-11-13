@@ -197,8 +197,12 @@ class Api(server: String, private val password: String) {
     ): MessagePage = withContext(Dispatchers.IO) {
         val query = buildString {
             append("/api/session/").append(sessionID).append("/message?limit=").append(limit)
-            append("&order=desc")
-            if (olderCursor != null) append("&cursor=").append(Uri.encode(olderCursor))
+            if (olderCursor == null) {
+                append("&order=desc")
+            } else {
+                // The cursor carries its own order; sending `order` as well is rejected.
+                append("&cursor=").append(Uri.encode(olderCursor))
+            }
         }
         val page = getJson(query)
         val data = page.optJSONArray("data") ?: JSONArray()

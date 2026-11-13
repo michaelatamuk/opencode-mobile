@@ -159,7 +159,11 @@ fun ChatScreen(
     }
 
     LaunchedEffect(listState.firstVisibleItemIndex, state.olderCursor) {
-        if (state.olderCursor != null && listState.firstVisibleItemIndex <= 2 && !state.loadingOlder) {
+        if (state.messages.isNotEmpty() &&
+            state.olderCursor != null &&
+            listState.firstVisibleItemIndex <= 2 &&
+            !state.loadingOlder
+        ) {
             vm.loadOlder { added ->
                 if (added > 0) {
                     scope.launch {
