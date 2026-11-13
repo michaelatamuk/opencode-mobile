@@ -16,7 +16,7 @@ class PermissionActionReceiver : BroadcastReceiver() {
 
         Thread {
             try {
-                val prefs = context.getSharedPreferences("opencode", Context.MODE_PRIVATE)
+                val prefs = SecurePrefs.get(context)
                 val api = Api(
                     prefs.getString("server", "").orEmpty(),
                     prefs.getString("password", "").orEmpty()

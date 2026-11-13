@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root() {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("opencode", Context.MODE_PRIVATE) }
+    val prefs = remember { SecurePrefs.get(context) }
 
     var server by remember { mutableStateOf(prefs.getString("server", "").orEmpty()) }
     var password by remember { mutableStateOf(prefs.getString("password", "").orEmpty()) }

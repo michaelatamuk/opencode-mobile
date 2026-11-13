@@ -7,7 +7,7 @@ import android.content.Context
  * `time.viewed`, so unread state is tracked on the device instead.
  */
 class SeenStore(context: Context) {
-    private val prefs = context.getSharedPreferences("opencode", Context.MODE_PRIVATE)
+    private val prefs = SecurePrefs.get(context)
 
     fun lastSeen(sessionID: String): Long = prefs.getLong("seen_$sessionID", 0L)
 

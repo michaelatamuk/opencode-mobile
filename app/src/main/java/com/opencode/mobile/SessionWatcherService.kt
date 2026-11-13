@@ -61,7 +61,7 @@ class SessionWatcherService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            getSharedPreferences("opencode", MODE_PRIVATE).edit().putBoolean("watch", false).apply()
+            SecurePrefs.get(this).edit().putBoolean("watch", false).apply()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -78,7 +78,7 @@ class SessionWatcherService : Service() {
     }
 
     private fun api(): Api? {
-        val prefs = getSharedPreferences("opencode", MODE_PRIVATE)
+        val prefs = SecurePrefs.get(this)
         val server = prefs.getString("server", "").orEmpty()
         val password = prefs.getString("password", "").orEmpty()
         if (server.isBlank()) return null
