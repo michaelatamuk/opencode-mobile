@@ -242,13 +242,21 @@ object Pairing {
                     val link = payload.optString("link").trim()
                     val code = payload.optString("code").trim()
                         .ifBlank { payload.optString("token").trim() }
-                    explicitServer = listOf(
-                        "url", "serverUrl", "server_url", "server",
-                        "base", "origin", "host", "endpoint", "address"
-                    )
-                        .map { payload.optString(it).trim() }
-                        .firstOrNull { it.isNotBlank() }
-                        ?.trimEnd('/')
+                    // The desktop QR is {"code":"…","urls":["https://…tunnel…"]}.
+                    val arrayUrl = payload.optJSONArray("urls")?.let { arr ->
+                        val all = (0 until arr.length())
+                            .map { arr.optString(it).trim() }
+                            .filter { it.startsWith("http", true) }
+                        all.firstOrNull { it.startsWith("https", true) } ?: all.firstOrNull()
+                    }
+                    explicitServer = arrayUrl?.trimEnd('/')
+                        ?: listOf(
+                            "url", "serverUrl", "server_url", "server",
+                            "base", "origin", "host", "endpoint", "address"
+                        )
+                            .map { payload.optString(it).trim() }
+                            .firstOrNull { it.isNotBlank() }
+                            ?.trimEnd('/')
                         ?: payload.optJSONObject("server")
                             ?.optString("url")
                             ?.trim()

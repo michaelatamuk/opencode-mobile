@@ -58,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -331,7 +332,8 @@ fun SessionListScreen(
                             selected = projectFilter == project.id,
                             onClick = {
                                 projectFilter = if (projectFilter == project.id) null else project.id
-                            }
+                            },
+                            tint = projectAccent(project.id)
                         )
                     }
                 }
@@ -359,7 +361,8 @@ fun SessionListScreen(
             state.sessions.isEmpty() -> EmptySessions(
                 error = state.error,
                 onRetry = { vm.refresh() },
-                onSettings = onSettings
+                onSettings = onSettings,
+                onNewSession = onNewSession
             )
 
             filtered.isEmpty() -> Text(
@@ -567,21 +570,13 @@ fun SessionListScreen(
             color = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shadowElevation = 8.dp,
-            modifier = Modifier.height(52.dp)
+            modifier = Modifier.size(56.dp)
         ) {
-            Row(
-                Modifier.padding(horizontal = 22.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Rounded.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.action_new_session),
-                    style = MaterialTheme.typography.labelLarge
+                    contentDescription = stringResource(R.string.action_new_session),
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
@@ -631,39 +626,49 @@ private fun ProjectChip(
     label: String,
     count: Int,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    tint: Color? = null
 ) {
     val shape = RoundedCornerShape(50)
+    val background = when {
+        selected && tint != null -> tint.copy(alpha = 0.16f)
+        selected -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
+    }
+    val borderColor = when {
+        selected -> Color.Transparent
+        tint != null -> tint.copy(alpha = 0.45f)
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
+    val textColor = when {
+        selected && tint != null -> tint
+        selected -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         Modifier
             .clip(shape)
-            .background(
-                if (selected) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent
-            )
-            .border(
-                width = 1.dp,
-                color = if (selected) Color.Transparent
-                else MaterialTheme.colorScheme.outlineVariant,
-                shape = shape
-            )
+            .background(background)
+            .border(width = 1.dp, color = borderColor, shape = shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (tint != null) {
+            Box(Modifier.size(6.dp).background(tint, CircleShape))
+            Spacer(Modifier.width(7.dp))
+        }
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textColor,
             maxLines = 1
         )
         Spacer(Modifier.width(6.dp))
         Text(
             count.toString(),
             style = MaterialTheme.typography.labelSmall,
-            color = (if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.6f)
+            color = textColor.copy(alpha = 0.6f)
         )
     }
 }
@@ -1431,7 +1436,12 @@ private fun RenameDialog(initial: String, onDismiss: () -> Unit, onConfirm: (Str
 }
 
 @Composable
-private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () -> Unit) {
+private fun EmptySessions(
+    error: String?,
+    onRetry: () -> Unit,
+    onSettings: () -> Unit,
+    onNewSession: () -> Unit
+) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1471,6 +1481,19 @@ private fun EmptySessions(error: String?, onRetry: () -> Unit, onSettings: () ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                 TextButton(onClick = onSettings) { Text(stringResource(R.string.action_change_server)) }
+            }
+        } else {
+            Button(
+                onClick = onNewSession,
+                shape = RoundedCornerShape(50)
+            ) {
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.action_new_session))
             }
         }
     }
