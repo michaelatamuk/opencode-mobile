@@ -252,7 +252,7 @@ class ChatViewModel(
             } catch (e: Exception) {
                 val target = _state.value.sessionID
                 if (e is java.io.IOException && target.isNotBlank() && appContext != null) {
-                    PendingStore.add(appContext, target, text, skillIDs)
+                    PendingStore.add(appContext, target, _state.value.title, text, skillIDs)
                     _state.update {
                         it.copy(error = "Queued - will send when the server is back.")
                     }
@@ -363,6 +363,21 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 repo.cancelInbox(id, inboxID)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+            refreshNow()
+        }
+    }
+
+    /** Promotes a queued item to steer delivery. */
+    fun steerQueued(inboxID: String) {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.updateInbox(id, inboxID, "steer")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -66,6 +66,18 @@ object AttachmentLoader {
         return Attachment(jpegName, "image/jpeg", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
     }
 
+    fun loadFile(context: Context, uri: Uri): Attachment {
+        val resolver = context.contentResolver
+        val mime = resolver.getType(uri) ?: "application/octet-stream"
+        val name = displayName(context, uri) ?: "file_${System.currentTimeMillis()}"
+        val raw = resolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("Could not read the selected file")
+        if (raw.size > 2_000_000) {
+            throw IllegalStateException("File is larger than 2 MB")
+        }
+        return Attachment(name, mime, Base64.encodeToString(raw, Base64.NO_WRAP))
+    }
+
     private fun displayName(context: Context, uri: Uri): String? =
         context.contentResolver
             .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)

@@ -65,8 +65,11 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Difference
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
@@ -140,6 +143,7 @@ import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
+import com.opencode.mobile.ScheduleItem
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionPreset
 import com.opencode.mobile.SkillOption
@@ -183,6 +187,8 @@ fun ChatScreen(
     var showAb by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showCompare by remember { mutableStateOf(false) }
+    var showSchedules by remember { mutableStateOf(false) }
+    var showShell by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -209,6 +215,21 @@ fun ChatScreen(
             ?.firstOrNull()
         if (!spoken.isNullOrBlank()) {
             input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
+        }
+    }
+    val fileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val attachment = withContext(Dispatchers.IO) {
+                        AttachmentLoader.loadFile(context, uri)
+                    }
+                    if (picked.size < 8) picked = picked + PickedAttachment(attachment, uri)
+                } catch (_: Exception) {
+                }
+            }
         }
     }
     val voicePrompt = stringResource(R.string.chat_voice_prompt)
@@ -454,6 +475,20 @@ fun ChatScreen(
                                 }
                             )
                         }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_schedules)) },
+                            onClick = {
+                                menuOpen = false
+                                showSchedules = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_shell)) },
+                            onClick = {
+                                menuOpen = false
+                                showShell = true
+                            }
+                        )
                     }
                 }
             }
@@ -583,7 +618,9 @@ fun ChatScreen(
             Composer(
                 value = input,
                 onValueChange = { input = it },
-                attachments = picked.map { AttachmentPreview(it.uri, it.attachment.name) },
+                attachments = picked.map {
+                    AttachmentPreview(it.uri, it.attachment.name, it.attachment.mime)
+                },
                 busy = state.busy,
                 onAttach = {
                     picker.launch(
@@ -626,7 +663,8 @@ fun ChatScreen(
                         )
                         .putExtra(RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     runCatching { voiceLauncher.launch(intent) }
-                }
+                },
+                onAttachFile = { runCatching { fileLauncher.launch(arrayOf("*/*")) } }
             )
         }
     }
@@ -758,6 +796,7 @@ fun ChatScreen(
         QueueSheet(
             queued = state.queued,
             onCancel = vm::cancelQueued,
+            onSteer = vm::steerQueued,
             onDismiss = { showQueue = false }
         )
     }
@@ -771,6 +810,22 @@ fun ChatScreen(
                 ?.plainText
                 .orEmpty(),
             onDismiss = { showCompare = false }
+        )
+    }
+
+    if (showSchedules && sessionID != null) {
+        SchedulesSheet(
+            repo = repo,
+            sessionID = sessionID,
+            onDismiss = { showSchedules = false }
+        )
+    }
+
+    if (showShell && sessionID != null) {
+        ShellSheet(
+            repo = repo,
+            sessionID = sessionID,
+            onDismiss = { showShell = false }
         )
     }
 
@@ -1697,6 +1752,283 @@ private fun LibrarySheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun SchedulesSheet(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var items by remember { mutableStateOf<List<ScheduleItem>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var prompt by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf(60) }
+    val scope = rememberCoroutineScope()
+
+    fun reload() {
+        scope.launch {
+            try {
+                items = repo.schedules(sessionID)
+                error = null
+            } catch (e: Exception) {
+                error = friendlyError(e)
+                items = emptyList()
+            }
+        }
+    }
+
+    LaunchedEffect(sessionID) { reload() }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                stringResource(R.string.chat_schedules),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                stringResource(R.string.chat_schedules_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                label = { Text(stringResource(R.string.chat_schedule_prompt)) },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(15 to "15m", 60 to "1h", 1440 to "1d").forEach { (value, label) ->
+                    FilterChip(
+                        selected = minutes == value,
+                        onClick = { minutes = value },
+                        label = { Text(label) }
+                    )
+                }
+            }
+            Button(
+                onClick = {
+                    if (prompt.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                repo.createSchedule(sessionID, prompt.trim(), minutes)
+                                prompt = ""
+                                reload()
+                            } catch (e: Exception) {
+                                error = friendlyError(e)
+                            }
+                        }
+                    }
+                },
+                enabled = prompt.isNotBlank(),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.chat_schedule_add))
+            }
+            if (error != null) {
+                Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            when {
+                items == null -> CircularProgressIndicator(Modifier.size(24.dp))
+                items!!.isEmpty() -> Text(
+                    stringResource(R.string.chat_schedule_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> items!!.forEach { schedule ->
+                    val paused = schedule.status.contains("pause", ignoreCase = true)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    schedule.prompt.ifBlank { stringResource(R.string.chat_schedules) },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    schedule.status +
+                                        if (schedule.nextDueAt > System.currentTimeMillis()) {
+                                            " · +" + ((schedule.nextDueAt - System.currentTimeMillis()) / 60_000) + "m"
+                                        } else "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repo.setSchedulePaused(schedule.id, !paused) }
+                                        reload()
+                                    }
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repo.deleteSchedule(schedule.id) }
+                                        reload()
+                                    }
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShellSheet(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var command by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf<String?>(null) }
+    var shellID by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var running by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun run() {
+        if (command.isBlank() || running) return
+        running = true
+        error = null
+        scope.launch {
+            try {
+                val shell = repo.runShell(sessionID, command.trim())
+                shellID = shell.id
+                delay(800)
+                output = repo.shellOutput(shell.id)
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                running = false
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                stringResource(R.string.chat_shell),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                stringResource(R.string.chat_shell_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = command,
+                onValueChange = { command = it },
+                label = { Text(stringResource(R.string.chat_shell_command)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { run() },
+                    enabled = command.isNotBlank() && !running,
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(stringResource(R.string.chat_shell_run))
+                }
+                OutlinedButton(
+                    onClick = {
+                        val id = shellID ?: return@OutlinedButton
+                        scope.launch {
+                            output = runCatching { repo.shellOutput(id) }.getOrDefault(output ?: "")
+                        }
+                    },
+                    enabled = shellID != null,
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(stringResource(R.string.chat_shell_refresh))
+                }
+            }
+            if (error != null) {
+                Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        output ?: if (running) stringResource(R.string.chat_shell_running)
+                        else stringResource(R.string.chat_shell_output),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun CompareSheet(
     repo: OpenCodeRepository,
     parentID: String,
@@ -1706,6 +2038,16 @@ private fun CompareSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var original by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val diff = remember(original, branchText) {
+        val source = original
+        if (source.isNullOrBlank() || branchText.isBlank()) null
+        else WordDiff.mark(
+            source,
+            branchText,
+            Color(0x55FF6B6B),
+            Color(0x554CAF50)
+        )
+    }
 
     LaunchedEffect(parentID) {
         try {
@@ -1760,7 +2102,8 @@ private fun CompareSheet(
                     } else {
                         SelectionContainer {
                             Text(
-                                (original ?: "—").ifBlank { "—" },
+                                diff?.first
+                                    ?: AnnotatedString((original ?: "—").ifBlank { "—" }),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -1781,7 +2124,7 @@ private fun CompareSheet(
                 Box(Modifier.padding(14.dp)) {
                     SelectionContainer {
                         Text(
-                            branchText.ifBlank { "—" },
+                            diff?.second ?: AnnotatedString(branchText.ifBlank { "—" }),
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -1796,6 +2139,7 @@ private fun CompareSheet(
 private fun QueueSheet(
     queued: List<QueuedMessage>,
     onCancel: (String) -> Unit,
+    onSteer: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1844,6 +2188,14 @@ private fun QueueSheet(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        if (item.delivery != "steer") {
+                            TextButton(onClick = { onSteer(item.id) }) {
+                                Text(
+                                    stringResource(R.string.chat_queue_steer),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                         IconButton(
                             onClick = { onCancel(item.id) },

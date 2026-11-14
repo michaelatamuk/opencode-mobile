@@ -92,6 +92,35 @@ class OpenCodeRepository(val api: Api) {
     suspend fun cancelInbox(sessionID: String, inboxID: String) =
         api.cancelInbox(sessionID, inboxID)
 
+    suspend fun updateInbox(sessionID: String, inboxID: String, delivery: String) =
+        api.updateInbox(sessionID, inboxID, delivery)
+
+    suspend fun schedules(sessionID: String): List<ScheduleItem> = api.schedules(sessionID)
+
+    suspend fun createSchedule(sessionID: String, prompt: String, everyMinutes: Int) =
+        api.createSchedule(sessionID, prompt, everyMinutes)
+
+    suspend fun setSchedulePaused(scheduleID: String, paused: Boolean) =
+        api.setSchedulePaused(scheduleID, paused)
+
+    suspend fun deleteSchedule(scheduleID: String) = api.deleteSchedule(scheduleID)
+
+    suspend fun mcpServers(): List<McpServer> = api.mcpServers()
+
+    suspend fun mcpConnect(name: String) = api.mcpConnect(name)
+
+    suspend fun mcpDisconnect(name: String) = api.mcpDisconnect(name)
+
+    suspend fun integrations(): List<IntegrationItem> = api.integrations()
+
+    suspend fun connectIntegrationKey(id: String, key: String) =
+        api.connectIntegrationKey(id, key)
+
+    suspend fun runShell(sessionID: String, command: String): ShellRun =
+        api.runShell(sessionID, command)
+
+    suspend fun shellOutput(shellID: String): String = api.shellOutput(shellID)
+
     suspend fun reply(sessionID: String, requestID: String, decision: String) =
         api.reply(sessionID, requestID, decision)
 

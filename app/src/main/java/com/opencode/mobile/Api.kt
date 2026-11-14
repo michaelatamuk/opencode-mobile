@@ -127,6 +127,26 @@ data class FileDiff(
 
 data class CommandOption(val name: String, val description: String)
 
+data class ScheduleItem(
+    val id: String,
+    val prompt: String,
+    val status: String,
+    val nextDueAt: Long,
+    val runCount: Int
+)
+
+data class McpServer(val name: String, val status: String)
+
+data class IntegrationItem(
+    val id: String,
+    val name: String,
+    val connected: Boolean,
+    val methods: List<String>,
+    val envNames: List<String>
+)
+
+data class ShellRun(val id: String, val status: String)
+
 data class SkillOption(
     val id: String,
     val name: String,
@@ -306,6 +326,13 @@ class Api(server: String, private val password: String, fallbackServer: String? 
 
     private fun deleteEmpty(path: String) = withFallback {
         client.newCall(request(path).delete().build()).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
+    private fun patchEmpty(path: String, payload: String) = withFallback {
+        val req = request(path).patch(payload.toRequestBody(jsonType)).build()
+        client.newCall(req).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }
     }
@@ -816,6 +843,125 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         withContext(Dispatchers.IO) {
             deleteEmpty("/api/session/$sessionID/inbox/$inboxID")
         }
+
+    /** Moves a queued item between queue and steer delivery. */
+    suspend fun updateInbox(sessionID: String, inboxID: String, delivery: String): Unit =
+        withContext(Dispatchers.IO) {
+            patchEmpty(
+                "/api/session/$sessionID/inbox/$inboxID",
+                JSONObject().put("delivery", delivery).toString()
+            )
+        }
+
+    suspend fun schedules(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/experimental/schedule?sessionID=${Uri.encode(sessionID)}")
+            .optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            val raw = o.opt("status")
+            val status = when (raw) {
+                is String -> raw
+                is JSONObject -> raw.optString("type").ifBlank { raw.optString("status") }
+                else -> ""
+            }
+            ScheduleItem(
+                id = o.optString("id"),
+                prompt = o.optJSONObject("action")?.optString("prompt").orEmpty(),
+                status = status,
+                nextDueAt = o.optLong("nextDueAt"),
+                runCount = o.optInt("runCount")
+            )
+        }
+    }
+
+    suspend fun createSchedule(
+        sessionID: String,
+        prompt: String,
+        everyMinutes: Int
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("sessionID", sessionID)
+            .put("prompt", prompt)
+            .put("when", JSONObject().put("every", "$everyMinutes minutes"))
+        postJson("/api/experimental/schedule", body.toString())
+        Unit
+    }
+
+    suspend fun setSchedulePaused(scheduleID: String, paused: Boolean): Unit =
+        withContext(Dispatchers.IO) {
+            val action = if (paused) "pause" else "resume"
+            postEmpty("/api/experimental/schedule/$scheduleID/$action", "{}")
+        }
+
+    suspend fun deleteSchedule(scheduleID: String): Unit = withContext(Dispatchers.IO) {
+        deleteEmpty("/api/experimental/schedule/$scheduleID")
+    }
+
+    suspend fun mcpServers(): List<McpServer> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/mcp").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            McpServer(
+                name = o.optString("name"),
+                status = o.optJSONObject("status")?.optString("status").orEmpty()
+            )
+        }
+    }
+
+    suspend fun mcpConnect(name: String): Unit = withContext(Dispatchers.IO) {
+        postEmpty("/api/experimental/mcp/$name/connect", "{}")
+    }
+
+    suspend fun mcpDisconnect(name: String): Unit = withContext(Dispatchers.IO) {
+        postEmpty("/api/experimental/mcp/$name/disconnect", "{}")
+    }
+
+    suspend fun integrations(): List<IntegrationItem> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/integration").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            val methodsArr = o.optJSONArray("methods") ?: JSONArray()
+            val methods = (0 until methodsArr.length()).mapNotNull { m ->
+                methodsArr.optJSONObject(m)?.optString("type")
+            }
+            val envArr = (0 until methodsArr.length())
+                .mapNotNull { methodsArr.optJSONObject(it) }
+                .firstOrNull { it.optString("type") == "env" }
+                ?.optJSONArray("names")
+            val envNames = (0 until (envArr?.length() ?: 0)).map { envArr!!.optString(it) }
+            IntegrationItem(
+                id = o.optString("id"),
+                name = o.optString("name").ifBlank { o.optString("id") },
+                connected = (o.optJSONArray("connections")?.length() ?: 0) > 0,
+                methods = methods,
+                envNames = envNames
+            )
+        }
+    }
+
+    suspend fun connectIntegrationKey(integrationID: String, key: String): Unit =
+        withContext(Dispatchers.IO) {
+            postEmpty(
+                "/api/integration/$integrationID/connect/key",
+                JSONObject().put("key", key).toString()
+            )
+        }
+
+    suspend fun runShell(sessionID: String, command: String): ShellRun =
+        withContext(Dispatchers.IO) {
+            val data = postJson(
+                "/api/session/$sessionID/shell",
+                JSONObject().put("command", command).toString()
+            ).getJSONObject("data")
+            ShellRun(data.optString("id"), data.optString("status"))
+        }
+
+    suspend fun shellOutput(shellID: String): String = withContext(Dispatchers.IO) {
+        getJson("/api/shell/$shellID/output")
+            .optJSONObject("data")
+            ?.optString("output")
+            .orEmpty()
+    }
 
     /** Emits the JSON payload of every server-sent event. */
     fun events(): Flow<String> = callbackFlow {

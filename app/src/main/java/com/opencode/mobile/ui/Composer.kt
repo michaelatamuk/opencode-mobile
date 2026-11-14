@@ -30,7 +30,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
@@ -56,7 +58,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.opencode.mobile.R
 
-data class AttachmentPreview(val uri: Uri, val name: String)
+data class AttachmentPreview(val uri: Uri, val name: String, val mime: String = "")
 
 /**
  * 2026 composer: one rounded surface, a growing text field on the same optical
@@ -75,7 +77,8 @@ fun Composer(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     maxAttachments: Int = 8,
-    onVoice: (() -> Unit)? = null
+    onVoice: (() -> Unit)? = null,
+    onAttachFile: (() -> Unit)? = null
 ) {
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val primaryIsStop = busy && !hasContent
@@ -110,15 +113,39 @@ fun Composer(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(attachments) { item ->
                             Box {
-                                AsyncImage(
-                                    model = item.uri,
-                                    contentDescription = item.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                                )
+                                if (item.mime.startsWith("image/") || item.mime.isBlank()) {
+                                    AsyncImage(
+                                        model = item.uri,
+                                        contentDescription = item.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                    )
+                                } else {
+                                    Column(
+                                        Modifier
+                                            .size(52.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.InsertDriveFile,
+                                            contentDescription = item.name,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            item.name.substringAfterLast('.').take(4).uppercase(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                                 Box(
                                     Modifier
                                         .align(Alignment.TopEnd)
@@ -154,6 +181,16 @@ fun Composer(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+                if (onAttachFile != null) {
+                    IconButton(onClick = onAttachFile, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            Icons.Rounded.AttachFile,
+                            contentDescription = stringResource(R.string.chat_attach_file),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
                 if (onVoice != null) {
                     IconButton(onClick = onVoice, modifier = Modifier.size(40.dp)) {

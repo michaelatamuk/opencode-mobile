@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -75,10 +76,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,6 +102,8 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
 import com.opencode.mobile.AppScope
+import com.opencode.mobile.IntegrationItem
+import com.opencode.mobile.McpServer
 import com.opencode.mobile.Pairing
 import com.opencode.mobile.PendingStore
 import com.opencode.mobile.ProfileStore
@@ -109,7 +114,7 @@ import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
-private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Security, About }
+private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Connections, Security, About }
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
 
@@ -386,6 +391,11 @@ fun SettingsScreen(
                 onBack = { page = SettingsPage.Automation }
             )
 
+            SettingsPage.Connections -> ConnectionsPage(
+                context = context,
+                onBack = { page = SettingsPage.Home }
+            )
+
             SettingsPage.Security -> SecurityPage(
                 biometricLock = biometricLock,
                 onBiometricLock = { enabled ->
@@ -493,6 +503,13 @@ private fun SettingsHome(
                     title = stringResource(R.string.settings_appearance_title),
                     supporting = appearanceSummary,
                     onClick = { onOpen(SettingsPage.Appearance) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Link,
+                    title = stringResource(R.string.settings_connections),
+                    supporting = stringResource(R.string.settings_connections_summary),
+                    onClick = { onOpen(SettingsPage.Connections) }
                 )
                 SettingsDivider()
                 SettingsRow(
@@ -1246,6 +1263,15 @@ private fun AutomationPage(
 @Composable
 private fun PendingPage(context: Context, onBack: () -> Unit) {
     var items by remember { mutableStateOf(PendingStore.all(context)) }
+    val prefs = SecurePrefs.get(context)
+    val api = remember {
+        Api(
+            prefs.getString("server", "").orEmpty(),
+            prefs.getString("password", "").orEmpty(),
+            prefs.getString("fallback_server", "").orEmpty()
+        )
+    }
+    val scope = rememberCoroutineScope()
 
     PageScaffold(
         title = stringResource(R.string.settings_pending),
@@ -1263,21 +1289,50 @@ private fun PendingPage(context: Context, onBack: () -> Unit) {
                     SettingsRow(
                         icon = Icons.Rounded.Send,
                         title = prompt.text.replace('\n', ' '),
-                        supporting = prompt.sessionID,
+                        supporting = listOf(prompt.title, prompt.sessionID)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" · "),
                         trailing = {
-                            IconButton(
-                                onClick = {
-                                    PendingStore.remove(context, prompt.id)
-                                    items = PendingStore.all(context)
-                                },
-                                modifier = Modifier.size(34.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Delete,
-                                    contentDescription = stringResource(R.string.action_delete),
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                            Row {
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val ok = runCatching {
+                                                api.send(
+                                                    sessionID = prompt.sessionID,
+                                                    text = prompt.text,
+                                                    skillIDs = prompt.skillIDs
+                                                )
+                                            }.isSuccess
+                                            if (ok) {
+                                                PendingStore.remove(context, prompt.id)
+                                                items = PendingStore.all(context)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Send,
+                                        contentDescription = stringResource(R.string.action_send),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        PendingStore.remove(context, prompt.id)
+                                        items = PendingStore.all(context)
+                                    },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = stringResource(R.string.action_delete),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         },
                         showDivider = index < items.lastIndex
@@ -1291,6 +1346,197 @@ private fun PendingPage(context: Context, onBack: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+/* ------------------------------------------------------------ connections */
+
+@Composable
+private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
+    val prefs = SecurePrefs.get(context)
+    val api = remember {
+        Api(
+            prefs.getString("server", "").orEmpty(),
+            prefs.getString("password", "").orEmpty(),
+            prefs.getString("fallback_server", "").orEmpty()
+        )
+    }
+    var mcp by remember { mutableStateOf<List<McpServer>?>(null) }
+    var integrations by remember { mutableStateOf<List<IntegrationItem>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var keyFor by remember { mutableStateOf<IntegrationItem?>(null) }
+    var keyValue by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    fun reload() {
+        scope.launch {
+            try {
+                mcp = api.mcpServers()
+                integrations = api.integrations()
+                error = null
+            } catch (e: Exception) {
+                error = e.message
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) { reload() }
+
+    PageScaffold(
+        title = stringResource(R.string.settings_connections),
+        onBack = onBack
+    ) {
+        Text(
+            stringResource(R.string.settings_connections_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            stringResource(R.string.settings_mcp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        SettingsGroup {
+            val servers = mcp
+            if (servers == null) {
+                Text(
+                    stringResource(R.string.settings_connections_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else if (servers.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_connections_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                servers.forEachIndexed { index, server ->
+                    val connected = server.status.contains("connect", ignoreCase = true)
+                    SettingsRow(
+                        icon = Icons.Rounded.Link,
+                        title = server.name,
+                        supporting = server.status,
+                        trailing = {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        if (connected) api.mcpDisconnect(server.name)
+                                        else api.mcpConnect(server.name)
+                                    }
+                                    reload()
+                                }
+                            }) {
+                                Text(
+                                    stringResource(
+                                        if (connected) R.string.settings_disconnect
+                                        else R.string.settings_connect
+                                    )
+                                )
+                            }
+                        },
+                        showDivider = index < servers.lastIndex
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(R.string.settings_integrations),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text(stringResource(R.string.settings_search_integrations)) },
+            singleLine = true,
+            colors = fieldColors(),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (error != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                error!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        val filtered = integrations
+            .filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+            .sortedByDescending { it.connected }
+            .take(if (query.isBlank()) 12 else 30)
+        Spacer(Modifier.height(10.dp))
+        SettingsGroup {
+            if (filtered.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_connections_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                filtered.forEachIndexed { index, item ->
+                    SettingsRow(
+                        icon = Icons.Rounded.Link,
+                        title = item.name,
+                        supporting = if (item.connected) {
+                            stringResource(R.string.settings_connected_label)
+                        } else {
+                            item.methods.joinToString(" / ")
+                        },
+                        onClick = {
+                            if (!item.connected && item.methods.contains("key")) {
+                                keyFor = item
+                                keyValue = ""
+                            }
+                        },
+                        showDivider = index < filtered.lastIndex
+                    )
+                }
+            }
+        }
+    }
+
+    keyFor?.let { item ->
+        AlertDialog(
+            onDismissRequest = { keyFor = null },
+            title = { Text(item.name) },
+            text = {
+                OutlinedTextField(
+                    value = keyValue,
+                    onValueChange = { keyValue = it },
+                    label = { Text(stringResource(R.string.settings_integration_key)) },
+                    singleLine = true,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (keyValue.isNotBlank()) {
+                        scope.launch {
+                            runCatching { api.connectIntegrationKey(item.id, keyValue.trim()) }
+                            keyFor = null
+                            reload()
+                        }
+                    }
+                }) { Text(stringResource(R.string.settings_connect)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { keyFor = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 }

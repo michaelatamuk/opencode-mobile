@@ -8,6 +8,7 @@ import org.json.JSONObject
 data class PendingPrompt(
     val id: String,
     val sessionID: String,
+    val title: String,
     val text: String,
     val skillIDs: List<String>
 )
@@ -27,6 +28,7 @@ object PendingStore {
                 PendingPrompt(
                     id = o.optString("id"),
                     sessionID = o.optString("sessionID"),
+                    title = o.optString("title"),
                     text = o.optString("text"),
                     skillIDs = (0 until skills.length()).map { skills.optString(it) }
                 )
@@ -35,10 +37,11 @@ object PendingStore {
     }
 
     @Synchronized
-    fun add(context: Context, sessionID: String, text: String, skillIDs: List<String>) {
+    fun add(context: Context, sessionID: String, title: String, text: String, skillIDs: List<String>) {
         val next = all(context) + PendingPrompt(
             id = "${System.currentTimeMillis()}-${(0..999).random()}",
             sessionID = sessionID,
+            title = title,
             text = text,
             skillIDs = skillIDs
         )
@@ -59,6 +62,7 @@ object PendingStore {
                 JSONObject()
                     .put("id", p.id)
                     .put("sessionID", p.sessionID)
+                    .put("title", p.title)
                     .put("text", p.text)
                     .put("skills", skills)
             )
