@@ -129,6 +129,8 @@
     <string name="notif_offline">Нет связи — сервер недоступен</string>
     <string name="notif_no_server">Сервер не настроен</string>
     <string name="notif_finished">Завершено — нажмите, чтобы открыть</string>
+    <string name="notif_reply">Ответить</string>
+    <string name="notif_reply_hint">Ответить OpenCode</string>
     <string name="notif_form_title">Вопрос от OpenCode</string>
     <string name="notif_form_fallback">OpenCode ждёт ответа</string>
     <string name="notif_session_fallback">Сессия</string>

@@ -256,6 +256,23 @@ class SessionWatcherService : Service() {
     private fun notifyFinished(sessionID: String) {
         val title = titles[sessionID] ?: getString(R.string.notif_session_fallback)
 
+        val remoteInput = androidx.core.app.RemoteInput.Builder(ReplyReceiver.KEY)
+            .setLabel(getString(R.string.notif_reply_hint))
+            .build()
+        val replyIntent = Intent(this, ReplyReceiver::class.java)
+            .putExtra("session_id", sessionID)
+        val replyPending = PendingIntent.getBroadcast(
+            this,
+            sessionID.hashCode() + 7,
+            replyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+        val replyAction = NotificationCompat.Action.Builder(
+            0,
+            getString(R.string.notif_reply),
+            replyPending
+        ).addRemoteInput(remoteInput).build()
+
         val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
             .setSmallIcon(R.drawable.ic_stat_opencode)
             .setContentTitle(title)
@@ -263,6 +280,7 @@ class SessionWatcherService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(sessionIntent(sessionID))
+            .addAction(replyAction)
             .build()
 
         getSystemService(android.app.NotificationManager::class.java)

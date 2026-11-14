@@ -137,6 +137,8 @@
     <string name="notif_offline">Offline — can\'t reach the server</string>
     <string name="notif_no_server">No server configured</string>
     <string name="notif_finished">Finished — tap to open</string>
+    <string name="notif_reply">Reply</string>
+    <string name="notif_reply_hint">Reply to OpenCode</string>
     <string name="notif_form_title">Question from OpenCode</string>
     <string name="notif_form_fallback">OpenCode is waiting for an answer</string>
     <string name="notif_session_fallback">Session</string>
