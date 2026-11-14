@@ -94,6 +94,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
@@ -164,6 +165,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -278,6 +280,38 @@ fun ChatScreen(
                 } catch (_: Exception) {
                 }
             }
+        }
+    }
+
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { ok ->
+        val uri = captureUri
+        if (ok && uri != null) {
+            scope.launch {
+                try {
+                    val attachment = withContext(Dispatchers.IO) {
+                        AttachmentLoader.load(context, uri)
+                    }
+                    if (picked.size < 8) picked = picked + PickedAttachment(attachment, uri)
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    fun takePhoto() {
+        val dir = java.io.File(context.cacheDir, "captures").apply { mkdirs() }
+        val file = java.io.File(dir, "capture-${System.currentTimeMillis()}.jpg")
+        runCatching {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            captureUri = uri
+            cameraLauncher.launch(uri)
         }
     }
     val voicePrompt = stringResource(R.string.chat_voice_prompt)
@@ -561,6 +595,39 @@ fun ChatScreen(
                                 onClick = {
                                     menuOpen = false
                                     showDiff = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_share_transcript)) },
+                                onClick = {
+                                    menuOpen = false
+                                    val body = buildString {
+                                        appendLine("# ${state.title}")
+                                        state.messages.forEach { msg ->
+                                            val text = msg.plainText.trim()
+                                            if (text.isNotEmpty()) {
+                                                appendLine()
+                                                appendLine(
+                                                    if (msg.role == "user") "**You**" else "**Agent**"
+                                                )
+                                                appendLine()
+                                                appendLine(text)
+                                            }
+                                        }
+                                    }
+                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, state.title)
+                                        putExtra(Intent.EXTRA_TEXT, body)
+                                    }
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                send,
+                                                context.getString(R.string.chat_share_transcript)
+                                            )
+                                        )
+                                    }
                                 }
                             )
                             DropdownMenuItem(
@@ -879,7 +946,8 @@ fun ChatScreen(
                     }
                     runCatching { voiceLauncher.launch(intent) }
                 },
-                onAttachFile = { runCatching { fileLauncher.launch(arrayOf("*/*")) } }
+                onAttachFile = { runCatching { fileLauncher.launch(arrayOf("*/*")) } },
+                onCamera = { takePhoto() }
             )
         }
     }
@@ -2100,8 +2168,11 @@ private fun TuneFooter(state: ChatUiState, onCompact: () -> Unit) {
                 0f
             }
             val overBudget = ratio > 0.85f
-            val accent = if (overBudget) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.primary
+            val accent = when {
+                overBudget -> MaterialTheme.colorScheme.error
+                ratio > 0.65f -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -3784,7 +3855,10 @@ private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
 }
 
 private fun prettyTool(name: String): String =
-    name.replaceFirstChar { it.uppercase() }
+    when (name.lowercase()) {
+        "todowrite", "todo", "todoread" -> "Plan"
+        else -> name.replaceFirstChar { it.uppercase() }
+    }
 
 /** Turns a turn span into `12s`, `2m 05s` or `1h 12m`; null below a second. */
 private fun formatElapsed(ms: Long): String? {
@@ -3805,8 +3879,85 @@ private fun statusLabel(status: String): String = when (status) {
     else -> status
 }
 
+private data class TodoItem(val text: String, val status: String)
+
+private fun parseTodos(raw: String): List<TodoItem>? {
+    if (raw.isBlank()) return null
+    val obj = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return null
+    val arr = obj.optJSONArray("todos") ?: obj.optJSONArray("items") ?: return null
+    if (arr.length() == 0) return null
+    val items = (0 until arr.length()).mapNotNull { index ->
+        val o = arr.optJSONObject(index) ?: return@mapNotNull null
+        val text = o.optString("content")
+            .ifBlank { o.optString("title") }
+            .ifBlank { o.optString("text") }
+        if (text.isBlank()) null else TodoItem(text, o.optString("status"))
+    }
+    return items.takeIf { it.isNotEmpty() }
+}
+
+/** `todowrite` output as an actual checklist instead of a JSON blob. */
+@Composable
+private fun TodoStep(items: List<TodoItem>) {
+    val done = items.count { it.status == "completed" }
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.chat_plan),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "$done/${items.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        items.forEach { item ->
+            val completed = item.status == "completed"
+            val active = item.status == "in_progress" || item.status == "in-progress"
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    when {
+                        completed -> Icons.Rounded.CheckCircle
+                        active -> Icons.Rounded.PlayArrow
+                        else -> Icons.Rounded.RadioButtonUnchecked
+                    },
+                    contentDescription = null,
+                    tint = when {
+                        completed -> MaterialTheme.colorScheme.secondary
+                        active -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    item.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (completed) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    textDecoration = if (completed) TextDecoration.LineThrough else null
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ToolStep(part: Part.Tool, directory: String) {
+    val todos = remember(part.input) { parseTodos(part.input) }
+    if (todos != null) {
+        TodoStep(todos)
+        return
+    }
     var open by remember { mutableStateOf(false) }
     val raw = part.summary.ifBlank { part.name }
     val relative = relativePath(raw, directory)

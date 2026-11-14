@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.DropdownMenu
@@ -87,7 +88,8 @@ fun Composer(
     modifier: Modifier = Modifier,
     maxAttachments: Int = 8,
     onVoice: (() -> Unit)? = null,
-    onAttachFile: (() -> Unit)? = null
+    onAttachFile: (() -> Unit)? = null,
+    onCamera: (() -> Unit)? = null
 ) {
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val primaryIsStop = busy && !hasContent
@@ -220,6 +222,18 @@ fun Composer(
                                 Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
                             }
                         )
+                        if (onCamera != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_attach_camera)) },
+                                onClick = {
+                                    attachMenu = false
+                                    onCamera()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.PhotoCamera, contentDescription = null)
+                                }
+                            )
+                        }
                         if (onAttachFile != null) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_attach_file)) },

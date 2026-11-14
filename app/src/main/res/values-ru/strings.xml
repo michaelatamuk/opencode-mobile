@@ -217,6 +217,9 @@
     <string name="chat_hide_thoughts">Скрыть размышления</string>
     <string name="chat_copy_code">Копировать код</string>
     <string name="chat_copy_message">Копировать сообщение</string>
+    <string name="chat_share_transcript">Поделиться перепиской</string>
+    <string name="chat_plan">План</string>
+    <string name="chat_attach_camera">Сделать фото</string>
     <string name="chat_turn_done">Готово</string>
     <string name="chat_code_label">код</string>
     <string name="chat_input">Ввод</string>

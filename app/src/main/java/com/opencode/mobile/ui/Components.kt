@@ -614,7 +614,7 @@ fun ShimmerBlock(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShap
         label = "shift"
     )
     val base = MaterialTheme.colorScheme.surfaceContainerHigh
-    val highlight = MaterialTheme.colorScheme.surfaceContainerHighest
+    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
     Box(
         modifier
             .clip(shape)
