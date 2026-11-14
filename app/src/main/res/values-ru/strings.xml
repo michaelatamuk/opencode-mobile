@@ -163,6 +163,9 @@
     <string name="chat_activity_stop_run">Остановить этот ход</string>
     <string name="chat_activity_steps">Шагов: %1$d</string>
     <string name="chat_activity_worked">Работа %1$s</string>
+    <string name="chat_activity_used">Использовано %1$s</string>
+    <string name="chat_activity_thoughts_one">1 мысль</string>
+    <string name="chat_activity_thoughts">%1$d мыслей</string>
     <string name="chat_activity_expand">развернуть</string>
     <string name="chat_activity_collapse">свернуть</string>
     <string name="chat_activity_toggle">%1$s, %2$s</string>

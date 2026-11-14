@@ -3386,64 +3386,75 @@ private fun DayPill(at: Long) {
     }
 }
 
+private sealed interface TurnEntry {
+    data class Steps(val parts: List<Part>) : TurnEntry
+    data class Text(val body: String) : TurnEntry
+}
+
+/**
+ * Assistant output in the order it happened: runs of tools/thoughts stay where
+ * they occurred instead of collapsing to one block at the top of the turn.
+ */
+private fun buildTurnEntries(messages: List<Msg>): List<TurnEntry> {
+    val entries = mutableListOf<TurnEntry>()
+    val run = mutableListOf<Part>()
+
+    fun flush() {
+        if (run.isNotEmpty()) {
+            entries += TurnEntry.Steps(run.toList())
+            run.clear()
+        }
+    }
+
+    messages.forEach { message ->
+        message.parts.forEach { part ->
+            when (part) {
+                is Part.Tool, is Part.Reasoning -> run += part
+                is Part.Text -> if (part.text.isNotBlank()) {
+                    flush()
+                    entries += TurnEntry.Text(part.text)
+                }
+
+                else -> Unit
+            }
+        }
+    }
+    flush()
+    return entries
+}
+
 @Composable
 private fun TurnMessage(
     messages: List<Msg>,
     directory: String,
     onSpeak: (String) -> Unit
 ) {
-    val parts = remember(messages) { messages.flatMap { it.parts } }
-    val activity = parts.filter { it is Part.Tool || it is Part.Reasoning }
-    val paragraphs = remember(messages) {
-        messages.mapNotNull { message ->
-            message.parts.filterIsInstance<Part.Text>()
-                .map { it.text }
-                .filter { it.isNotBlank() }
-                .joinToString("\n\n")
-                .takeIf { it.isNotBlank() }
-        }
-    }
-    val fullText = paragraphs.joinToString("\n\n")
     val pending = messages.lastOrNull()?.pending == true
-
-    val start = remember(messages) {
-        messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
+    val entries = remember(messages) { buildTurnEntries(messages) }
+    val fullText = remember(entries) {
+        entries.filterIsInstance<TurnEntry.Text>().joinToString("\n\n") { it.body }
     }
-    val finishedAt = remember(messages) {
-        messages.mapNotNull { it.completed.takeIf { c -> c > 0 } }.maxOrNull()
-    }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(pending) {
-        while (pending) {
-            now = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
-    val elapsed = remember(start, finishedAt, pending, now) {
-        val end = finishedAt ?: if (pending) now else null
-        if (start != null && end != null && end > start) end - start else 0L
-    }
+    val lastTextIndex = entries.indexOfLast { it is TurnEntry.Text }
 
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (activity.size == 1) {
-            ActivityPart(activity.first(), pending)
-        } else if (activity.size > 1) {
-            ActivityGroup(
-                parts = activity,
-                directory = directory,
-                elapsedMs = elapsed,
-                pending = pending,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        paragraphs.forEachIndexed { index, paragraph ->
-            // Intermediate narration stays quieter; the latest block is the answer.
-            val isLatest = index == paragraphs.lastIndex
-            SelectionContainer {
-                MarkdownText(paragraph, contentAlpha = if (isLatest) 1f else 0.72f)
+        entries.forEachIndexed { index, entry ->
+            when (entry) {
+                is TurnEntry.Steps -> StepLine(
+                    parts = entry.parts,
+                    directory = directory,
+                    pending = pending
+                )
+
+                is TurnEntry.Text -> SelectionContainer {
+                    // Intermediate narration stays quieter; the latest block is the answer.
+                    MarkdownText(
+                        entry.body,
+                        contentAlpha = if (index == lastTextIndex) 1f else 0.72f
+                    )
+                }
             }
         }
         if (!pending && fullText.isNotBlank()) {
@@ -3476,124 +3487,104 @@ private fun TurnMessage(
     }
 }
 
+/**
+ * One run of consecutive tools and thoughts, reported the way the TUI does it:
+ * "Used Shell", "Used 2 Write, Shell", "Used 1 Thought". Tapping opens the
+ * detailed steps in place.
+ */
 @Composable
-private fun ActivityPart(part: Part, pending: Boolean) {
-    when (part) {
-        is Part.Tool -> ToolCallCard(
-            name = part.name,
-            status = part.status,
-            summary = part.summary,
-            input = part.input,
-            output = part.output,
-            error = part.error,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        is Part.Reasoning -> ReasoningBlock(
-            text = part.text,
-            durationMs = part.durationMs,
-            pending = pending,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        else -> Unit
-    }
-}
-
-@Composable
-private fun ActivityGroup(
+private fun StepLine(
     parts: List<Part>,
     directory: String,
-    elapsedMs: Long,
     pending: Boolean,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val steps = parts.filter { it is Part.Tool || it is Part.Reasoning }
-    val tools = parts.filterIsInstance<Part.Tool>()
-    val runningTool = tools.lastOrNull {
-        it.status == "running" || it.status == "streaming"
-    }
-    val running = pending && runningTool != null
-    val elapsedLabel = remember(elapsedMs) { formatElapsed(elapsedMs) }
-    val stepsLabel = stringResource(R.string.chat_activity_steps, steps.size)
-    // While running, the live timer and tool live in the status strip above the
-    // composer; the turn header only reports how much has happened.
-    val summary = if (running) {
-        stepsLabel
-    } else if (elapsedLabel != null) {
-        stringResource(R.string.chat_activity_worked, elapsedLabel) + " · " + stepsLabel
-    } else {
-        stepsLabel
+    val summary = stepSummary(parts)
+    val running = pending && parts.any {
+        it is Part.Tool && (it.status == "running" || it.status == "streaming")
     }
     val expandLabel = stringResource(
         if (expanded) R.string.chat_activity_collapse else R.string.chat_activity_expand
     )
     val toggleLabel = stringResource(R.string.chat_activity_toggle, summary, expandLabel)
 
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(14.dp),
-        modifier = modifier
-    ) {
-        Column {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(role = Role.Button) { expanded = !expanded }
-                    .semantics { contentDescription = toggleLabel }
-                    .heightIn(min = 44.dp)
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (running) {
-                    ActivityBars()
-                } else {
-                    Icon(
-                        Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .semantics { contentDescription = toggleLabel }
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (running) {
+                ActivityBars()
+            } else {
                 Icon(
-                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    Icons.Rounded.CheckCircle,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                    modifier = Modifier.size(14.dp)
                 )
             }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
-                ) {
-                    steps.forEachIndexed { index, part ->
-                        when (part) {
-                            is Part.Tool -> ToolStep(part, directory)
-                            is Part.Reasoning -> ThoughtStep(part, pending)
-                            else -> Unit
-                        }
-                        if (index < steps.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 2.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        }
+            Spacer(Modifier.width(7.dp))
+            Text(
+                summary,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                Modifier.padding(start = 6.dp, end = 6.dp, bottom = 4.dp)
+            ) {
+                parts.forEachIndexed { index, part ->
+                    when (part) {
+                        is Part.Tool -> ToolStep(part, directory)
+                        is Part.Reasoning -> ThoughtStep(part, pending)
+                        else -> Unit
+                    }
+                    if (index < parts.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 2.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun stepSummary(parts: List<Part>): String {
+    val thoughts = parts.count { it is Part.Reasoning }
+    val tools = parts.filterIsInstance<Part.Tool>()
+    val names = tools.map { prettyTool(it.name) }.distinct()
+    val shown = names.take(3).joinToString(", ")
+    val pieces = buildList {
+        when {
+            thoughts == 1 -> add(stringResource(R.string.chat_activity_thoughts_one))
+            thoughts > 1 -> add(stringResource(R.string.chat_activity_thoughts, thoughts))
+        }
+        if (tools.size == 1) add(shown)
+        else if (tools.size > 1) add("${tools.size} $shown")
+    }
+    return stringResource(R.string.chat_activity_used, pieces.joinToString(", "))
+}
+
 
 private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
     "bash", "shell" -> Icons.Rounded.Terminal

@@ -167,6 +167,9 @@
     <string name="chat_activity_stop_run">Stop this run</string>
     <string name="chat_activity_steps">%1$d steps</string>
     <string name="chat_activity_worked">Worked %1$s</string>
+    <string name="chat_activity_used">Used %1$s</string>
+    <string name="chat_activity_thoughts_one">1 Thought</string>
+    <string name="chat_activity_thoughts">%1$d Thoughts</string>
     <string name="chat_activity_expand">expand</string>
     <string name="chat_activity_collapse">collapse</string>
     <string name="chat_activity_toggle">%1$s, %2$s</string>

@@ -92,9 +92,11 @@ over each other.
    export excludes the password).
 9. Server-reported cost is authoritative; providers without a cost block show `$0`.
 10. `targetSdk 36` / SDK 36 is required by CI; don't bump dependencies blindly.
-11. Activity headers report **turn** elapsed time, never tool elapsed time.
-12. Live work is always visible at the bottom of the active turn (bars + tool
-    label), because the collapsed activity header scrolls away above.
+11. Steps are reported **inline, in the order they happened** (`Used 2 Write,
+    Shell`); never hoist a turn's tools to one block above its text.
+12. The only live indicator is the strip above the composer. It is an overlay
+    over reserved list padding, so showing or hiding it must never resize the
+    transcript.
 13. Chat scroll positions use **lazy block** indices, never message indices: one
     block can hold a whole turn of messages, and mixing the two silently stops
     follow-the-run and jumps to the wrong place when older pages load.

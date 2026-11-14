@@ -75,10 +75,10 @@ Samsung devices may need Auto Blocker or Play Protect disabled to sideload.
 
 ## What it does
 
-- **Watch it work.** Runs, permissions and forms arrive as they happen. One
-  activity block per turn (`Working 2m 05s · Shell`, `Worked 4m 12s · 9 steps`)
-  with a live line at the bottom, and a step timeline you can expand down to each
-  tool's input and output.
+- **Watch it work.** Runs, permissions and forms arrive as they happen. Steps
+  stay where they happened as light `Used 2 Write, Shell` lines — tap one to see
+  each tool's input and output — and a single live line above the composer carries
+  the timer and the stop control.
 - **Steer without switching.** Type while a turn runs to steer it, queue
   messages, or reply straight from the notification.
 - **Approve from the lock screen.** Permission requests and agent forms show up

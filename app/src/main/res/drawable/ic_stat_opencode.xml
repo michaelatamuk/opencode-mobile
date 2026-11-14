@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Status bar mark: a solid terminal window with the prompt knocked out.
      Solid shapes survive being tinted and scaled to ~22 px far better than
-     thin strokes, which read as an empty outline next to other status icons. -->
+     thin strokes, which read as an empty outline next to other status icons.
+     The tile fills the ~22 dp safe area so it does not look undersized. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -10,5 +11,5 @@
     <path
         android:fillColor="#FFFFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M6.6,5.5 H17.4 A3.6,3.6 0 0 1 21,9.1 V14.9 A3.6,3.6 0 0 1 17.4,18.5 H6.6 A3.6,3.6 0 0 1 3,14.9 V9.1 A3.6,3.6 0 0 1 6.6,5.5 Z M7.0,7.4 L9.6,7.4 L13.0,12 L9.6,16.6 L7.0,16.6 L10.4,12 Z M13.6,14.6 H17.4 A1.1,1.1 0 0 1 17.4,16.8 H13.6 A1.1,1.1 0 0 1 13.6,14.6 Z" />
+        android:pathData="M5.52,4.2 H18.48 A4.32,4.32 0 0 1 22.8,8.52 V15.48 A4.32,4.32 0 0 1 18.48,19.8 H5.52 A4.32,4.32 0 0 1 1.2,15.48 V8.52 A4.32,4.32 0 0 1 5.52,4.2 Z M6.0,6.48 L9.12,6.48 L13.2,12 L9.12,17.52 L6.0,17.52 L10.08,12 Z M13.92,15.12 H18.48 A1.32,1.32 0 0 1 18.48,17.76 H13.92 A1.32,1.32 0 0 1 13.92,15.12 Z" />
 </vector>
