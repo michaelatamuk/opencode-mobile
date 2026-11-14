@@ -7,7 +7,10 @@ import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -78,6 +81,24 @@ class WatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
     companion object {
         private const val NAME = "watch-fallback"
+        private const val NOW = "watch-now"
+
+        /** Expedited check when the app opens, to catch a run missed in the background. */
+        fun runNow(context: Context) {
+            val request = OneTimeWorkRequestBuilder<WatchWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                NOW,
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<WatchWorker>(15, TimeUnit.MINUTES)

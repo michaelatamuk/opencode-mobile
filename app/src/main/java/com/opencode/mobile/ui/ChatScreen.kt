@@ -1,9 +1,11 @@
 package com.opencode.mobile.ui
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
+import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +22,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -65,6 +68,7 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CallSplit
+import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -114,6 +118,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -122,6 +127,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -2665,6 +2672,39 @@ private fun QueueSheet(
 }
 
 @Composable
+private fun Base64Image(mime: String, base64: String, modifier: Modifier = Modifier) {
+    val image by produceState<ImageBitmap?>(null, base64) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val bytes = Base64.decode(base64, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    val bitmap = image
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = stringResource(R.string.chat_attached_image),
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.BrokenImage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(
@@ -2673,15 +2713,13 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
         ) {
             message.parts.forEach { part ->
                 when (part) {
-                    is Part.Image -> AsyncImage(
-                        model = "data:${part.mime};base64,${part.base64}",
-                        contentDescription = stringResource(R.string.chat_attached_image),
-                        contentScale = ContentScale.Fit,
+                    is Part.Image -> Base64Image(
+                        mime = part.mime,
+                        base64 = part.base64,
                         modifier = Modifier
                             .widthIn(max = 260.dp)
                             .heightIn(max = 240.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     )
 
                     is Part.Text -> Surface(
@@ -2725,6 +2763,30 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
 }
 
 @Composable
+private fun ActivityPart(part: Part, pending: Boolean) {
+    when (part) {
+        is Part.Tool -> ToolCallCard(
+            name = part.name,
+            status = part.status,
+            summary = part.summary,
+            input = part.input,
+            output = part.output,
+            error = part.error,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        is Part.Reasoning -> ReasoningBlock(
+            text = part.text,
+            durationMs = part.durationMs,
+            pending = pending,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        else -> Unit
+    }
+}
+
+@Composable
 private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     val tools = parts.filterIsInstance<Part.Tool>()
@@ -2752,13 +2814,15 @@ private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifie
 
     val summary = when {
         running -> working
-        tools.isNotEmpty() -> buildString {
-            append(if (tools.size == 1) usedOne else usedMany)
-            if (prettyNames.isNotBlank()) append(" · ").append(prettyNames)
-        }
-
-        thoughts.isNotEmpty() -> thoughtsLabel
-        else -> ""
+        else -> listOf(
+            thoughtsLabel.takeIf { thoughts.isNotEmpty() },
+            buildString {
+                if (tools.isNotEmpty()) {
+                    append(if (tools.size == 1) usedOne else usedMany)
+                    if (prettyNames.isNotBlank()) append(" · ").append(prettyNames)
+                }
+            }.takeIf { tools.isNotEmpty() }
+        ).filterNotNull().joinToString(" · ")
     }
 
     Surface(
@@ -2878,11 +2942,20 @@ private fun AssistantMessage(message: Msg, onSpeak: (String) -> Unit) {
                         MarkdownText(block.text)
                     }
 
-                    is DisplayBlock.Activity -> ActivityGroup(
-                        parts = block.parts,
-                        pending = message.pending,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    is DisplayBlock.Activity -> {
+                        val items = block.parts.filter {
+                            it is Part.Tool || it is Part.Reasoning
+                        }
+                        if (items.size == 1) {
+                            ActivityPart(items.first(), message.pending)
+                        } else if (items.isNotEmpty()) {
+                            ActivityGroup(
+                                parts = block.parts,
+                                pending = message.pending,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                 }
             }
             if (message.pending) TypingIndicator(compact = true)

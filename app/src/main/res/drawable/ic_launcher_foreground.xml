@@ -4,26 +4,10 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Pixel-cornered terminal frame -->
     <path
-        android:pathData="M32,28 H76 V32 H80 V76 H76 V80 H32 V76 H28 V32 H32 Z"
-        android:fillColor="#FFEEEEEE" />
+        android:fillColor="#FF7C9CFF"
+        android:pathData="M32,34 h44 a6,6 0 0 1 6,6 v28 a6,6 0 0 1 -6,6 h-44 a6,6 0 0 1 -6,-6 v-28 a6,6 0 0 1 6,-6 z" />
     <path
-        android:pathData="M36,36 H72 V72 H36 Z"
-        android:fillColor="#FF0B0B0B" />
-    <!-- Prompt and cursor -->
-    <path
-        android:pathData="M45,47 L53,55 L45,63"
-        android:strokeColor="#FFEEEEEE"
-        android:strokeWidth="5"
-        android:strokeLineCap="square" />
-    <path
-        android:pathData="M58,63 H68"
-        android:strokeColor="#FFEEEEEE"
-        android:strokeWidth="5"
-        android:strokeLineCap="square" />
-    <!-- Mobile dock bar -->
-    <path
-        android:pathData="M44,86 H64 V89 H44 Z"
-        android:fillColor="#FF8A8A8A" />
+        android:fillColor="#FF0E1015"
+        android:pathData="M40,46 l10,8 -10,8 z M56,58 h14 v4 h-14 z" />
 </vector>

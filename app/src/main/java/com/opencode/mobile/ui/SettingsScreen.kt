@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
@@ -1399,6 +1400,8 @@ private fun AppearancePage(
     onAccent: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val showSubagents by UiPrefs.showSubagents.collectAsState()
     PageScaffold(
         title = stringResource(R.string.settings_appearance_title),
         onBack = onBack
@@ -1509,6 +1512,18 @@ private fun AppearancePage(
                     )
                 }
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        SettingsGroup {
+            SwitchRow(
+                icon = Icons.Rounded.Group,
+                title = stringResource(R.string.settings_subagents_title),
+                supporting = stringResource(R.string.settings_subagents_body),
+                checked = showSubagents,
+                onChange = { enabled -> UiPrefs.setShowSubagents(context, enabled) },
+                showDivider = false
+            )
         }
     }
 }

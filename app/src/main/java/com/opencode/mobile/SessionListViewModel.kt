@@ -85,7 +85,10 @@ class SessionListViewModel(
         try {
             val sessions = repo.sessions()
             cache?.write(sessions)
-            context?.let { UsageStore.record(it, sessions) }
+            context?.let {
+                UsageStore.record(it, sessions)
+                Shortcuts.sync(it)
+            }
             _state.update {
                 it.copy(sessions = sessions, loading = false, error = null, failures = 0)
             }

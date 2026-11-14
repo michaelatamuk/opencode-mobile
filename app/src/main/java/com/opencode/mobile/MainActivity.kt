@@ -266,6 +266,7 @@ private fun Root() {
             context.startService(intent)
         }
         WatchWorker.schedule(context)
+        WatchWorker.runNow(context)
     }
 
     fun startWatching() {

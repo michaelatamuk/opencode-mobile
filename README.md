@@ -10,6 +10,15 @@
   <img alt="Kotlin 2.0" src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white">
 </p>
 
+<p align="center">
+  <a href="https://opencode.ai">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/opencode-works-with-dark.svg">
+      <img alt="Works with OpenCode" src="docs/brand/opencode-works-with-light.svg" height="20">
+    </picture>
+  </a>
+</p>
+
 # opencode mobile
 
 A native Android client for a **self-hosted [OpenCode](https://opencode.ai) server** —
@@ -72,7 +81,9 @@ Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
 
 - **No empty sessions** — a draft is created only on first send.
 - **One primary composer action** — Mic when empty, Send when typed, Stop when a run is active.
-- **Subagents stay under their parent** — roots only in the main list, expandable child runs, no notification noise from children.
+- **Subagents stay under their parent** — root sessions only by default; enable
+  Settings → Appearance → *Subagent runs* to nest and expand child runs. Child
+  completions never notify.
 - **Finish-only means silent** — no ongoing notification while a turn runs.
 
 ## Configure

@@ -139,6 +139,8 @@
     <string name="settings_voice_hint">BCP-47 tag such as en-US, de-DE or ru-RU. Empty uses the system default.</string>
     <string name="settings_widget">Widget</string>
     <string name="settings_widget_summary">Titles, stop action, refresh</string>
+    <string name="settings_subagents_title">Subagent runs</string>
+    <string name="settings_subagents_body">Show child sessions nested under their parent. Off keeps the list to root sessions only.</string>
     <string name="settings_security_title">Security</string>
     <string name="settings_biometric_title">Biometric lock</string>
     <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>
@@ -149,8 +151,8 @@
     <string name="chat_preset_name">Preset name</string>
     <string name="chat_presets">Presets</string>
     <string name="chat_queue_title">Queued messages</string>
-    <string name="chat_activity_used">Used %1$d tools</string>
-    <string name="chat_activity_used_one">Used 1 tool</string>
+    <string name="chat_activity_used">%1$d tools</string>
+    <string name="chat_activity_used_one">1 tool</string>
     <string name="chat_activity_working">Working · %1$s</string>
     <string name="chat_activity_thought">Thought</string>
     <string name="chat_activity_thoughts">%1$d thoughts</string>

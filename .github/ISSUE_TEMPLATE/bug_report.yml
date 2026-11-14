@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in the Android client is broken or confusing
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is an **unofficial** client. Please include the app and server
+        versions; reports without them are hard to reproduce.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Settings → About, or the APK file name.
+      placeholder: v0.27.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: Samsung S24, Android 15
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: OpenCode server version
+      description: Shown by `opencode --version` or the test button in Settings.
+    validations:
+      required: false
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - LAN
+        - OpenTunnel / remote URL
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → About → Export diagnostics (no password is included).
+      render: text
+    validations:
+      required: false

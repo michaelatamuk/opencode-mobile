@@ -65,6 +65,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +96,7 @@ import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionCache
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
+import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import java.time.Instant
 import java.time.LocalDate
@@ -137,6 +139,7 @@ fun SessionListScreen(
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val seenStore = remember { SeenStore(context) }
+    val showSubagents by UiPrefs.showSubagents.collectAsState()
 
     var query by rememberSaveable { mutableStateOf("") }
     var projectFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -358,6 +361,7 @@ fun SessionListScreen(
                         ActiveCards(
                             running = running,
                             previews = state.previews,
+                            childCounts = if (showSubagents) childCounts else emptyMap(),
                             onOpen = onOpen,
                             onRename = { renaming = it },
                             onDelete = { deleting = it },
@@ -424,7 +428,27 @@ fun SessionListScreen(
                                     muted = session.id in muted,
                                     archived = session.archived,
                                     projectMuted = session.projectID in mutedProjects,
-                                    subagents = childCounts[session.id] ?: 0,
+                                    subagents = if (showSubagents) {
+                                        childCounts[session.id] ?: 0
+                                    } else {
+                                        0
+                                    },
+                                    subagentsExpanded = session.id in expandedParents,
+                                    onToggleSubagents = if (
+                                        showSubagents &&
+                                        (childCounts[session.id] ?: 0) > 0
+                                    ) {
+                                        {
+                                            expandedParents =
+                                                if (session.id in expandedParents) {
+                                                    expandedParents - session.id
+                                                } else {
+                                                    expandedParents + session.id
+                                                }
+                                        }
+                                    } else {
+                                        null
+                                    },
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
                                     onDelete = { deleting = session },
@@ -448,20 +472,7 @@ fun SessionListScreen(
                         }
                         }
                         val children = childrenByParent[session.id].orEmpty()
-                        if (children.isNotEmpty()) {
-                            item(key = "expand-${session.id}") {
-                                SubagentExpander(
-                                    count = children.size,
-                                    expanded = session.id in expandedParents,
-                                    onToggle = {
-                                        expandedParents = if (session.id in expandedParents) {
-                                            expandedParents - session.id
-                                        } else {
-                                            expandedParents + session.id
-                                        }
-                                    }
-                                )
-                            }
+                        if (showSubagents && children.isNotEmpty()) {
                             if (session.id in expandedParents) {
                                 children.forEach { child ->
                                     val childSeen = seenStore.lastSeen(child.id)
@@ -556,6 +567,7 @@ fun SessionListScreen(
 private fun ActiveCards(
     running: List<SessionItem>,
     previews: Map<String, String>,
+    childCounts: Map<String, Int>,
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
     onDelete: (SessionItem) -> Unit,
@@ -574,6 +586,7 @@ private fun ActiveCards(
             ActiveCard(
                 session = session,
                 preview = previews[session.id],
+                subagents = childCounts[session.id] ?: 0,
                 onClick = { onOpen(session) },
                 onRename = { onRename(session) },
                 onDelete = { onDelete(session) },
@@ -625,6 +638,7 @@ private fun ActiveCards(
                     ActiveCard(
                         session = session,
                         preview = previews[session.id],
+                        subagents = childCounts[session.id] ?: 0,
                         onClick = {
                             showAll = false
                             onOpen(session)
@@ -653,6 +667,7 @@ private fun ActiveCards(
 private fun ActiveCard(
     session: SessionItem,
     preview: String?,
+    subagents: Int,
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -687,6 +702,14 @@ private fun ActiveCard(
                         Spacer(Modifier.width(8.dp))
                         Text(
                             elapsed,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                    if (subagents > 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.session_subagent_count, subagents),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                         )
@@ -788,6 +811,8 @@ private fun SessionRow(
     projectMuted: Boolean,
     subagents: Int,
     subagent: Boolean = false,
+    subagentsExpanded: Boolean = false,
+    onToggleSubagents: (() -> Unit)? = null,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -859,11 +884,29 @@ private fun SessionRow(
                 }
                 if (subagents > 0) {
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        stringResource(R.string.session_subagent_count, subagents),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        Modifier
+                            .clickable(enabled = onToggleSubagents != null) {
+                                onToggleSubagents?.invoke()
+                            }
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringResource(R.string.session_subagent_count, subagents),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (onToggleSubagents != null) {
+                            Icon(
+                                if (subagentsExpanded) Icons.Rounded.ExpandLess
+                                else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(

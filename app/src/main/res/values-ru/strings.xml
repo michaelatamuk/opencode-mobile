@@ -128,6 +128,8 @@
     <string name="settings_voice_hint">Тег BCP-47, например en-US, de-DE или ru-RU. Пусто — системный язык.</string>
     <string name="settings_widget">Виджет</string>
     <string name="settings_widget_summary">Названия, кнопка остановки, обновление</string>
+    <string name="settings_subagents_title">Запуски субагентов</string>
+    <string name="settings_subagents_body">Показывать дочерние сессии вложенными под родителем. Выкл — только корневые сессии.</string>
     <string name="settings_security_title">Безопасность</string>
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Ожидание сессии</string>
@@ -145,8 +147,8 @@
     <string name="chat_preset_name">Название пресета</string>
     <string name="chat_presets">Пресеты</string>
     <string name="chat_queue_title">Очередь сообщений</string>
-    <string name="chat_activity_used">Использовано инструментов: %1$d</string>
-    <string name="chat_activity_used_one">Использован 1 инструмент</string>
+    <string name="chat_activity_used">Инструментов: %1$d</string>
+    <string name="chat_activity_used_one">1 инструмент</string>
     <string name="chat_activity_working">Работа · %1$s</string>
     <string name="chat_activity_thought">Размышление</string>
     <string name="chat_activity_thoughts">Размышлений: %1$d</string>
