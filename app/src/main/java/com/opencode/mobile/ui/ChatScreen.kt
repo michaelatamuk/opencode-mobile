@@ -11,6 +11,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -24,6 +25,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +34,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -113,8 +116,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -590,7 +591,7 @@ fun ChatScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 14.dp,
-                    bottom = 96.dp
+                    bottom = 32.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -650,11 +651,7 @@ fun ChatScreen(
         }
 
         Column(Modifier.navigationBarsPadding()) {
-            LiveStatusStrip(
-                busy = state.busy,
-                messages = state.messages,
-                onStop = { vm.interrupt() }
-            )
+            LiveStatusStrip(busy = state.busy, messages = state.messages)
             if (state.queued.isNotEmpty()) {
                 Row(
                     Modifier
@@ -1450,7 +1447,7 @@ private fun DiffCard(diff: FileDiff, directory: String, onRevert: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TuneSheet(
     state: ChatUiState,
@@ -1462,7 +1459,7 @@ private fun TuneSheet(
     onApplyPreset: (SessionPreset) -> Unit,
     onDeletePreset: (SessionPreset) -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var tab by remember { mutableStateOf(0) }
     var modelQuery by remember { mutableStateOf("") }
 
@@ -1480,85 +1477,39 @@ private fun TuneSheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.92f)
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.chat_model_agent),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+            TuneHeader(
+                agent = currentAgent,
+                model = currentModel,
+                loading = state.selecting,
+                onDismiss = onDismiss
+            )
+            TuneSwitch(selected = tab, onSelect = { tab = it })
+            if (tab == 0) {
+                TuneSearch(query = modelQuery, onQuery = { modelQuery = it })
+            } else {
+                Text(
+                    stringResource(R.string.chat_agent_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = 24.dp,
+                        end = 24.dp,
+                        top = 12.dp,
+                        bottom = 2.dp
                     )
-                    Text(
-                        "$currentAgent · $currentModel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.action_cancel)
-                    )
-                }
-            }
-            if (state.selecting) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
             }
-            TabRow(
-                selectedTabIndex = tab,
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.primary
-            ) {
-                Tab(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    text = {
-                        Text(
-                            stringResource(R.string.chat_models),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                )
-                Tab(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
-                    text = {
-                        Text(
-                            stringResource(R.string.chat_agents),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                )
-            }
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 12.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (tab == 0) {
                     ModelsTab(
                         models = state.models,
                         selectedID = state.modelID,
                         selectedProvider = state.modelProviderID,
                         query = modelQuery,
-                        onQuery = { modelQuery = it },
                         enabled = !state.selecting,
                         onSelect = onModel
                     )
@@ -1567,39 +1518,132 @@ private fun TuneSheet(
                         agents = state.agents,
                         selectedID = state.agentID,
                         enabled = !state.selecting,
-                        onSelect = onAgent
-                    )
-                    if (presets.isNotEmpty()) {
-                        PresetsSection(
-                            presets = presets,
-                            onApply = onApplyPreset,
-                            onDelete = onDeletePreset
-                        )
-                    }
-                }
-                SessionFooter(state = state, onCompact = onCompact)
-                state.error?.let { message ->
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        presets = presets,
+                        onSelect = onAgent,
+                        onApplyPreset = onApplyPreset,
+                        onDeletePreset = onDeletePreset
                     )
                 }
             }
+            TuneFooter(state = state, onCompact = onCompact)
         }
     }
 }
 
 @Composable
-private fun ModelsTab(
-    models: List<ModelOption>,
-    selectedID: String,
-    selectedProvider: String,
-    query: String,
-    onQuery: (String) -> Unit,
-    enabled: Boolean,
-    onSelect: (String, String) -> Unit
+private fun TuneHeader(
+    agent: String,
+    model: String,
+    loading: Boolean,
+    onDismiss: () -> Unit
 ) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, end = 12.dp, top = 2.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.chat_model_agent),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "$agent · $model",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(role = Role.Button, onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.action_cancel),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+    if (loading) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .height(2.dp)
+                .clip(CircleShape),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent
+        )
+    }
+}
+
+@Composable
+private fun TuneSwitch(selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 4.dp)
+            .height(44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(4.dp)
+    ) {
+        TuneSegment(
+            label = stringResource(R.string.chat_models),
+            active = selected == 0,
+            modifier = Modifier.weight(1f),
+            onClick = { onSelect(0) }
+        )
+        TuneSegment(
+            label = stringResource(R.string.chat_agents),
+            active = selected == 1,
+            modifier = Modifier.weight(1f),
+            onClick = { onSelect(1) }
+        )
+    }
+}
+
+@Composable
+private fun TuneSegment(
+    label: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val background by animateColorAsState(
+        targetValue = if (active) MaterialTheme.colorScheme.surface else Color.Transparent,
+        label = "tuneSegment"
+    )
+    Box(
+        modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(10.dp))
+            .background(background)
+            .clickable(role = Role.Tab, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (active) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun TuneSearch(query: String, onQuery: (String) -> Unit) {
     TextField(
         value = query,
         onValueChange = onQuery,
@@ -1617,7 +1661,22 @@ private fun ModelsTab(
                 modifier = Modifier.size(18.dp)
             )
         },
+        trailingIcon = if (query.isNotBlank()) {
+            {
+                IconButton(onClick = { onQuery("") }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        } else {
+            null
+        },
         singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         shape = RoundedCornerShape(14.dp),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1625,9 +1684,21 @@ private fun ModelsTab(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
     )
+}
 
+@Composable
+private fun ModelsTab(
+    models: List<ModelOption>,
+    selectedID: String,
+    selectedProvider: String,
+    query: String,
+    enabled: Boolean,
+    onSelect: (String, String) -> Unit
+) {
     val filtered = remember(models, query, selectedID, selectedProvider) {
         models
             .filter { model ->
@@ -1644,86 +1715,46 @@ private fun ModelsTab(
                     .thenBy { it.name }
             )
     }
-
-    if (filtered.isEmpty()) {
-        Text(
-            stringResource(R.string.sessions_no_match),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-        return
+    val groups = remember(filtered) {
+        filtered.groupBy { it.providerName.ifBlank { it.providerID } }
     }
 
-    filtered.groupBy { it.providerName.ifBlank { it.providerID } }
-        .forEach { (provider, list) ->
-            Text(
-                provider,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)
-            )
-            list.forEach { model ->
-                val selected = model.id == selectedID && model.providerID == selectedProvider
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.secondaryContainer
-                            else Color.Transparent
-                        )
-                        .clickable(enabled = enabled) { onSelect(model.providerID, model.id) }
-                        .heightIn(min = 52.dp)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            model.name,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            buildString {
-                                append(
-                                    stringResource(
-                                        R.string.chat_context_caption,
-                                        if (model.contextLimit > 0) {
-                                            compactTokens(model.contextLimit)
-                                        } else {
-                                            "—"
-                                        }
-                                    )
-                                )
-                                if (model.family.isNotBlank()) {
-                                    append(" · ").append(model.family)
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (filtered.isEmpty()) {
+            item { EmptyListHint() }
+        }
+        groups.forEach { (provider, list) ->
+            item(key = "provider:$provider") {
+                TuneSectionLabel(provider, list.size)
+            }
+            items(list, key = { "${it.providerID}:${it.id}" }) { model ->
+                TuneRow(
+                    title = model.name,
+                    meta = buildString {
+                        append(
+                            stringResource(
+                                R.string.chat_context_caption,
+                                if (model.contextLimit > 0) {
+                                    compactTokens(model.contextLimit)
+                                } else {
+                                    "—"
                                 }
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            )
                         )
-                    }
-                    if (selected) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            stringResource(R.string.chat_model_current),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            Icons.Rounded.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                        if (model.family.isNotBlank()) append(" · ").append(model.family)
+                    },
+                    monogram = monogram(model.providerName.ifBlank { model.providerID }),
+                    selected = model.id == selectedID && model.providerID == selectedProvider,
+                    enabled = enabled,
+                    onClick = { onSelect(model.providerID, model.id) }
+                )
             }
         }
+    }
 }
 
 @Composable
@@ -1731,93 +1762,36 @@ private fun AgentsTab(
     agents: List<AgentOption>,
     selectedID: String,
     enabled: Boolean,
-    onSelect: (String) -> Unit
-) {
-    Text(
-        stringResource(R.string.chat_agent_hint),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 4.dp)
-    )
-    agents.forEach { agent ->
-        val selected = agent.id == selectedID
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.secondaryContainer
-                    else Color.Transparent
-                )
-                .clickable(enabled = enabled) { onSelect(agent.id) }
-                .heightIn(min = 56.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(agent.name, style = MaterialTheme.typography.titleSmall)
-                if (agent.description.isNotBlank()) {
-                    Text(
-                        agent.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            if (selected) {
-                Icon(
-                    Icons.Rounded.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PresetsSection(
     presets: List<SessionPreset>,
-    onApply: (SessionPreset) -> Unit,
-    onDelete: (SessionPreset) -> Unit
+    onSelect: (String) -> Unit,
+    onApplyPreset: (SessionPreset) -> Unit,
+    onDeletePreset: (SessionPreset) -> Unit
 ) {
-    Text(
-        stringResource(R.string.chat_presets),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 14.dp)
-    )
-    presets.forEach { preset ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { onApply(preset) }
-                .heightIn(min = 48.dp)
-                .padding(start = 12.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(preset.name, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    listOf(preset.agentID, preset.modelID)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(agents, key = { "agent:${it.id}" }) { agent ->
+            TuneRow(
+                title = agent.name,
+                meta = agent.description.takeIf { it.isNotBlank() },
+                metaLines = 2,
+                monogram = monogram(agent.name),
+                selected = agent.id == selectedID,
+                enabled = enabled,
+                onClick = { onSelect(agent.id) }
+            )
+        }
+        if (presets.isNotEmpty()) {
+            item(key = "presets") {
+                TuneSectionLabel(stringResource(R.string.chat_presets), presets.size)
             }
-            IconButton(onClick = { onDelete(preset) }, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Rounded.Close,
-                    contentDescription = stringResource(R.string.action_delete),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+            items(presets, key = { "preset:${it.name}:${it.agentID}:${it.modelID}" }) { preset ->
+                PresetRow(
+                    preset = preset,
+                    onApply = { onApplyPreset(preset) },
+                    onDelete = { onDeletePreset(preset) }
                 )
             }
         }
@@ -1825,128 +1799,366 @@ private fun PresetsSection(
 }
 
 @Composable
-private fun SessionFooter(state: ChatUiState, onCompact: () -> Unit) {
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 12.dp),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    )
-
-    if (state.contextUsed > 0L) {
-        val limit = state.contextLimit
-        val ratio = if (limit > 0) {
-            (state.contextUsed.toFloat() / limit).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.chat_context),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                if (limit > 0) {
-                    stringResource(
-                        R.string.chat_context_used,
-                        compactTokens(state.contextUsed),
-                        compactTokens(limit),
-                        (ratio * 100).toInt()
-                    )
-                } else {
-                    stringResource(
-                        R.string.chat_context_used_unknown,
-                        compactTokens(state.contextUsed)
-                    )
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (limit > 0) {
-            LinearProgressIndicator(
-                progress = { ratio },
-                modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
-        }
-    }
-
-    if (state.tokensInput > 0L || state.tokensOutput > 0L || state.cost > 0.0) {
-        Row(Modifier.padding(top = 10.dp)) {
-            Text(
-                stringResource(R.string.chat_tokens_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                buildString {
-                    append(compactTokens(state.tokensInput)).append(" in")
-                    if (state.tokensOutput > 0L) {
-                        append(" · ").append(compactTokens(state.tokensOutput)).append(" out")
-                    }
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Row(Modifier.padding(top = 6.dp)) {
-            Text(
-                stringResource(R.string.chat_spend_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                if (state.cost > 0.0) {
-                    String.format(java.util.Locale.getDefault(), "$%.2f", state.cost)
-                } else {
-                    stringResource(R.string.chat_cost_not_reported)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
+private fun TuneSectionLabel(label: String, count: Int? = null) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = !state.busy, onClick = onCompact)
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(start = 4.dp, end = 4.dp, top = 12.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.9.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (count != null) {
+            Text(
+                count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TuneRow(
+    title: String,
+    meta: String?,
+    monogram: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    metaLines: Int = 1
+) {
+    val background by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        label = "tuneRow"
+    )
+    val contentAlpha = if (enabled) 1f else 0.45f
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(background)
+            .clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                    else MaterialTheme.colorScheme.surface
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                monogram,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!meta.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    meta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                    maxLines = metaLines,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        SelectionDot(selected = selected, enabled = enabled)
+    }
+}
+
+@Composable
+private fun SelectionDot(selected: Boolean, enabled: Boolean) {
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(
+                if (selected) accent.copy(alpha = if (enabled) 1f else 0.4f) else Color.Transparent
+            )
+            .then(
+                if (selected) Modifier
+                else Modifier.border(
+                    width = 1.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = CircleShape
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                Icons.Rounded.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyListHint() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            stringResource(R.string.sessions_no_match),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PresetRow(
+    preset: SessionPreset,
+    onApply: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onApply)
+            .padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            Icons.Rounded.UnfoldLess,
+            Icons.Rounded.Tune,
             contentDescription = null,
-            tint = if (state.busy) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(preset.name, style = MaterialTheme.typography.titleSmall)
+            Text(
+                listOf(preset.agentID, preset.modelID)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.action_delete),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TuneFooter(state: ChatUiState, onCompact: () -> Unit) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        if (state.contextUsed > 0L) {
+            val limit = state.contextLimit
+            val ratio = if (limit > 0) {
+                (state.contextUsed.toFloat() / limit).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            val overBudget = ratio > 0.85f
+            val accent = if (overBudget) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.primary
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.chat_context),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (limit > 0) {
+                        stringResource(
+                            R.string.chat_context_used,
+                            compactTokens(state.contextUsed),
+                            compactTokens(limit),
+                            (ratio * 100).toInt()
+                        )
+                    } else {
+                        stringResource(
+                            R.string.chat_context_used_unknown,
+                            compactTokens(state.contextUsed)
+                        )
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (overBudget) accent else MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                if (ratio > 0f) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(ratio)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(accent)
+                    )
+                }
+            }
+        }
+
+        if (state.tokensInput > 0L || state.tokensOutput > 0L || state.cost > 0.0) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.chat_tokens_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    buildString {
+                        append(compactTokens(state.tokensInput)).append(" in")
+                        if (state.tokensOutput > 0L) {
+                            append(" · ").append(compactTokens(state.tokensOutput)).append(" out")
+                        }
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.chat_spend_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (state.cost > 0.0) {
+                        String.format(java.util.Locale.getDefault(), "$%.2f", state.cost)
+                    } else {
+                        stringResource(R.string.chat_cost_not_reported)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        CompactAction(enabled = !state.busy, onCompact = onCompact)
+
+        state.error?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactAction(enabled: Boolean, onCompact: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                else MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+            .clickable(enabled = enabled, role = Role.Button, onClick = onCompact)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(
+                    if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    else Color.Transparent
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.UnfoldLess,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 stringResource(R.string.chat_compact),
                 style = MaterialTheme.typography.labelLarge,
-                color = if (state.busy) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                else MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.4f)
             )
             Text(
                 stringResource(R.string.chat_compact_hint),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                    alpha = if (enabled) 1f else 0.5f
+                )
             )
         }
     }
 }
 
-
+private fun monogram(value: String): String {
+    val parts = value.trim().split(' ', '-', '_', '.', ':').filter { it.isNotEmpty() }
+    val letters = parts.take(2).mapNotNull { it.firstOrNull()?.uppercaseChar() }
+    return if (letters.isEmpty()) "?" else letters.joinToString("")
+}
 
 private fun compactTokens(value: Long): String = when {
     value >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", value / 1_000_000.0)
@@ -3181,9 +3393,6 @@ private fun TurnMessage(
                 MarkdownText(paragraph, contentAlpha = if (isLatest) 1f else 0.72f)
             }
         }
-        if (pending) {
-            TypingIndicator(compact = true)
-        }
         if (!pending && fullText.isNotBlank()) {
             val clipboard = LocalClipboardManager.current
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -3576,7 +3785,7 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
  * bottom "Working" line instead of duplicating it inside the transcript.
  */
 @Composable
-private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>, onStop: () -> Unit) {
+private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
     if (!busy) return
     val turn = remember(messages) { messages.takeLastWhile { it.role != "user" } }
     val start = remember(turn) {
@@ -3618,17 +3827,7 @@ private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>, onStop: () -> Un
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            stringResource(R.string.action_stop),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .clickable(role = Role.Button, onClick = onStop)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
