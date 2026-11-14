@@ -29,6 +29,7 @@ data class SessionItem(
     val agentID: String = "",
     val projectID: String = "",
     val directory: String = "",
+    val parentID: String = "",
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L
 )
@@ -157,6 +158,9 @@ private fun JSONObject.toSession(): SessionItem {
         agentID = optString("agent"),
         projectID = optString("projectID"),
         directory = optJSONObject("location")?.optString("directory").orEmpty(),
+        parentID = optString("parentID").ifBlank {
+            optJSONObject("fork")?.optString("sessionID").orEmpty()
+        },
         tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
         tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
     )
@@ -806,6 +810,12 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             )
         }
     }
+
+    /** Cancels a queued inbox item that has not been delivered yet. */
+    suspend fun cancelInbox(sessionID: String, inboxID: String): Unit =
+        withContext(Dispatchers.IO) {
+            deleteEmpty("/api/session/$sessionID/inbox/$inboxID")
+        }
 
     /** Emits the JSON payload of every server-sent event. */
     fun events(): Flow<String> = callbackFlow {

@@ -39,6 +39,7 @@
     <string name="cost_top_sessions">Most expensive sessions</string>
     <string name="cost_today">Today</string>
     <string name="cost_week">Last 7 days</string>
+    <string name="cost_month">This month: %1$s · projected %2$s</string>
     <string name="cost_empty">No cost recorded yet. Spend appears after a model call completes.</string>
     <string name="sessions_no_match">No sessions match your search.</string>
     <string name="sessions_today">Today</string>
@@ -99,6 +100,7 @@
     <string name="lock_unlock">Unlock</string>
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Waiting for a session</string>
+    <string name="widget_stop">Stop first run</string>
     <string name="settings_security_title">Security</string>
     <string name="settings_biometric_title">Biometric lock</string>
     <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>
@@ -108,7 +110,12 @@
     <string name="chat_save_preset">Save preset</string>
     <string name="chat_preset_name">Preset name</string>
     <string name="chat_presets">Presets</string>
+    <string name="chat_queue_title">Queued messages</string>
+    <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_ab">Model A/B</string>
+    <string name="chat_compare">Compare with original</string>
+    <string name="chat_compare_original">Original branch</string>
+    <string name="chat_compare_branch">This branch</string>
     <string name="chat_ab_body">Branches the conversation before your last prompt and replays it on the chosen model, then opens the new branch.</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_diff_from_tools">The server has no diff for this project. Files the agent edited in this conversation:</string>
@@ -172,7 +179,7 @@
     <string name="settings_background_body">Notify me when a session finishes while I\'m elsewhere. Keeps a low-priority notification while watching.</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
-    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs and notifies you when it stops. Always keeps a live watcher notice with progress. Android may pause the watcher if the app stays closed for a long time.</string>
+    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs and notifies you when it stops; a periodic check about every 15 minutes catches turns that finished while the app was in the background. Always keeps a live watcher notice with progress.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
     <string name="settings_appearance_title">Appearance</string>
@@ -200,6 +207,14 @@
     <string name="settings_pair_summary">Code or QR</string>
     <string name="settings_conn_pair">Pairing code</string>
     <string name="settings_conn_manual">Manual</string>
+    <string name="settings_profiles">Server profiles</string>
+    <string name="settings_profile_default">Default</string>
+    <string name="settings_profile_add">Add current server as profile</string>
+    <string name="settings_profile_hint">Switching a profile replaces the active server, password and fallback everywhere.</string>
+    <string name="settings_profile_name">Profile name</string>
+    <string name="settings_profile_rename">Rename profile</string>
+    <string name="settings_profile_delete_title">Delete profile?</string>
+    <string name="settings_profile_delete_body">Remove “%1$s”? Its saved credentials are deleted from this device.</string>
     <string name="settings_group_automation">Automation</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_open_notification_settings">Open notification settings</string>
@@ -207,6 +222,10 @@
     <string name="settings_preview_user">How does the watcher work?</string>
     <string name="settings_preview_assistant">It keeps one connection open and only interrupts you when a turn stops.</string>
     <string name="settings_spend_today">Spent today: %1$s</string>
+    <string name="settings_pending">Pending prompts</string>
+    <string name="settings_pending_count">%1$d queued</string>
+    <string name="settings_pending_empty">Nothing queued</string>
+    <string name="settings_pending_hint">Prompts are delivered by the watcher when the server reconnects.</string>
     <string name="settings_security_hint">The lock is requested on every launch. If no biometrics are enrolled, the app opens normally so you cannot be locked out.</string>
     <string name="settings_version">Version</string>
     <string name="settings_server_row">Server</string>

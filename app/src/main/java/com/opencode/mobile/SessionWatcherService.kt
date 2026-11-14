@@ -485,7 +485,12 @@ class SessionWatcherService : Service() {
             .putString("watch_status", label)
             .putInt("watch_running", runs.size)
             .apply()
-        OpenCodeWidgetProvider.updateAll(this, label)
+        OpenCodeWidgetProvider.updateAll(
+            this,
+            label,
+            runs.keys.take(3).joinToString("\n") { titleFor(it) },
+            runs.keys.firstOrNull()
+        )
         runCatching {
             TileService.requestListeningState(
                 this,

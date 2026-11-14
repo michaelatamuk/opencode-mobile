@@ -832,6 +832,8 @@ private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
     val today = remember { UsageStore.today(context) }
     val week = remember { UsageStore.recent(context, 7) }
     val weekTotal = week.sumOf { it.cost }
+    val month = remember { UsageStore.monthToDate(context) }
+    val projected = remember { UsageStore.projectedMonth(context) }
 
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -916,6 +918,16 @@ private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
                             )
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(
+                            R.string.cost_month,
+                            formatCost(month),
+                            formatCost(projected)
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

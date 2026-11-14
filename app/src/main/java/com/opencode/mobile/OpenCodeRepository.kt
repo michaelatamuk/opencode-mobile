@@ -89,6 +89,9 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun inbox(sessionID: String): List<QueuedMessage> = api.inbox(sessionID)
 
+    suspend fun cancelInbox(sessionID: String, inboxID: String) =
+        api.cancelInbox(sessionID, inboxID)
+
     suspend fun reply(sessionID: String, requestID: String, decision: String) =
         api.reply(sessionID, requestID, decision)
 

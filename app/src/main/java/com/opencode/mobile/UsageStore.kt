@@ -81,6 +81,34 @@ object UsageStore {
             ?.optDouble("total", 0.0)
             ?: 0.0
 
+    /** Sum of this calendar month's recorded days. */
+    fun monthToDate(context: Context): Double {
+        val days = prefs(context).getString(KEY_DAYS, null)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return 0.0
+        val prefix = dayKey().take(7) // yyyy-MM
+        var total = 0.0
+        val keys = days.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key.startsWith(prefix)) {
+                total += days.optJSONObject(key)?.optDouble("total", 0.0) ?: 0.0
+            }
+        }
+        return total
+    }
+
+    /** Month-to-date plus the recent daily average for the rest of the month. */
+    fun projectedMonth(context: Context): Double {
+        val now = System.currentTimeMillis()
+        val calendar = java.util.Calendar.getInstance()
+        calendar.timeInMillis = now
+        val remaining = calendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH) -
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        val average = recent(context, 7).sumOf { it.cost } / 7.0
+        return monthToDate(context) + average * remaining
+    }
+
     /** Last [count] days, oldest first, including days with no spend. */
     fun recent(context: Context, count: Int = 7): List<Day> {
         val days = prefs(context).getString(KEY_DAYS, null)

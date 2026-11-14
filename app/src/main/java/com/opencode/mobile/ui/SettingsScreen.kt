@@ -1,6 +1,7 @@
 package com.opencode.mobile.ui
 
 import android.content.Intent
+import android.content.Context
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,6 +43,8 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
@@ -56,6 +59,7 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,13 +100,16 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
 import com.opencode.mobile.AppScope
 import com.opencode.mobile.Pairing
+import com.opencode.mobile.PendingStore
+import com.opencode.mobile.ProfileStore
 import com.opencode.mobile.R
 import com.opencode.mobile.SecurePrefs
+import com.opencode.mobile.ServerProfile
 import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
-private enum class SettingsPage { Home, Connection, Notifications, Appearance, Automation, Security, About }
+private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Security, About }
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
 
@@ -155,6 +162,7 @@ fun SettingsScreen(
     var reveal by remember { mutableStateOf(false) }
     var conn by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
+    var profiles by remember { mutableStateOf(ProfileStore.all(context)) }
     val scope = AppScope
 
     val themeMode by UiPrefs.mode.collectAsState()
@@ -214,6 +222,7 @@ fun SettingsScreen(
 
     fun save() {
         onSave(server, password, fallback)
+        profiles = ProfileStore.all(context)
         if (canCancel) page = SettingsPage.Home
     }
 
@@ -316,6 +325,21 @@ fun SettingsScreen(
                             .setBeepEnabled(false)
                             .setOrientationLocked(false)
                     )
+                },
+                profileName = profiles.firstOrNull { it.id == ProfileStore.activeID(context) }?.name
+                    ?: stringResource(R.string.settings_profile_default),
+                onProfiles = { page = SettingsPage.Profiles }
+            )
+
+            SettingsPage.Profiles -> ProfilesPage(
+                context = context,
+                onBack = { page = SettingsPage.Connection },
+                onSwitched = { profile ->
+                    server = profile.server
+                    password = profile.password
+                    fallback = profile.fallback
+                    conn = ConnState.Unknown
+                    profiles = ProfileStore.all(context)
                 }
             )
 
@@ -352,7 +376,14 @@ fun SettingsScreen(
                     SecurePrefs.get(context).edit().putString("budget_usd", budget).apply()
                 },
                 spentToday = UsageStore.today(context),
+                pendingCount = PendingStore.all(context).size,
+                onPending = { page = SettingsPage.Pending },
                 onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Pending -> PendingPage(
+                context = context,
+                onBack = { page = SettingsPage.Automation }
             )
 
             SettingsPage.Security -> SecurityPage(
@@ -518,7 +549,9 @@ private fun ConnectionPage(
     pairError: String?,
     pairing: Boolean,
     onPair: () -> Unit,
-    onScan: () -> Unit
+    onScan: () -> Unit,
+    profileName: String,
+    onProfiles: () -> Unit
 ) {
     var pairMode by rememberSaveable { mutableStateOf(startInPairing) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -533,6 +566,16 @@ private fun ConnectionPage(
                 .padding(horizontal = 20.dp)
                 .imePadding()
         ) {
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Dns,
+                    title = stringResource(R.string.settings_profiles),
+                    supporting = profileName,
+                    onClick = onProfiles,
+                    showDivider = false
+                )
+            }
+            Spacer(Modifier.height(16.dp))
             Text(
                 stringResource(R.string.settings_hint),
                 style = MaterialTheme.typography.bodyMedium,
@@ -718,6 +761,190 @@ private fun PairingCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun ProfilesPage(
+    context: Context,
+    onBack: () -> Unit,
+    onSwitched: (ServerProfile) -> Unit
+) {
+    var profiles by remember { mutableStateOf(ProfileStore.all(context)) }
+    var active by remember { mutableStateOf(ProfileStore.activeID(context)) }
+    var showAdd by remember { mutableStateOf(false) }
+    var addName by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<ServerProfile?>(null) }
+    var renameValue by remember { mutableStateOf("") }
+    var deleting by remember { mutableStateOf<ServerProfile?>(null) }
+
+    PageScaffold(
+        title = stringResource(R.string.settings_profiles),
+        onBack = onBack
+    ) {
+        SettingsGroup {
+            profiles.forEachIndexed { index, profile ->
+                SettingsRow(
+                    icon = if (profile.id == active) Icons.Rounded.Check else Icons.Rounded.Dns,
+                    title = profile.name,
+                    supporting = profile.server
+                        .removePrefix("http://")
+                        .removePrefix("https://")
+                        .trimEnd('/'),
+                    onClick = {
+                        ProfileStore.switchTo(context, profile.id)
+                        active = profile.id
+                        profiles = ProfileStore.all(context)
+                        onSwitched(profile)
+                    },
+                    trailing = {
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    renaming = profile
+                                    renameValue = profile.name
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Edit,
+                                    contentDescription = stringResource(R.string.settings_profile_rename),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            if (profiles.size > 1) {
+                                IconButton(
+                                    onClick = { deleting = profile },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = stringResource(R.string.action_delete),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    showDivider = index < profiles.lastIndex
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = {
+                addName = ""
+                showAdd = true
+            },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text(stringResource(R.string.settings_profile_add))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            stringResource(R.string.settings_profile_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+
+    if (showAdd) {
+        AlertDialog(
+            onDismissRequest = { showAdd = false },
+            title = { Text(stringResource(R.string.settings_profile_add)) },
+            text = {
+                OutlinedTextField(
+                    value = addName,
+                    onValueChange = { addName = it },
+                    label = { Text(stringResource(R.string.settings_profile_name)) },
+                    singleLine = true,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (addName.isNotBlank()) {
+                        val created = ProfileStore.addFromCurrent(context, addName.trim())
+                        profiles = ProfileStore.all(context)
+                        active = created.id
+                        onSwitched(created)
+                    }
+                    showAdd = false
+                }) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdd = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    renaming?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text(stringResource(R.string.settings_profile_rename)) },
+            text = {
+                OutlinedTextField(
+                    value = renameValue,
+                    onValueChange = { renameValue = it },
+                    label = { Text(stringResource(R.string.settings_profile_name)) },
+                    singleLine = true,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (renameValue.isNotBlank()) {
+                        ProfileStore.save(context, profile.copy(name = renameValue.trim()))
+                        profiles = ProfileStore.all(context)
+                        profiles.firstOrNull { it.id == active }?.let(onSwitched)
+                    }
+                    renaming = null
+                }) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    deleting?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.settings_profile_delete_title)) },
+            text = {
+                Text(stringResource(R.string.settings_profile_delete_body, profile.name))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    ProfileStore.delete(context, profile.id)
+                    profiles = ProfileStore.all(context)
+                    active = ProfileStore.activeID(context)
+                    profiles.firstOrNull { it.id == active }?.let(onSwitched)
+                    deleting = null
+                }) {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 
@@ -932,6 +1159,8 @@ private fun AutomationPage(
     budget: String,
     onBudget: (String) -> Unit,
     spentToday: Double,
+    pendingCount: Int,
+    onPending: () -> Unit,
     onBack: () -> Unit
 ) {
     PageScaffold(
@@ -939,6 +1168,17 @@ private fun AutomationPage(
         onBack = onBack
     ) {
         SettingsGroup {
+            SettingsRow(
+                icon = Icons.Rounded.Send,
+                title = stringResource(R.string.settings_pending),
+                supporting = if (pendingCount > 0) {
+                    stringResource(R.string.settings_pending_count, pendingCount)
+                } else {
+                    stringResource(R.string.settings_pending_empty)
+                },
+                onClick = onPending
+            )
+            SettingsDivider()
             Column(Modifier.padding(16.dp)) {
                 Text(
                     stringResource(R.string.settings_watchdog_title),
@@ -998,6 +1238,60 @@ private fun AutomationPage(
                 )
             }
         }
+    }
+}
+
+/* --------------------------------------------------------------- pending */
+
+@Composable
+private fun PendingPage(context: Context, onBack: () -> Unit) {
+    var items by remember { mutableStateOf(PendingStore.all(context)) }
+
+    PageScaffold(
+        title = stringResource(R.string.settings_pending),
+        onBack = onBack
+    ) {
+        if (items.isEmpty()) {
+            Text(
+                stringResource(R.string.settings_pending_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SettingsGroup {
+                items.forEachIndexed { index, prompt ->
+                    SettingsRow(
+                        icon = Icons.Rounded.Send,
+                        title = prompt.text.replace('\n', ' '),
+                        supporting = prompt.sessionID,
+                        trailing = {
+                            IconButton(
+                                onClick = {
+                                    PendingStore.remove(context, prompt.id)
+                                    items = PendingStore.all(context)
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        },
+                        showDivider = index < items.lastIndex
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.settings_pending_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
     }
 }
 

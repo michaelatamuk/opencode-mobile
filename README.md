@@ -38,10 +38,17 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
   text files only
 - Skills detail view with the skill's full markdown content
-- Daily budget: one notification when today's spend reaches the configured cap
+- Named server profiles: add the current server, switch, rename, delete
+- Finish-only safety net: a periodic check catches turns that ended while the
+  watcher was paused
+- Pending prompt list in Settings with per-item removal
+- Queued/steered messages can be cancelled from the chat queue sheet
+- Model A/B: branch before the last prompt and replay it on another model, with
+  an original-vs-branch comparison sheet
 - Offline queue: a prompt sent while the server is unreachable is delivered by
-  the watcher when it reconnects
-- Model A/B: branch before the last prompt and replay it on another model
+  the watcher when it reconnects; pending items are listed in Settings
+- Spend sheet shows month-to-date and a projected month; daily budget alert
+- Widget lists up to three running sessions with a stop action; tile shows count
 - Grouped settings with live summaries, sub-pages, segmented controls, theme
   preview and labelled accent swatches
 - Voice input (system dictation) and read-aloud for assistant messages

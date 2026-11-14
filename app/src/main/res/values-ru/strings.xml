@@ -37,6 +37,7 @@
     <string name="cost_top_sessions">Самые дорогие сессии</string>
     <string name="cost_today">Сегодня</string>
     <string name="cost_week">Последние 7 дней</string>
+    <string name="cost_month">В этом месяце: %1$s · прогноз %2$s</string>
     <string name="cost_empty">Расходов пока нет. Они появятся после первого вызова модели.</string>
     <string name="sessions_no_match">Ничего не найдено.</string>
     <string name="sessions_today">Сегодня</string>
@@ -96,6 +97,7 @@
     <string name="settings_security_title">Безопасность</string>
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Ожидание сессии</string>
+    <string name="widget_stop">Остановить первый запуск</string>
     <string name="settings_biometric_title">Биометрическая блокировка</string>
     <string name="settings_biometric_body">Запрашивать отпечаток или лицо при каждом запуске.</string>
     <string name="settings_screenshots_title">Блокировать скриншоты</string>
@@ -104,7 +106,12 @@
     <string name="chat_save_preset">Сохранить пресет</string>
     <string name="chat_preset_name">Название пресета</string>
     <string name="chat_presets">Пресеты</string>
+    <string name="chat_queue_title">Очередь сообщений</string>
+    <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_ab">Сравнение моделей</string>
+    <string name="chat_compare">Сравнить с исходной</string>
+    <string name="chat_compare_original">Исходная ветка</string>
+    <string name="chat_compare_branch">Эта ветка</string>
     <string name="chat_ab_body">Ответвляет диалог перед последним запросом и повторяет его на выбранной модели, затем открывает новую ветку.</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
@@ -166,7 +173,7 @@
     <string name="settings_background_body">Сообщать, когда сессия завершится, пока вы в другом месте. Пока наблюдение включено, висит уведомление низкого приоритета.</string>
     <string name="settings_test_notification">Отправить тестовое уведомление</string>
     <string name="settings_notif_mode_title">Уведомление наблюдателя</string>
-    <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход, и уведомляет только когда он остановился. «Всегда» держит живое уведомление наблюдателя с прогрессом. Android может приостановить наблюдатель, если приложение долго закрыто.</string>
+    <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход, и уведомляет только когда он остановился; периодическая проверка примерно каждые 15 минут ловит ходы, завершившиеся в фоне. «Всегда» держит живое уведомление наблюдателя с прогрессом.</string>
     <string name="settings_notif_mode_finish">По завершении</string>
     <string name="settings_notif_mode_always">Всегда</string>
     <string name="settings_appearance_title">Оформление</string>
@@ -195,6 +202,14 @@
     <string name="settings_pair_summary">Код или QR</string>
     <string name="settings_conn_pair">Код сопряжения</string>
     <string name="settings_conn_manual">Вручную</string>
+    <string name="settings_profiles">Профили серверов</string>
+    <string name="settings_profile_default">По умолчанию</string>
+    <string name="settings_profile_add">Добавить текущий сервер как профиль</string>
+    <string name="settings_profile_hint">Переключение профиля заменяет активный сервер, пароль и резервный адрес везде.</string>
+    <string name="settings_profile_name">Название профиля</string>
+    <string name="settings_profile_rename">Переименовать профиль</string>
+    <string name="settings_profile_delete_title">Удалить профиль?</string>
+    <string name="settings_profile_delete_body">Удалить «%1$s»? Сохранённые данные доступа будут стёрты с устройства.</string>
     <string name="settings_group_automation">Автоматизация</string>
     <string name="settings_advanced">Дополнительно</string>
     <string name="settings_open_notification_settings">Открыть настройки уведомлений</string>
@@ -202,6 +217,10 @@
     <string name="settings_preview_user">Как работает наблюдатель?</string>
     <string name="settings_preview_assistant">Он держит одно соединение и прерывает вас только когда ход завершён.</string>
     <string name="settings_spend_today">Потрачено сегодня: %1$s</string>
+    <string name="settings_pending">Очередь запросов</string>
+    <string name="settings_pending_count">В очереди: %1$d</string>
+    <string name="settings_pending_empty">Очередь пуста</string>
+    <string name="settings_pending_hint">Запросы отправит наблюдатель, когда сервер снова станет доступен.</string>
     <string name="settings_security_hint">Блокировка запрашивается при каждом запуске. Если биометрия не настроена, приложение открывается обычным способом, чтобы вы не оказались заблокированы.</string>
     <string name="settings_version">Версия</string>
     <string name="settings_server_row">Сервер</string>

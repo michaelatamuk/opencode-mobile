@@ -138,6 +138,7 @@ import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PresetStore
+import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionPreset
@@ -180,6 +181,8 @@ fun ChatScreen(
     var presetName by remember { mutableStateOf("") }
     var viewingSkill by remember { mutableStateOf<SkillOption?>(null) }
     var showAb by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
+    var showCompare by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -441,6 +444,16 @@ fun ChatScreen(
                                 showAb = true
                             }
                         )
+                        if (state.parentID.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_compare)) },
+                                enabled = !state.busy,
+                                onClick = {
+                                    menuOpen = false
+                                    showCompare = true
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -511,7 +524,10 @@ fun ChatScreen(
         Column(Modifier.navigationBarsPadding()) {
             if (state.queued.isNotEmpty()) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 2.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showQueue = true }
+                        .padding(horizontal = 18.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     PulsingDot(
@@ -735,6 +751,26 @@ fun ChatScreen(
                 showAb = false
                 vm.runAb(model.providerID, model.id) { child -> onSessionCreated(child) }
             }
+        )
+    }
+
+    if (showQueue && state.queued.isNotEmpty()) {
+        QueueSheet(
+            queued = state.queued,
+            onCancel = vm::cancelQueued,
+            onDismiss = { showQueue = false }
+        )
+    }
+
+    if (showCompare && state.parentID.isNotBlank()) {
+        CompareSheet(
+            repo = repo,
+            parentID = state.parentID,
+            branchText = state.messages
+                .lastOrNull { it.role == "assistant" && it.plainText.isNotBlank() }
+                ?.plainText
+                .orEmpty(),
+            onDismiss = { showCompare = false }
         )
     }
 
@@ -1654,6 +1690,174 @@ private fun LibrarySheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompareSheet(
+    repo: OpenCodeRepository,
+    parentID: String,
+    branchText: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var original by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(parentID) {
+        try {
+            val page = repo.messages(parentID)
+            original = page.messages
+                .lastOrNull { it.role == "assistant" && it.plainText.isNotBlank() }
+                ?.plainText
+                .orEmpty()
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                stringResource(R.string.chat_compare),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            if (error != null) {
+                Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Text(
+                stringResource(R.string.chat_compare_original),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(Modifier.padding(14.dp)) {
+                    if (original == null && error == null) {
+                        CircularProgressIndicator(Modifier.size(22.dp))
+                    } else {
+                        SelectionContainer {
+                            Text(
+                                (original ?: "—").ifBlank { "—" },
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+            Text(
+                stringResource(R.string.chat_compare_branch),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(Modifier.padding(14.dp)) {
+                    SelectionContainer {
+                        Text(
+                            branchText.ifBlank { "—" },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QueueSheet(
+    queued: List<QueuedMessage>,
+    onCancel: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 560.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                stringResource(R.string.chat_queue_title),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                stringResource(R.string.chat_queue_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            queued.forEach { item ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item.text.replace('\n', ' ').take(240),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                item.delivery,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = { onCancel(item.id) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.action_cancel),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

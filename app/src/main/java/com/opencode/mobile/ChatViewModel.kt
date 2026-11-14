@@ -32,6 +32,7 @@ data class ChatUiState(
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L,
     val directory: String = "",
+    val parentID: String = "",
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
@@ -99,7 +100,8 @@ class ChatViewModel(
                     cost = session.cost,
                     tokensInput = session.tokensInput,
                     tokensOutput = session.tokensOutput,
-                    directory = session.directory
+                    directory = session.directory,
+                    parentID = session.parentID
                 )
             }
         } catch (e: CancellationException) {
@@ -352,6 +354,21 @@ class ChatViewModel(
             } catch (e: Exception) {
                 _state.update { it.copy(error = friendlyError(e)) }
             }
+        }
+    }
+
+    /** Removes one queued/steered message that has not been delivered. */
+    fun cancelQueued(inboxID: String) {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.cancelInbox(id, inboxID)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+            refreshNow()
         }
     }
 

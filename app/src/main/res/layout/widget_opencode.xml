@@ -24,4 +24,28 @@
         android:text="@string/widget_waiting"
         android:textColor="#9BA3B4"
         android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_lines"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:textColor="#C7CBD6"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/widget_stop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:text="@string/widget_stop"
+        android:textColor="#FFB4AB"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 </LinearLayout>

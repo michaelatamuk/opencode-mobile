@@ -72,6 +72,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         handleIntent(intent)
         Shortcuts.sync(this)
         UiPrefs.load(this)
+        ProfileStore.ensure(this)
         setContent {
             val mode by UiPrefs.mode.collectAsState()
             val accent by UiPrefs.accent.collectAsState()
@@ -241,6 +242,13 @@ private fun Root() {
     var watchdogMinutes by remember { mutableStateOf(prefs.getInt("watchdog_minutes", 0)) }
     var persistentWatch by remember { mutableStateOf(prefs.getBoolean("watch_persistent", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
+    val profileRevision by ProfileStore.revision.collectAsState()
+
+    LaunchedEffect(profileRevision) {
+        server = prefs.getString("server", "").orEmpty()
+        password = prefs.getString("password", "").orEmpty()
+        fallback = prefs.getString("fallback_server", "").orEmpty()
+    }
 
     val repo = remember(server, password, fallback) {
         if (server.isBlank()) null
@@ -255,6 +263,7 @@ private fun Root() {
         } else {
             context.startService(intent)
         }
+        WatchWorker.schedule(context)
     }
 
     fun startWatching() {
@@ -267,6 +276,7 @@ private fun Root() {
         prefs.edit().putBoolean("watch", false).apply()
         watching = false
         context.stopService(Intent(context, SessionWatcherService::class.java))
+        WatchWorker.cancel(context)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -343,6 +353,8 @@ private fun Root() {
                         .putString("password", password)
                         .putString("fallback_server", fallback)
                         .apply()
+                    ProfileStore.ensure(context)
+                    ProfileStore.updateActiveFromPrefs(context)
                 }
             )
 
@@ -395,6 +407,8 @@ private fun Root() {
                         .putString("password", password)
                         .putString("fallback_server", fallback)
                         .apply()
+                    ProfileStore.ensure(context)
+                    ProfileStore.updateActiveFromPrefs(context)
                     settingsOpen = false
                 }
             )

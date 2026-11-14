@@ -73,6 +73,10 @@
                 android:resource="@xml/opencode_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".WidgetActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".OpenCodeTileService"
             android:exported="true"
