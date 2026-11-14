@@ -634,6 +634,17 @@ private fun TuneSheet(
         ) {
             Text(stringResource(R.string.chat_model_agent), style = MaterialTheme.typography.headlineSmall)
 
+            Text(
+                stringResource(
+                    R.string.chat_session_stats,
+                    String.format(java.util.Locale.getDefault(), "$%.2f", state.cost),
+                    state.tokensInput,
+                    state.tokensOutput
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             if (state.agents.isNotEmpty()) {
                 Text(
                     stringResource(R.string.chat_agents),

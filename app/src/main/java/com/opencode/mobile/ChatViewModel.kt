@@ -26,6 +26,9 @@ data class ChatUiState(
     val agentID: String = "",
     val modelID: String = "",
     val modelProviderID: String = "",
+    val cost: Double = 0.0,
+    val tokensInput: Long = 0L,
+    val tokensOutput: Long = 0L,
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
@@ -79,7 +82,10 @@ class ChatViewModel(
                     title = session.title,
                     modelID = session.modelID,
                     modelProviderID = session.modelProviderID,
-                    agentID = session.agentID
+                    agentID = session.agentID,
+                    cost = session.cost,
+                    tokensInput = session.tokensInput,
+                    tokensOutput = session.tokensOutput
                 )
             }
         } catch (e: CancellationException) {

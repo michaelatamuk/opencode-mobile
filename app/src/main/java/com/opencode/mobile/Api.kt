@@ -26,7 +26,9 @@ data class SessionItem(
     val modelID: String = "",
     val modelProviderID: String = "",
     val agentID: String = "",
-    val projectID: String = ""
+    val projectID: String = "",
+    val tokensInput: Long = 0L,
+    val tokensOutput: Long = 0L
 )
 
 data class ProjectOption(val id: String, val name: String)
@@ -138,7 +140,9 @@ private fun JSONObject.toSession(): SessionItem {
         modelID = model?.optString("id").orEmpty(),
         modelProviderID = model?.optString("providerID").orEmpty(),
         agentID = optString("agent"),
-        projectID = optString("projectID")
+        projectID = optString("projectID"),
+        tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
+        tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
     )
 }
 

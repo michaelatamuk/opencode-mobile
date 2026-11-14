@@ -65,6 +65,7 @@
     <string name="chat_model_agent">Model &amp; agent</string>
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
+    <string name="chat_session_stats">%1$s spent · %2$d in / %3$d out tokens</string>
     <string name="chat_changes">Changes</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_search">Search in session</string>
