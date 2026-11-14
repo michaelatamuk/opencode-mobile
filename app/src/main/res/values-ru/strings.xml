@@ -187,6 +187,27 @@
     <string name="notif_budget_title">Дневной бюджет достигнут</string>
     <string name="notif_budget_body">Потрачено $%1$.2f из $%2$.2f за сегодня.</string>
     <string name="settings_notifications_off">Уведомления для этого приложения отключены в настройках Android, поэтому ничего не появится. Разрешите их и отправьте тестовое.</string>
+    <string name="settings_home_title">Настройки</string>
+    <string name="settings_home_subtitle">OpenCode mobile</string>
+    <string name="settings_summary_not_configured">Не настроен</string>
+    <string name="settings_summary_on">Вкл</string>
+    <string name="settings_summary_off">Выкл</string>
+    <string name="settings_pair_summary">Код или QR</string>
+    <string name="settings_group_automation">Автоматизация</string>
+    <string name="settings_advanced">Дополнительно</string>
+    <string name="settings_open_notification_settings">Открыть настройки уведомлений</string>
+    <string name="settings_preview">Предпросмотр</string>
+    <string name="settings_preview_user">Как работает наблюдатель?</string>
+    <string name="settings_preview_assistant">Он держит одно соединение и прерывает вас только когда ход завершён.</string>
+    <string name="settings_spend_today">Потрачено сегодня: %1$s</string>
+    <string name="settings_security_hint">Блокировка запрашивается при каждом запуске. Если биометрия не настроена, приложение открывается обычным способом, чтобы вы не оказались заблокированы.</string>
+    <string name="settings_version">Версия</string>
+    <string name="settings_server_row">Сервер</string>
+    <string name="settings_github">Репозиторий GitHub</string>
+    <string name="settings_accent_blue">Синий</string>
+    <string name="settings_accent_mint">Мятный</string>
+    <string name="settings_accent_violet">Фиолетовый</string>
+    <string name="settings_accent_amber">Янтарный</string>
     <string name="notif_test_title">Тестовое уведомление</string>
     <string name="notif_test_body">Если вы это видите, уведомления работают. Для отчёта наблюдателю всё ещё нужна работающая сессия.</string>
 

@@ -192,6 +192,27 @@
     <string name="notif_budget_title">Daily budget reached</string>
     <string name="notif_budget_body">Spent $%1$.2f of $%2$.2f today.</string>
     <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
+    <string name="settings_home_title">Settings</string>
+    <string name="settings_home_subtitle">OpenCode mobile</string>
+    <string name="settings_summary_not_configured">Not configured</string>
+    <string name="settings_summary_on">On</string>
+    <string name="settings_summary_off">Off</string>
+    <string name="settings_pair_summary">Code or QR</string>
+    <string name="settings_group_automation">Automation</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="settings_open_notification_settings">Open notification settings</string>
+    <string name="settings_preview">Preview</string>
+    <string name="settings_preview_user">How does the watcher work?</string>
+    <string name="settings_preview_assistant">It keeps one connection open and only interrupts you when a turn stops.</string>
+    <string name="settings_spend_today">Spent today: %1$s</string>
+    <string name="settings_security_hint">The lock is requested on every launch. If no biometrics are enrolled, the app opens normally so you cannot be locked out.</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_server_row">Server</string>
+    <string name="settings_github">GitHub repository</string>
+    <string name="settings_accent_blue">Blue</string>
+    <string name="settings_accent_mint">Mint</string>
+    <string name="settings_accent_violet">Violet</string>
+    <string name="settings_accent_amber">Amber</string>
     <string name="notif_test_title">Test notification</string>
     <string name="notif_test_body">If you can see this, notifications work. The watcher still needs a running session to report.</string>
 

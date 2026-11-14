@@ -1,24 +1,32 @@
 package com.opencode.mobile.ui
 
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,19 +40,31 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.QrCode
+import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -55,31 +75,45 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.activity.compose.rememberLauncherForActivityResult
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
+import com.opencode.mobile.AppScope
 import com.opencode.mobile.Pairing
 import com.opencode.mobile.R
-import com.opencode.mobile.AppScope
 import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.UiPrefs
+import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
+private enum class SettingsPage { Home, Connection, Notifications, Appearance, Automation, Security, Pairing, About }
+
 private enum class ConnState { Unknown, Testing, Ok, Failed }
+
+private data class AccentChoice(val id: String, val color: Color, val label: Int)
+
+private val ACCENTS = listOf(
+    AccentChoice("blue", Color(0xFF8FB4FF), R.string.settings_accent_blue),
+    AccentChoice("mint", Color(0xFF9FE7C3), R.string.settings_accent_mint),
+    AccentChoice("violet", Color(0xFFE7C6FF), R.string.settings_accent_violet),
+    AccentChoice("amber", Color(0xFFFFD59B), R.string.settings_accent_amber)
+)
 
 @Composable
 fun SettingsScreen(
@@ -102,9 +136,12 @@ fun SettingsScreen(
     var server by remember { mutableStateOf(initialServer.ifBlank { "http://192.168.1.10:28894" }) }
     var password by remember { mutableStateOf(initialPassword) }
     var fallback by remember { mutableStateOf(initialFallback) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+
     var pairInput by remember { mutableStateOf("") }
     var pairError by remember { mutableStateOf<String?>(null) }
     var pairing by remember { mutableStateOf(false) }
+
     var budget by remember {
         mutableStateOf(SecurePrefs.get(context).getString("budget_usd", "").orEmpty())
     }
@@ -114,24 +151,31 @@ fun SettingsScreen(
     var blockShots by remember {
         mutableStateOf(SecurePrefs.get(context).getBoolean("block_screenshots", false))
     }
+
     var reveal by remember { mutableStateOf(false) }
-    var state by remember { mutableStateOf(ConnState.Unknown) }
+    var conn by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
     val scope = AppScope
+
     val themeMode by UiPrefs.mode.collectAsState()
     val themeAccent by UiPrefs.accent.collectAsState()
     val scanPrompt = stringResource(R.string.settings_scan_prompt)
 
+    var page by rememberSaveable {
+        mutableStateOf(if (canCancel) SettingsPage.Home else SettingsPage.Connection)
+    }
+    BackHandler(enabled = canCancel && page != SettingsPage.Home) { page = SettingsPage.Home }
+
     fun test() {
-        state = ConnState.Testing
+        conn = ConnState.Testing
         detail = null
         scope.launch {
             try {
                 val version = Api(server.trim(), password, fallback.trim()).ping()
-                state = ConnState.Ok
+                conn = ConnState.Ok
                 detail = "OpenCode $version"
             } catch (e: Exception) {
-                state = ConnState.Failed
+                conn = ConnState.Failed
                 detail = e.message
             }
         }
@@ -150,7 +194,7 @@ fun SettingsScreen(
                 }
                 password = token
                 pairInput = value
-                state = ConnState.Unknown
+                conn = ConnState.Unknown
                 test()
             } catch (e: Exception) {
                 pairError = e.message
@@ -164,522 +208,1130 @@ fun SettingsScreen(
         result.contents?.let { redeemPairing(it) }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-    ) {
+    fun save() {
+        onSave(server, password, fallback)
+        if (canCancel) page = SettingsPage.Home
+    }
+
+    val themeLabel = stringResource(
+        when (themeMode) {
+            "amoled" -> R.string.settings_theme_amoled
+            "standard" -> R.string.settings_theme_classic
+            else -> R.string.settings_theme_wallpaper
+        }
+    )
+    val accentLabel = stringResource(
+        ACCENTS.firstOrNull { it.id == themeAccent }?.label ?: R.string.settings_accent_blue
+    )
+    val watchdogLabel = stringResource(
+        when (watchdogMinutes) {
+            30 -> R.string.settings_watchdog_30
+            60 -> R.string.settings_watchdog_60
+            120 -> R.string.settings_watchdog_120
+            else -> R.string.settings_watchdog_off
+        }
+    )
+    val modeLabel = stringResource(
+        if (persistentWatch) R.string.settings_notif_mode_always
+        else R.string.settings_notif_mode_finish
+    )
+    val onText = stringResource(R.string.settings_summary_on)
+    val offText = stringResource(R.string.settings_summary_off)
+    val notConfigured = stringResource(R.string.settings_summary_not_configured)
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
+
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            val forward = targetState.ordinal > initialState.ordinal
+            if (forward) {
+                (slideInHorizontally(tween(260)) { it / 5 } + fadeIn(tween(220))) togetherWith
+                    (slideOutHorizontally(tween(200)) { -it / 8 } + fadeOut(tween(160)))
+            } else {
+                (slideInHorizontally(tween(260)) { -it / 5 } + fadeIn(tween(220))) togetherWith
+                    (slideOutHorizontally(tween(200)) { it / 8 } + fadeOut(tween(160)))
+            }
+        },
+        label = "settings-page"
+    ) { current ->
+        when (current) {
+            SettingsPage.Home -> SettingsHome(
+                canCancel = canCancel,
+                serverSummary = if (initialServer.isBlank()) notConfigured
+                else server.removePrefix("http://").removePrefix("https://").trimEnd('/'),
+                notificationsSummary = if (watching) "$onText · $modeLabel" else offText,
+                appearanceSummary = "$themeLabel · $accentLabel",
+                automationSummary = buildString {
+                    append(watchdogLabel)
+                    if (budget.isNotBlank()) append(" · $").append(budget)
+                },
+                securitySummary = if (biometricLock || blockShots) {
+                    listOfNotNull(
+                        if (biometricLock) stringResource(R.string.settings_biometric_title) else null,
+                        if (blockShots) stringResource(R.string.settings_screenshots_title) else null
+                    ).joinToString(" · ")
+                } else {
+                    offText
+                },
+                aboutSummary = if (version.isNotBlank()) "v$version" else "",
+                onBack = onCancel,
+                onOpen = { page = it }
+            )
+
+            SettingsPage.Connection -> ConnectionPage(
+                canCancel = canCancel,
+                server = server,
+                onServer = { server = it; conn = ConnState.Unknown },
+                password = password,
+                onPassword = { password = it; conn = ConnState.Unknown },
+                reveal = reveal,
+                onReveal = { reveal = !reveal },
+                fallback = fallback,
+                onFallback = { fallback = it; conn = ConnState.Unknown },
+                advanced = showAdvanced,
+                onAdvanced = { showAdvanced = !showAdvanced },
+                conn = conn,
+                detail = detail,
+                onTest = { test() },
+                onSave = { save() },
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Notifications -> NotificationsPage(
+                watching = watching,
+                onWatchingChange = onWatchingChange,
+                notificationsEnabled = notificationsEnabled,
+                persistentWatch = persistentWatch,
+                onPersistentWatchChange = onPersistentWatchChange,
+                onTestNotification = onTestNotification,
+                onOpenSystemSettings = {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Appearance -> AppearancePage(
+                themeMode = themeMode,
+                onThemeMode = { UiPrefs.setMode(context, it) },
+                themeAccent = themeAccent,
+                onAccent = { UiPrefs.setAccent(context, it) },
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Automation -> AutomationPage(
+                watchdogMinutes = watchdogMinutes,
+                onWatchdogChange = onWatchdogChange,
+                budget = budget,
+                onBudget = { value ->
+                    budget = value.filter { it.isDigit() || it == '.' }.take(10)
+                    SecurePrefs.get(context).edit().putString("budget_usd", budget).apply()
+                },
+                spentToday = UsageStore.today(context),
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Security -> SecurityPage(
+                biometricLock = biometricLock,
+                onBiometricLock = { enabled ->
+                    biometricLock = enabled
+                    SecurePrefs.get(context).edit()
+                        .putBoolean("biometric_lock", enabled).apply()
+                },
+                blockShots = blockShots,
+                onBlockShots = { enabled ->
+                    blockShots = enabled
+                    SecurePrefs.get(context).edit()
+                        .putBoolean("block_screenshots", enabled).apply()
+                    val window = (context as? android.app.Activity)?.window
+                    if (enabled) {
+                        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                },
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Pairing -> PairingPage(
+                pairInput = pairInput,
+                onPairInput = { pairInput = it; pairError = null },
+                pairError = pairError,
+                pairing = pairing,
+                onPair = { redeemPairing(pairInput) },
+                onScan = {
+                    scanLauncher.launch(
+                        ScanOptions()
+                            .setPrompt(scanPrompt)
+                            .setBeepEnabled(false)
+                            .setOrientationLocked(false)
+                    )
+                },
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.About -> AboutPage(
+                version = version,
+                server = server,
+                onBack = { page = SettingsPage.Home }
+            )
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ home */
+
+@Composable
+private fun SettingsHome(
+    canCancel: Boolean,
+    serverSummary: String,
+    notificationsSummary: String,
+    appearanceSummary: String,
+    automationSummary: String,
+    securitySummary: String,
+    aboutSummary: String,
+    onBack: () -> Unit,
+    onOpen: (SettingsPage) -> Unit
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp, top = 4.dp),
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 6.dp, end = 16.dp, top = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (canCancel) {
-                IconButton(onClick = onCancel) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back)
+                    )
                 }
             } else {
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
             }
-            Spacer(Modifier.weight(1f))
-            if (canCancel) {
-                TextButton(onClick = { onSave(server, password, fallback) }) { Text(stringResource(R.string.action_save)) }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_home_title),
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                Text(
+                    stringResource(R.string.settings_home_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
         Column(
             Modifier
-                .weight(1f)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 14.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Dns,
+                    title = stringResource(R.string.settings_section_connection),
+                    supporting = serverSummary,
+                    onClick = { onOpen(SettingsPage.Connection) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.QrCode,
+                    title = stringResource(R.string.settings_pair_title),
+                    supporting = stringResource(R.string.settings_pair_summary),
+                    onClick = { onOpen(SettingsPage.Pairing) }
+                )
+            }
+
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Notifications,
+                    title = stringResource(R.string.settings_background_title),
+                    supporting = notificationsSummary,
+                    onClick = { onOpen(SettingsPage.Notifications) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Palette,
+                    title = stringResource(R.string.settings_appearance_title),
+                    supporting = appearanceSummary,
+                    onClick = { onOpen(SettingsPage.Appearance) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Timer,
+                    title = stringResource(R.string.settings_group_automation),
+                    supporting = automationSummary,
+                    onClick = { onOpen(SettingsPage.Automation) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Shield,
+                    title = stringResource(R.string.settings_security_title),
+                    supporting = securitySummary,
+                    onClick = { onOpen(SettingsPage.Security) }
+                )
+            }
+
+            SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Info,
+                    title = stringResource(R.string.settings_about_title),
+                    supporting = aboutSummary,
+                    onClick = { onOpen(SettingsPage.About) },
+                    showDivider = false
+                )
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------ connection */
+
+@Composable
+private fun ConnectionPage(
+    canCancel: Boolean,
+    server: String,
+    onServer: (String) -> Unit,
+    password: String,
+    onPassword: (String) -> Unit,
+    reveal: Boolean,
+    onReveal: () -> Unit,
+    fallback: String,
+    onFallback: (String) -> Unit,
+    advanced: Boolean,
+    onAdvanced: () -> Unit,
+    conn: ConnState,
+    detail: String?,
+    onTest: () -> Unit,
+    onSave: () -> Unit,
+    onBack: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PageHeader(
+            title = stringResource(if (canCancel) R.string.settings_section_connection else R.string.settings_title),
+            onBack = if (canCancel) onBack else null
+        )
+        Column(
+            Modifier
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
+                .imePadding()
         ) {
-            Spacer(Modifier.height(8.dp))
-            SectionLabel(stringResource(R.string.settings_section_connection))
-            Spacer(Modifier.height(6.dp))
-            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(10.dp))
             Text(
                 stringResource(R.string.settings_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(16.dp))
 
-            FieldCard {
-                OutlinedTextField(
-                    value = server,
-                    onValueChange = { server = it; state = ConnState.Unknown },
-                    label = { Text(stringResource(R.string.settings_server_url)) },
-                    placeholder = { Text("http://192.168.1.10:28894") },
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    keyboardOptions = KeyboardOptions(
+            SettingsGroup {
+                Column(Modifier.padding(16.dp)) {
+                    SettingsField(
+                        value = server,
+                        onValueChange = onServer,
+                        label = stringResource(R.string.settings_server_url),
+                        placeholder = "http://192.168.1.10:28894",
+                        leading = Icons.Rounded.Dns,
                         keyboardType = KeyboardType.Uri,
                         imeAction = ImeAction.Next
-                    ),
-                    colors = fieldColors(),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it; state = ConnState.Unknown },
-                    label = { Text(stringResource(R.string.settings_password)) },
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { reveal = !reveal }) {
-                            Icon(
-                                if (reveal) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                contentDescription = stringResource(if (reveal) R.string.settings_hide_password else R.string.settings_show_password),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    },
-                    visualTransformation =
-                        if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingsField(
+                        value = password,
+                        onValueChange = onPassword,
+                        label = stringResource(R.string.settings_password),
+                        leading = Icons.Rounded.Lock,
                         keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    ),
-                    colors = fieldColors(),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = fallback,
-                    onValueChange = { fallback = it; state = ConnState.Unknown },
-                    label = { Text(stringResource(R.string.settings_fallback_url)) },
-                    placeholder = { Text("https://…opentunnel.xyz") },
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(18.dp))
+                        imeAction = ImeAction.Done,
+                        visualTransformation =
+                            if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailing = {
+                            IconButton(onClick = onReveal) {
+                                Icon(
+                                    if (reveal) Icons.Rounded.VisibilityOff
+                                    else Icons.Rounded.Visibility,
+                                    contentDescription = stringResource(
+                                        if (reveal) R.string.settings_hide_password
+                                        else R.string.settings_show_password
+                                    ),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    )
+                }
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Dns,
+                    title = stringResource(R.string.settings_advanced),
+                    supporting = stringResource(R.string.settings_fallback_url),
+                    onClick = onAdvanced,
+                    trailing = {
+                        Icon(
+                            if (advanced) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     },
+                    showDivider = false
+                )
+                AnimatedVisibility(visible = advanced) {
+                    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                        SettingsField(
+                            value = fallback,
+                            onValueChange = onFallback,
+                            label = stringResource(R.string.settings_fallback_url),
+                            placeholder = "https://…opentunnel.xyz",
+                            leading = Icons.Rounded.Dns,
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.settings_fallback_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            ConnectionBanner(state = conn, detail = detail, onTest = onTest)
+
+            Spacer(Modifier.height(22.dp))
+            Button(
+                onClick = onSave,
+                enabled = server.isNotBlank(),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+            ) {
+                Text(
+                    stringResource(
+                        if (canCancel) R.string.action_save else R.string.action_connect
+                    ),
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/* --------------------------------------------------------- notifications */
+
+@Composable
+private fun NotificationsPage(
+    watching: Boolean,
+    onWatchingChange: (Boolean) -> Unit,
+    notificationsEnabled: Boolean,
+    persistentWatch: Boolean,
+    onPersistentWatchChange: (Boolean) -> Unit,
+    onTestNotification: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
+    onBack: () -> Unit
+) {
+    PageScaffold(
+        title = stringResource(R.string.settings_background_title),
+        onBack = onBack
+    ) {
+        if (!notificationsEnabled) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_notifications_off),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(
+                        onClick = onOpenSystemSettings,
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                    ) {
+                        Text(stringResource(R.string.settings_open_notification_settings))
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        SettingsGroup {
+            SwitchRow(
+                icon = Icons.Rounded.Notifications,
+                title = stringResource(R.string.settings_background_title),
+                supporting = stringResource(R.string.settings_background_body),
+                checked = watching,
+                onChange = onWatchingChange
+            )
+            SettingsDivider()
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.settings_notif_mode_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.settings_notif_mode_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                SegmentedChoice(
+                    options = listOf(
+                        false to stringResource(R.string.settings_notif_mode_finish),
+                        true to stringResource(R.string.settings_notif_mode_always)
+                    ),
+                    selected = persistentWatch,
+                    onSelect = onPersistentWatchChange
+                )
+            }
+            SettingsDivider()
+            SettingsRow(
+                icon = Icons.Rounded.Send,
+                title = stringResource(R.string.settings_test_notification),
+                onClick = onTestNotification,
+                showDivider = false
+            )
+        }
+    }
+}
+
+/* ------------------------------------------------------------ appearance */
+
+@Composable
+private fun AppearancePage(
+    themeMode: String,
+    onThemeMode: (String) -> Unit,
+    themeAccent: String,
+    onAccent: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    PageScaffold(
+        title = stringResource(R.string.settings_appearance_title),
+        onBack = onBack
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    stringResource(R.string.settings_preview),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(
+                        topStart = 18.dp,
+                        topEnd = 18.dp,
+                        bottomEnd = 6.dp,
+                        bottomStart = 18.dp
+                    ),
+                    modifier = Modifier.fillMaxWidth(0.82f)
+                ) {
+                    Text(
+                        stringResource(R.string.settings_preview_user),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth(0.92f)
+                ) {
+                    Text(
+                        stringResource(R.string.settings_preview_assistant),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(R.string.settings_theme),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        SegmentedChoice(
+            options = listOf(
+                "dynamic" to stringResource(R.string.settings_theme_wallpaper),
+                "standard" to stringResource(R.string.settings_theme_classic),
+                "amoled" to stringResource(R.string.settings_theme_amoled)
+            ),
+            selected = themeMode,
+            onSelect = onThemeMode
+        )
+
+        Spacer(Modifier.height(20.dp))
+        Text(
+            stringResource(R.string.settings_accent),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ACCENTS.forEach { accent ->
+                val selected = accent.id == themeAccent
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        onClick = { onAccent(accent.id) },
+                        shape = CircleShape,
+                        color = accent.color,
+                        border = if (selected) {
+                            BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface)
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        if (selected) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF101319),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        stringResource(accent.label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selected) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------ automation */
+
+@Composable
+private fun AutomationPage(
+    watchdogMinutes: Int,
+    onWatchdogChange: (Int) -> Unit,
+    budget: String,
+    onBudget: (String) -> Unit,
+    spentToday: Double,
+    onBack: () -> Unit
+) {
+    PageScaffold(
+        title = stringResource(R.string.settings_group_automation),
+        onBack = onBack
+    ) {
+        SettingsGroup {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.settings_watchdog_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.settings_watchdog_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                SegmentedChoice(
+                    options = listOf(
+                        0 to stringResource(R.string.settings_watchdog_off),
+                        30 to stringResource(R.string.settings_watchdog_30),
+                        60 to stringResource(R.string.settings_watchdog_60),
+                        120 to stringResource(R.string.settings_watchdog_120)
+                    ),
+                    selected = watchdogMinutes,
+                    onSelect = onWatchdogChange
+                )
+            }
+            SettingsDivider()
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.settings_budget_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.settings_budget_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = budget,
+                    onValueChange = onBudget,
+                    label = { Text(stringResource(R.string.settings_budget_field)) },
+                    placeholder = { Text("5.00") },
+                    prefix = { Text("$") },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
+                        keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Done
                     ),
                     colors = fieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    stringResource(R.string.settings_fallback_hint),
+                    stringResource(R.string.settings_spend_today, formatCost(spentToday)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            Spacer(Modifier.height(14.dp))
-            StatusPill(state, detail)
-
-            Spacer(Modifier.height(22.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = { test() },
-                    enabled = server.isNotBlank() && state != ConnState.Testing,
-                    shape = RoundedCornerShape(14.dp)
-                ) { Text(stringResource(if (state == ConnState.Testing) R.string.action_testing else R.string.action_test)) }
-                Button(
-                    onClick = { onSave(server, password, fallback) },
-                    enabled = server.isNotBlank(),
-                    shape = RoundedCornerShape(14.dp)
-                ) { Text(stringResource(if (canCancel) R.string.action_save else R.string.action_connect)) }
-            }
-
-            Spacer(Modifier.height(18.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_pair_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.settings_pair_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = pairInput,
-                        onValueChange = { pairInput = it; pairError = null },
-                        label = { Text(stringResource(R.string.settings_pair_field)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        colors = fieldColors(),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (pairError != null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            pairError!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = { redeemPairing(pairInput) },
-                            enabled = pairInput.isNotBlank() && !pairing,
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(
-                                stringResource(
-                                    if (pairing) R.string.settings_pairing else R.string.action_pair
-                                )
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                scanLauncher.launch(
-                                    ScanOptions()
-                                        .setPrompt(scanPrompt)
-                                        .setBeepEnabled(false)
-                                        .setOrientationLocked(false)
-                                )
-                            },
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(stringResource(R.string.settings_scan_qr))
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(28.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_background_title),
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                stringResource(R.string.settings_background_body),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(checked = watching, onCheckedChange = onWatchingChange)
-                    }
-
-                    if (!notificationsEnabled) {
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            stringResource(R.string.settings_notifications_off),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-                    TextButton(
-                        onClick = onTestNotification,
-                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
-                    ) {
-                        Text(stringResource(R.string.settings_test_notification))
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_notif_mode_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.settings_notif_mode_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = !persistentWatch,
-                            onClick = { onPersistentWatchChange(false) },
-                            label = { Text(stringResource(R.string.settings_notif_mode_finish)) }
-                        )
-                        FilterChip(
-                            selected = persistentWatch,
-                            onClick = { onPersistentWatchChange(true) },
-                            label = { Text(stringResource(R.string.settings_notif_mode_always)) }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_appearance_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.settings_theme),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(
-                            "dynamic" to R.string.settings_theme_wallpaper,
-                            "standard" to R.string.settings_theme_classic,
-                            "amoled" to R.string.settings_theme_amoled
-                        ).forEach { (mode, label) ->
-                            FilterChip(
-                                selected = themeMode == mode,
-                                onClick = { UiPrefs.setMode(context, mode) },
-                                label = { Text(stringResource(label)) }
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        stringResource(R.string.settings_accent),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        listOf(
-                            "blue" to Color(0xFF8FB4FF),
-                            "mint" to Color(0xFF9FE7C3),
-                            "violet" to Color(0xFFE7C6FF),
-                            "amber" to Color(0xFFFFD59B)
-                        ).forEach { (name, color) ->
-                            Surface(
-                                onClick = { UiPrefs.setAccent(context, name) },
-                                shape = CircleShape,
-                                color = color,
-                                modifier = Modifier.size(30.dp)
-                            ) {
-                                if (themeAccent == name) {
-                                    Icon(
-                                        Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        tint = Color(0xFF101319),
-                                        modifier = Modifier.padding(7.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_watchdog_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.settings_watchdog_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(
-                            0 to R.string.settings_watchdog_off,
-                            30 to R.string.settings_watchdog_30,
-                            60 to R.string.settings_watchdog_60,
-                            120 to R.string.settings_watchdog_120
-                        ).forEach { (minutes, label) ->
-                            FilterChip(
-                                selected = watchdogMinutes == minutes,
-                                onClick = { onWatchdogChange(minutes) },
-                                label = { Text(stringResource(label)) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_budget_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.settings_budget_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = budget,
-                        onValueChange = { value ->
-                            budget = value.filter { it.isDigit() || it == '.' }.take(10)
-                            SecurePrefs.get(context).edit()
-                                .putString("budget_usd", budget)
-                                .apply()
-                        },
-                        label = { Text(stringResource(R.string.settings_budget_field)) },
-                        placeholder = { Text("5.00") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done
-                        ),
-                        colors = fieldColors(),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.settings_security_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_biometric_title),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                stringResource(R.string.settings_biometric_body),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = biometricLock,
-                            onCheckedChange = { enabled ->
-                                biometricLock = enabled
-                                SecurePrefs.get(context).edit()
-                                    .putBoolean("biometric_lock", enabled)
-                                    .apply()
-                            }
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_screenshots_title),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                stringResource(R.string.settings_screenshots_body),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = blockShots,
-                            onCheckedChange = { enabled ->
-                                blockShots = enabled
-                                SecurePrefs.get(context).edit()
-                                    .putBoolean("block_screenshots", enabled)
-                                    .apply()
-                                val window = (context as? android.app.Activity)?.window
-                                if (enabled) {
-                                    window?.addFlags(
-                                        android.view.WindowManager.LayoutParams.FLAG_SECURE
-                                    )
-                                } else {
-                                    window?.clearFlags(
-                                        android.view.WindowManager.LayoutParams.FLAG_SECURE
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(28.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.settings_about_title), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        stringResource(R.string.settings_about_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        stringResource(R.string.settings_about_storage),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.height(32.dp))
         }
-        Spacer(Modifier.navigationBarsPadding())
+    }
+}
+
+/* -------------------------------------------------------------- security */
+
+@Composable
+private fun SecurityPage(
+    biometricLock: Boolean,
+    onBiometricLock: (Boolean) -> Unit,
+    blockShots: Boolean,
+    onBlockShots: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
+    PageScaffold(
+        title = stringResource(R.string.settings_security_title),
+        onBack = onBack
+    ) {
+        SettingsGroup {
+            SwitchRow(
+                icon = Icons.Rounded.Shield,
+                title = stringResource(R.string.settings_biometric_title),
+                supporting = stringResource(R.string.settings_biometric_body),
+                checked = biometricLock,
+                onChange = onBiometricLock
+            )
+            SettingsDivider()
+            SwitchRow(
+                icon = Icons.Rounded.Lock,
+                title = stringResource(R.string.settings_screenshots_title),
+                supporting = stringResource(R.string.settings_screenshots_body),
+                checked = blockShots,
+                onChange = onBlockShots,
+                showDivider = false
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.settings_security_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+/* ---------------------------------------------------------------- pairing */
+
+@Composable
+private fun PairingPage(
+    pairInput: String,
+    onPairInput: (String) -> Unit,
+    pairError: String?,
+    pairing: Boolean,
+    onPair: () -> Unit,
+    onScan: () -> Unit,
+    onBack: () -> Unit
+) {
+    PageScaffold(
+        title = stringResource(R.string.settings_pair_title),
+        onBack = onBack
+    ) {
+        Text(
+            stringResource(R.string.settings_pair_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
+        SettingsGroup {
+            Column(Modifier.padding(16.dp)) {
+                SettingsField(
+                    value = pairInput,
+                    onValueChange = onPairInput,
+                    label = stringResource(R.string.settings_pair_field),
+                    leading = Icons.Rounded.QrCode,
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                )
+                if (pairError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        pairError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = onPair,
+                        enabled = pairInput.isNotBlank() && !pairing,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            stringResource(
+                                if (pairing) R.string.settings_pairing else R.string.action_pair
+                            )
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onScan,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.QrCode,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.settings_scan_qr))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ about */
+
+@Composable
+private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    PageScaffold(
+        title = stringResource(R.string.settings_about_title),
+        onBack = onBack
+    ) {
+        SettingsGroup {
+            SettingsRow(
+                icon = Icons.Rounded.Info,
+                title = stringResource(R.string.settings_version),
+                supporting = if (version.isBlank()) "—" else "v$version",
+                onClick = {
+                    if (version.isNotBlank()) {
+                        clipboard.setText(AnnotatedString(version))
+                    }
+                }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = Icons.Rounded.Dns,
+                title = stringResource(R.string.settings_server_row),
+                supporting = server.removePrefix("http://").removePrefix("https://").trimEnd('/'),
+                showDivider = false
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        SettingsGroup {
+            SettingsRow(
+                icon = Icons.Rounded.OpenInNew,
+                title = stringResource(R.string.settings_github),
+                supporting = "github.com/michaelatamuk/opencode-mobile",
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse(
+                                    "https://github.com/michaelatamuk/opencode-mobile"
+                                )
+                            )
+                        )
+                    }
+                },
+                showDivider = false
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            stringResource(R.string.settings_about_body) + " " +
+                stringResource(R.string.settings_about_storage),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+/* ------------------------------------------------------------- components */
+
+@Composable
+private fun PageScaffold(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PageHeader(title = title, onBack = onBack)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            content()
+        }
     }
 }
 
 @Composable
-private fun FieldCard(content: @Composable () -> Unit) {
+private fun PageHeader(title: String, onBack: (() -> Unit)?) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.action_back)
+                )
+            }
+        } else {
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(14.dp)) { content() }
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 64.dp),
+        color = MaterialTheme.colorScheme.outlineVariant
+    )
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    supporting: String? = null,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    showDivider: Boolean = true
+) {
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onClick != null) Modifier.clickable(onClick = onClick)
+                    else Modifier
+                )
+                .padding(start = 16.dp, end = 14.dp, top = 13.dp, bottom = 13.dp)
+                .heightIn(min = 40.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(11.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (!supporting.isNullOrBlank()) {
+                    Text(
+                        supporting,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            if (trailing != null) {
+                trailing()
+            } else if (onClick != null) {
+                Icon(
+                    Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        if (showDivider) SettingsDivider()
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    icon: ImageVector,
+    title: String,
+    supporting: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    showDivider: Boolean = true
+) {
+    SettingsRow(
+        icon = icon,
+        title = title,
+        supporting = supporting,
+        onClick = { onChange(!checked) },
+        trailing = { Switch(checked = checked, onCheckedChange = onChange) },
+        showDivider = showDivider
+    )
+}
+
+@Composable
+private fun <T> SegmentedChoice(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = option.first == selected,
+                onClick = { onSelect(option.first) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    option.second,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String? = null,
+    leading: ImageVector? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Done,
+    visualTransformation: VisualTransformation = VisualTransformation.None
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = if (placeholder != null) ({ Text(placeholder) }) else null,
+        singleLine = true,
+        leadingIcon = leading?.let {
+            {
+                Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+        },
+        trailingIcon = trailing,
+        visualTransformation = visualTransformation,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+        colors = fieldColors(),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+private fun ConnectionBanner(state: ConnState, detail: String?, onTest: () -> Unit) {
+    val accent = when (state) {
+        ConnState.Ok -> MaterialTheme.colorScheme.secondary
+        ConnState.Failed -> MaterialTheme.colorScheme.error
+        ConnState.Testing -> MaterialTheme.colorScheme.primary
+        ConnState.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val title = when (state) {
+        ConnState.Ok -> stringResource(R.string.settings_connected)
+        ConnState.Failed -> stringResource(R.string.settings_not_reachable)
+        ConnState.Testing -> stringResource(R.string.settings_checking)
+        ConnState.Unknown -> stringResource(R.string.settings_not_tested)
+    }
+    Surface(
+        color = accent.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(8.dp).background(accent, CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (!detail.isNullOrBlank()) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            TextButton(onClick = onTest) {
+                Text(stringResource(R.string.action_test))
+            }
+        }
     }
 }
 
@@ -692,63 +1344,3 @@ private fun fieldColors() = TextFieldDefaults.colors(
     unfocusedIndicatorColor = Color.Transparent,
     disabledIndicatorColor = Color.Transparent
 )
-
-@Composable
-private fun StatusPill(state: ConnState, detail: String?) {
-    val color = when (state) {
-        ConnState.Ok -> MaterialTheme.colorScheme.secondary
-        ConnState.Failed -> MaterialTheme.colorScheme.error
-        ConnState.Testing -> MaterialTheme.colorScheme.primary
-        ConnState.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val label = when (state) {
-        ConnState.Ok -> stringResource(R.string.settings_connected)
-        ConnState.Failed -> stringResource(R.string.settings_not_reachable)
-        ConnState.Testing -> stringResource(R.string.settings_checking)
-        ConnState.Unknown -> stringResource(R.string.settings_not_tested)
-    }
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn() + slideInVertically { it / 3 },
-        exit = fadeOut() + slideOutVertically { it / 3 }
-    ) {
-        Surface(color = color.copy(alpha = 0.12f), shape = RoundedCornerShape(14.dp)) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                when (state) {
-                    ConnState.Ok -> Icon(
-                        Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(16.dp)
-                    )
-
-                    ConnState.Failed -> Icon(
-                        Icons.Rounded.ErrorOutline,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(16.dp)
-                    )
-
-                    else -> Box(
-                        Modifier.size(8.dp).background(color, CircleShape)
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(label, style = MaterialTheme.typography.labelLarge, color = color)
-                    if (!detail.isNullOrBlank()) {
-                        Text(
-                            detail,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2
-                        )
-                    }
-                }
-            }
-        }
-    }
-}

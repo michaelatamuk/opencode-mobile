@@ -42,6 +42,8 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Offline queue: a prompt sent while the server is unreachable is delivered by
   the watcher when it reconnects
 - Model A/B: branch before the last prompt and replay it on another model
+- Grouped settings with live summaries, sub-pages, segmented controls, theme
+  preview and labelled accent swatches
 - Voice input (system dictation) and read-aloud for assistant messages
 - Biometric lock on launch and optional screenshot / recents blocking
 - Home-screen widget and quick-settings tile showing the watcher status
