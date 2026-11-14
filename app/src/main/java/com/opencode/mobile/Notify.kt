@@ -29,6 +29,13 @@ object Notify {
                 setShowBadge(false)
             }
         )
+        // Channels are immutable after creation: if an earlier build (or the user)
+        // left watch_silent at a higher importance, the placeholder would keep
+        // showing in the status bar. Recreate it so "only on finish" stays quiet.
+        val staleSilent = manager.getNotificationChannel(CHANNEL_WATCH_SILENT)
+        if (staleSilent != null && staleSilent.importance > NotificationManager.IMPORTANCE_MIN) {
+            manager.deleteNotificationChannel(CHANNEL_WATCH_SILENT)
+        }
         // "Only on finish": the watcher still needs a foreground service to
         // survive in the background, but the placeholder stays invisible in the
         // status bar and never makes a sound.

@@ -88,8 +88,6 @@
     <string name="chat_model_agent">Model &amp; agent</string>
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
-    <string name="chat_models_configured">Only providers enabled on your server.</string>
-    <string name="chat_model_current">current</string>
     <string name="chat_context_caption">%1$s context</string>
     <string name="chat_tokens_label">Tokens</string>
     <string name="chat_spend_label">Spend</string>
@@ -164,9 +162,6 @@
     <string name="chat_activity_thought_for">Thought for %1$ds</string>
     <string name="chat_activity_working">Working %1$s</string>
     <string name="chat_activity_running_short">Running %1$s</string>
-    <string name="chat_activity_stop_run">Stop this run</string>
-    <string name="chat_activity_steps">%1$d steps</string>
-    <string name="chat_activity_worked">Worked %1$s</string>
     <string name="chat_activity_used">Used %1$s</string>
     <string name="chat_activity_thoughts_one">1 Thought</string>
     <string name="chat_activity_thoughts">%1$d Thoughts</string>
@@ -270,7 +265,7 @@
     <string name="settings_quick_prompts_title">Quick action prompts</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
-    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs: a placeholder sits in the silent notification group (no icon, no sound) so Android keeps watching, and you get a normal notification when a turn stops. Always shows live progress in the shade.</string>
+    <string name="settings_notif_mode_body">Only on finish keeps the watcher quiet: Android still requires a silent entry while it runs in the background (some devices show its icon), and you get a normal alert when a turn stops. Always shows live progress.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
     <string name="settings_appearance_title">Appearance</string>
@@ -356,6 +351,7 @@
     <string name="notif_channel_permissions">Permission requests</string>
     <string name="notif_channel_permissions_desc">A session is waiting for your approval</string>
     <string name="notif_watching_title">OpenCode</string>
+    <string name="notif_watch_silent_text">Background watcher · alerts only when a turn finishes</string>
     <string name="notif_running">%1$d running</string>
     <string name="notif_waiting">Waiting for a session to run</string>
     <string name="notif_offline">Offline — can\'t reach the server</string>

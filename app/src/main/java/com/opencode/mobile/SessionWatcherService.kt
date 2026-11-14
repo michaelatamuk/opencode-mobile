@@ -544,8 +544,10 @@ class SessionWatcherService : Service() {
         )
 
         val single = runs.entries.firstOrNull()
-        val text = statusLabel()
         val silent = !persistentNotification()
+        // Never mirror live run state into the finish-only placeholder: it must
+        // not read (or update) like a "running task" notification.
+        val text = if (silent) getString(R.string.notif_watch_silent_text) else statusLabel()
 
         val builder = NotificationCompat.Builder(
             this,
