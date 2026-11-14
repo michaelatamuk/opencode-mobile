@@ -37,6 +37,11 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
   and the app trades it for the password itself
 - Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
   text files only
+- Skills detail view with the skill's full markdown content
+- Daily budget: one notification when today's spend reaches the configured cap
+- Offline queue: a prompt sent while the server is unreachable is delivered by
+  the watcher when it reconnects
+- Model A/B: branch before the last prompt and replay it on another model
 - Saved presets: agent + model + opening prompt, applied in one tap
 - Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
   choice of four accent colors

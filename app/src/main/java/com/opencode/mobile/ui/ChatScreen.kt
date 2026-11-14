@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Difference
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -128,6 +129,7 @@ import com.opencode.mobile.ChatViewModel
 import com.opencode.mobile.CommandOption
 import com.opencode.mobile.FileDiff
 import com.opencode.mobile.Msg
+import com.opencode.mobile.ModelOption
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
@@ -153,12 +155,11 @@ fun ChatScreen(
     onSessionCreated: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val vm: ChatViewModel = viewModel(key = "chat:${sessionID ?: "draft"}") {
-        ChatViewModel(repo, sessionID)
+        ChatViewModel(repo, sessionID, context)
     }
     val state by vm.state.collectAsStateWithLifecycle()
-
-    val context = LocalContext.current
 
     var input by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
@@ -173,6 +174,8 @@ fun ChatScreen(
     var presets by remember { mutableStateOf(PresetStore.all(context)) }
     var savePreset by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
+    var viewingSkill by remember { mutableStateOf<SkillOption?>(null) }
+    var showAb by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -399,6 +402,14 @@ fun ChatScreen(
                                 menuOpen = false
                                 presetName = ""
                                 savePreset = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_ab)) },
+                            enabled = !state.busy,
+                            onClick = {
+                                menuOpen = false
+                                showAb = true
                             }
                         )
                     }
@@ -667,6 +678,24 @@ fun ChatScreen(
                 } else {
                     pickedSkills + skill
                 }
+            },
+            onViewSkill = { viewingSkill = it }
+        )
+    }
+
+    viewingSkill?.let { skill ->
+        SkillSheet(skill = skill, onDismiss = { viewingSkill = null })
+    }
+
+    if (showAb) {
+        AbSheet(
+            models = state.models.filterNot {
+                it.id == state.modelID && it.providerID == state.modelProviderID
+            },
+            onDismiss = { showAb = false },
+            onPick = { model ->
+                showAb = false
+                vm.runAb(model.providerID, model.id) { child -> onSessionCreated(child) }
             }
         )
     }
@@ -1370,13 +1399,106 @@ private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun AbSheet(
+    models: List<ModelOption>,
+    onDismiss: () -> Unit,
+    onPick: (ModelOption) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 600.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(stringResource(R.string.chat_ab), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                stringResource(R.string.chat_ab_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (models.isEmpty()) {
+                Text(
+                    stringResource(R.string.chat_library_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            models.forEach { model ->
+                Surface(
+                    onClick = { onPick(model) },
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text(model.name, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "${model.providerID} · ${model.id}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SkillSheet(skill: SkillOption, onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 680.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(skill.name, style = MaterialTheme.typography.headlineSmall)
+            if (skill.description.isNotBlank()) {
+                Text(
+                    skill.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            HorizontalDivider()
+            if (skill.content.isNotBlank()) {
+                MarkdownText(skill.content)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun LibrarySheet(
     commands: List<CommandOption>,
     skills: List<SkillOption>,
     selected: List<SkillOption>,
     onDismiss: () -> Unit,
     onCommand: (CommandOption) -> Unit,
-    onToggleSkill: (SkillOption) -> Unit
+    onToggleSkill: (SkillOption) -> Unit,
+    onViewSkill: (SkillOption) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -1469,6 +1591,19 @@ private fun LibrarySheet(
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
+                            }
+                            if (skill.content.isNotBlank()) {
+                                IconButton(
+                                    onClick = { onViewSkill(skill) },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Info,
+                                        contentDescription = stringResource(R.string.chat_skill_details),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }

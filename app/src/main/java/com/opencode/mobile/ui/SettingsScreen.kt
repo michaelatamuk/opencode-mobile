@@ -75,6 +75,7 @@ import com.opencode.mobile.Api
 import com.opencode.mobile.Pairing
 import com.opencode.mobile.R
 import com.opencode.mobile.AppScope
+import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.UiPrefs
 import kotlinx.coroutines.launch
 
@@ -97,17 +98,20 @@ fun SettingsScreen(
     onCancel: () -> Unit,
     onSave: (String, String, String) -> Unit
 ) {
+    val context = LocalContext.current
     var server by remember { mutableStateOf(initialServer.ifBlank { "http://192.168.1.10:28894" }) }
     var password by remember { mutableStateOf(initialPassword) }
     var fallback by remember { mutableStateOf(initialFallback) }
     var pairInput by remember { mutableStateOf("") }
     var pairError by remember { mutableStateOf<String?>(null) }
     var pairing by remember { mutableStateOf(false) }
+    var budget by remember {
+        mutableStateOf(SecurePrefs.get(context).getString("budget_usd", "").orEmpty())
+    }
     var reveal by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
     val scope = AppScope
-    val context = LocalContext.current
     val themeMode by UiPrefs.mode.collectAsState()
     val themeAccent by UiPrefs.accent.collectAsState()
     val scanPrompt = stringResource(R.string.settings_scan_prompt)
@@ -523,6 +527,46 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_budget_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_budget_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = budget,
+                        onValueChange = { value ->
+                            budget = value.filter { it.isDigit() || it == '.' }.take(10)
+                            SecurePrefs.get(context).edit()
+                                .putString("budget_usd", budget)
+                                .apply()
+                        },
+                        label = { Text(stringResource(R.string.settings_budget_field)) },
+                        placeholder = { Text("5.00") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        colors = fieldColors(),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 

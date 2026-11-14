@@ -53,7 +53,8 @@ data class ChatUiState(
 
 class ChatViewModel(
     private val repo: OpenCodeRepository,
-    sessionID: String?
+    sessionID: String?,
+    private val appContext: android.content.Context? = null
 ) : ViewModel() {
 
     private var activeID: String? = sessionID
@@ -247,7 +248,16 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = friendlyError(e)) }
+                val target = _state.value.sessionID
+                if (e is java.io.IOException && target.isNotBlank() && appContext != null) {
+                    PendingStore.add(appContext, target, text, skillIDs)
+                    _state.update {
+                        it.copy(error = "Queued - will send when the server is back.")
+                    }
+                    ok = true
+                } else {
+                    _state.update { it.copy(error = friendlyError(e)) }
+                }
             } finally {
                 _state.update { it.copy(sending = false) }
                 onDone(ok)
@@ -337,6 +347,29 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 repo.compactSession(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
+    /**
+     * Branches the conversation before the last user prompt and replays that
+     * prompt on [providerID]/[modelID], so the two answers can be compared.
+     */
+    fun runAb(providerID: String, modelID: String, onCreated: (String) -> Unit) {
+        val id = activeID ?: return
+        val lastUser = _state.value.messages.lastOrNull { it.role == "user" } ?: return
+        val prompt = lastUser.plainText
+        if (prompt.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val child = repo.forkSession(id, lastUser.id)
+                repo.setModel(child, providerID, modelID)
+                repo.send(child, prompt)
+                onCreated(child)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

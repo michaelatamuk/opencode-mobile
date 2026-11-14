@@ -91,9 +91,12 @@
     <string name="chat_commands">Commands</string>
     <string name="chat_skills">Skills</string>
     <string name="chat_library_empty">This server has no commands or skills to show.</string>
+    <string name="chat_skill_details">Skill details</string>
     <string name="chat_save_preset">Save preset</string>
     <string name="chat_preset_name">Preset name</string>
     <string name="chat_presets">Presets</string>
+    <string name="chat_ab">Model A/B</string>
+    <string name="chat_ab_body">Branches the conversation before your last prompt and replays it on the chosen model, then opens the new branch.</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_diff_from_tools">The server has no diff for this project. Files the agent edited in this conversation:</string>
     <string name="chat_diff_revert">Revert file</string>
@@ -170,6 +173,11 @@
     <string name="settings_watchdog_30">30m</string>
     <string name="settings_watchdog_60">1h</string>
     <string name="settings_watchdog_120">2h</string>
+    <string name="settings_budget_title">Daily budget</string>
+    <string name="settings_budget_body">Send one notification when today\'s spend reaches this amount. Leave empty to disable.</string>
+    <string name="settings_budget_field">Budget in USD</string>
+    <string name="notif_budget_title">Daily budget reached</string>
+    <string name="notif_budget_body">Spent $%1$.2f of $%2$.2f today.</string>
     <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
     <string name="notif_test_title">Test notification</string>
     <string name="notif_test_body">If you can see this, notifications work. The watcher still needs a running session to report.</string>

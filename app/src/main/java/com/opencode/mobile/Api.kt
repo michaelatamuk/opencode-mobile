@@ -129,7 +129,8 @@ data class CommandOption(val name: String, val description: String)
 data class SkillOption(
     val id: String,
     val name: String,
-    val description: String
+    val description: String,
+    val content: String = ""
 )
 
 /**
@@ -699,7 +700,8 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             SkillOption(
                 id = o.optString("id"),
                 name = o.optString("name").ifBlank { o.optString("id") },
-                description = o.optString("description")
+                description = o.optString("description"),
+                content = o.optString("content")
             )
         }
     }

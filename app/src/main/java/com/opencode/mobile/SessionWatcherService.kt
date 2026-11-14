@@ -274,7 +274,59 @@ class SessionWatcherService : Service() {
         active.forEach { id -> if (!runs.containsKey(id)) runs[id] = LiveRun(System.currentTimeMillis()) }
 
         syncPermissions(client)
+        flushPending(client)
+        UsageStore.record(this, sessions)
+        checkBudget()
         updateOngoing()
+    }
+
+    /** Delivers prompts that were queued while the server was unreachable. */
+    private suspend fun flushPending(client: Api) {
+        PendingStore.all(this).forEach { prompt ->
+            try {
+                client.send(
+                    sessionID = prompt.sessionID,
+                    text = prompt.text,
+                    skillIDs = prompt.skillIDs
+                )
+                PendingStore.remove(this, prompt.id)
+            } catch (e: ApiException) {
+                if (e.status in 400..499) PendingStore.remove(this, prompt.id)
+            } catch (_: Exception) {
+                // Keep it queued for the next attempt.
+            }
+        }
+    }
+
+    /** Warns once per day when today's spend reaches the configured budget. */
+    private fun checkBudget() {
+        val prefs = SecurePrefs.get(this)
+        val budget = prefs.getString("budget_usd", "")?.toDoubleOrNull() ?: return
+        if (budget <= 0.0) return
+        val spent = UsageStore.today(this)
+        if (spent < budget) return
+
+        val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            .format(java.util.Date())
+        if (prefs.getString("budget_alerted_day", "") == day) return
+        prefs.edit().putString("budget_alerted_day", day).apply()
+
+        val open = PendingIntent.getActivity(
+            this,
+            3,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
+            .setSmallIcon(R.drawable.ic_stat_opencode)
+            .setContentTitle(getString(R.string.notif_budget_title))
+            .setContentText(getString(R.string.notif_budget_body, spent, budget))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        getSystemService(android.app.NotificationManager::class.java)
+            .notify(4_100_001, notification)
     }
 
     private suspend fun syncPermissions(api: Api) {

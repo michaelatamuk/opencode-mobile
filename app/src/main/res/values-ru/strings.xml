@@ -87,9 +87,12 @@
     <string name="chat_commands">Команды</string>
     <string name="chat_skills">Навыки</string>
     <string name="chat_library_empty">На этом сервере нет команд и навыков.</string>
+    <string name="chat_skill_details">Описание навыка</string>
     <string name="chat_save_preset">Сохранить пресет</string>
     <string name="chat_preset_name">Название пресета</string>
     <string name="chat_presets">Пресеты</string>
+    <string name="chat_ab">Сравнение моделей</string>
+    <string name="chat_ab_body">Ответвляет диалог перед последним запросом и повторяет его на выбранной модели, затем открывает новую ветку.</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
     <string name="chat_diff_revert">Откатить файл</string>
@@ -165,6 +168,11 @@
     <string name="settings_watchdog_30">30м</string>
     <string name="settings_watchdog_60">1ч</string>
     <string name="settings_watchdog_120">2ч</string>
+    <string name="settings_budget_title">Дневной бюджет</string>
+    <string name="settings_budget_body">Одно уведомление, когда расходы за день достигнут этой суммы. Пусто — выключено.</string>
+    <string name="settings_budget_field">Бюджет в USD</string>
+    <string name="notif_budget_title">Дневной бюджет достигнут</string>
+    <string name="notif_budget_body">Потрачено $%1$.2f из $%2$.2f за сегодня.</string>
     <string name="settings_notifications_off">Уведомления для этого приложения отключены в настройках Android, поэтому ничего не появится. Разрешите их и отправьте тестовое.</string>
     <string name="notif_test_title">Тестовое уведомление</string>
     <string name="notif_test_body">Если вы это видите, уведомления работают. Для отчёта наблюдателю всё ещё нужна работающая сессия.</string>
