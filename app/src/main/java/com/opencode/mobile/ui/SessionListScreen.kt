@@ -3,7 +3,6 @@ package com.opencode.mobile.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -27,10 +26,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,6 +51,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +74,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -155,6 +157,19 @@ fun SessionListScreen(
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
+    var fabVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        var last = 0
+        snapshotFlow {
+            listState.firstVisibleItemIndex * 10_000 + listState.firstVisibleItemScrollOffset
+        }.collect { position ->
+            if (position > last + 8) fabVisible = false
+            else if (position < last - 8) fabVisible = true
+            last = position
+        }
+    }
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
         var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
@@ -242,10 +257,15 @@ fun SessionListScreen(
                         )
                         val subtitle = when {
                             state.error != null -> stringResource(R.string.sessions_reconnecting_short)
-                            running.isNotEmpty() ->
-                                "${running.size} ${stringResource(R.string.session_running)}"
-
-                            else -> "${filtered.size}"
+                            else -> buildString {
+                                append(stringResource(R.string.sessions_count, filtered.size))
+                                if (running.isNotEmpty()) {
+                                    append(" · ")
+                                    append(running.size)
+                                    append(' ')
+                                    append(stringResource(R.string.session_running))
+                                }
+                            }
                         }
                         Text(
                             subtitle,
@@ -314,7 +334,10 @@ fun SessionListScreen(
                             label = {
                                 Text(
                                     project.name.ifBlank {
-                                        project.id.substringAfterLast('/').take(24)
+                                        stringResource(
+                                            R.string.sessions_project_fallback,
+                                            project.id.take(4)
+                                        )
                                     },
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -368,7 +391,8 @@ fun SessionListScreen(
             ) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 96.dp)
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 104.dp)
                 ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
@@ -539,20 +563,30 @@ fun SessionListScreen(
         }
     }
 
-        // Primary creation action: bottom-right, in thumb reach, 56 dp.
-        FloatingActionButton(
-            onClick = onNewSession,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 18.dp)
-                .size(56.dp)
-        ) {
-            Icon(
-                Icons.Rounded.Add,
-                contentDescription = stringResource(R.string.action_new_session),
-                modifier = Modifier.size(24.dp)
+        // Primary creation action: docked extended FAB above the navigation bar,
+        // hidden while scrolling down so it never covers a row.
+        if (fabVisible) {
+            ExtendedFloatingActionButton(
+                onClick = onNewSession,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 16.dp),
+                icon = {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                text = {
+                    Text(
+                        stringResource(R.string.action_new_session),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             )
         }
     }
@@ -738,7 +772,7 @@ private fun ActiveCard(
                     if (subagents > 0) {
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "$subagents",
+                            if (subagents > 9) "9+" else "$subagents",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
                         )
@@ -863,6 +897,7 @@ private fun SessionRow(
                     Text(
                         session.title,
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -924,7 +959,7 @@ private fun SessionRow(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "$subagents",
+                                    if (subagents > 9) "9+" else "$subagents",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -950,7 +985,10 @@ private fun SessionRow(
             Text(
                 relativeTime(session.updated),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.widthIn(min = 62.dp)
             )
         }
 

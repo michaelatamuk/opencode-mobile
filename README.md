@@ -66,7 +66,7 @@ Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
 
 | Area | Highlights |
 |---|---|
-| **Sessions** | Bottom-right create button, sticky day headers, full-width titles with project/preview meta, reserved unread gutter, subagent chevron, live running cards with Stop, swipe-to-delete, pull-to-refresh. |
+| **Sessions** | Docked *New session* button above the nav bar (hides while scrolling), sticky day headers, full-width titles with project/preview meta, reserved unread gutter, subagent chevron, live running cards, swipe-to-delete, pull-to-refresh. |
 | **Chat** | Streaming SSE with reconnect, markdown/tables/code copy, clickable links, images and files (≤8 MB), agent forms, permissions, queued/steered messages with edit/steer/cancel, in-session search, pagination, jump-to-latest, drafts that survive leaving the screen. |
 | **Agent activity** | One block per assistant turn (`Working 10m 07s · Shell` / `Worked 2m 05s · 9 steps`) with Stop in place, expandable to a step timeline with tool icons, file names and per-step input/output. |
 | **Reviews** | Diff sheet with per-file stats, collapsed patches, branch/provider from VCS, file viewer, validated per-file revert (all-or-nothing), conversation fallback when the project has no git diff. |

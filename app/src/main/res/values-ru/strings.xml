@@ -41,6 +41,8 @@
     <string name="cost_export">Экспорт расходов в CSV</string>
     <string name="cost_empty">Расходов пока нет. Они появятся после первого вызова модели.</string>
     <string name="sessions_no_match">Ничего не найдено.</string>
+    <string name="sessions_count">Сессий: %1$d</string>
+    <string name="sessions_project_fallback">Проект %1$s</string>
     <string name="sessions_today">Сегодня</string>
     <string name="sessions_yesterday">Вчера</string>
     <string name="sessions_week">Последние 7 дней</string>

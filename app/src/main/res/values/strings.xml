@@ -43,6 +43,8 @@
     <string name="cost_export">Export usage CSV</string>
     <string name="cost_empty">No cost recorded yet. Spend appears after a model call completes.</string>
     <string name="sessions_no_match">No sessions match your search.</string>
+    <string name="sessions_count">%1$d sessions</string>
+    <string name="sessions_project_fallback">Project %1$s</string>
     <string name="sessions_today">Today</string>
     <string name="sessions_yesterday">Yesterday</string>
     <string name="sessions_week">Previous 7 days</string>

@@ -3140,7 +3140,10 @@ private fun TurnMessage(
     val toolRunning = activity.lastOrNull { it is Part.Tool }
         ?.let { (it as Part.Tool).status == "running" || it.status == "streaming" }
         ?: false
-    val showDots = pending && !toolRunning
+    val liveToolName = activity.filterIsInstance<Part.Tool>()
+        .lastOrNull { it.status == "running" || it.status == "streaming" }
+        ?.name
+        ?.replaceFirstChar { it.uppercase() }
 
     val start = remember(messages) {
         messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
@@ -3183,7 +3186,34 @@ private fun TurnMessage(
                 MarkdownText(paragraph, contentAlpha = if (isLatest) 1f else 0.72f)
             }
         }
-        if (showDots) TypingIndicator(compact = true)
+        if (pending) {
+            // Keep live feedback at the bottom of the turn: the collapsed
+            // activity header sits at the top and is usually scrolled away.
+            Row(
+                Modifier.padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (toolRunning) {
+                    ActivityBars()
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        buildString {
+                            append(
+                                stringResource(
+                                    R.string.chat_activity_working,
+                                    formatElapsed(elapsed) ?: "…"
+                                )
+                            )
+                            if (liveToolName != null) append(" · ").append(liveToolName)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    TypingIndicator(compact = true)
+                }
+            }
+        }
         if (!pending && fullText.isNotBlank()) {
             val clipboard = LocalClipboardManager.current
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
