@@ -236,6 +236,9 @@ fun SettingsScreen(
                     e is ApiException && (e.status == 401 || e.status == 403) ->
                         context.getString(R.string.settings_pair_expired)
 
+                    e is ApiException && e.status == 400 ->
+                        context.getString(R.string.settings_pair_no_server)
+
                     else -> e.message ?: context.getString(R.string.settings_pair_failed)
                 }
             } finally {

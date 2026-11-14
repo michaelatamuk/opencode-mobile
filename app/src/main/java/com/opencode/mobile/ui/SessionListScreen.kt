@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -51,9 +50,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,7 +71,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -162,17 +157,6 @@ fun SessionListScreen(
     var showCost by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    var fabVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(listState) {
-        var last = 0
-        snapshotFlow {
-            listState.firstVisibleItemIndex * 10_000 + listState.firstVisibleItemScrollOffset
-        }.collect { position ->
-            if (position > last + 8) fabVisible = false
-            else if (position < last - 8) fabVisible = true
-            last = position
-        }
-    }
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
         var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
@@ -389,12 +373,12 @@ fun SessionListScreen(
             else -> PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = { vm.refresh() },
-                modifier = Modifier.fillMaxSize().navigationBarsPadding()
+                modifier = Modifier.fillMaxSize()
             ) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     state = listState,
-                    contentPadding = PaddingValues(bottom = 104.dp)
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
@@ -566,34 +550,44 @@ fun SessionListScreen(
         }
     }
 
-        // Primary creation action: the labelled FAB is deliberate (a plain round
-        // one was clipped in an earlier iteration). It hides on scroll-down.
-        if (fabVisible) {
-            ExtendedFloatingActionButton(
-                onClick = onNewSession,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 16.dp, bottom = 16.dp),
-                icon = {
-                    Icon(
-                        Icons.Rounded.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                text = {
-                    Text(
-                        stringResource(R.string.action_new_session),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            )
+    }
+
+    // Docked creation action: in the layout below the list, never an overlay,
+    // so it cannot cover a row. Always visible, no scroll-hide jump.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 8.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Surface(
+            onClick = onNewSession,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shadowElevation = 8.dp,
+            modifier = Modifier.height(52.dp)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.action_new_session),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
         }
     }
-    }
+}
+
 
     if (showCost) {
         CostSheet(sessions = state.sessions, onDismiss = { showCost = false })

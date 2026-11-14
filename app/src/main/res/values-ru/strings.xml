@@ -73,12 +73,7 @@
     <string name="session_rename_title">Переименовать сессию</string>
     <string name="session_delete_title">Удалить сессию?</string>
     <string name="session_delete_body">Сессия будет удалена с сервера.</string>
-
-    <string name="time_just_now">только что</string>
     <string name="time_yesterday">Вчера</string>
-    <string name="time_minutes_ago">%1$d мин назад</string>
-    <string name="time_hours_ago">%1$d ч назад</string>
-    <string name="time_days_ago">%1$d дн назад</string>
 
     <string name="chat_placeholder">Сообщение OpenCode</string>
     <string name="chat_placeholder_busy">Вклиниться в текущий ход…</string>
@@ -247,6 +242,7 @@
     <string name="settings_pair_body">Запустите `opencode pair` на сервере и вставьте код или ссылку. Приложение само обменяет его на пароль — длинный токен вводить не нужно.</string>
     <string name="settings_pair_field">Код или ссылка сопряжения</string>
     <string name="settings_pair_expired">Эта ссылка для сопряжения больше не действует. Создайте новую на сервере и отсканируйте или вставьте её сразу — ссылка работает один раз и живёт пять минут.</string>
+    <string name="settings_pair_no_server">В этом коде сопряжения нет адреса сервера. Откройте вкладку «Вручную», укажите URL сервера и отсканируйте код снова.</string>
     <string name="settings_pair_failed">Не удалось выполнить сопряжение.</string>
     <string name="settings_pairing">Сопряжение…</string>
     <string name="action_pair">Сопрячь</string>

@@ -77,11 +77,7 @@
     <string name="session_delete_body">This removes the session from your server.</string>
 
     <!-- Relative time -->
-    <string name="time_just_now">just now</string>
     <string name="time_yesterday">Yesterday</string>
-    <string name="time_minutes_ago">%1$d min ago</string>
-    <string name="time_hours_ago">%1$d h ago</string>
-    <string name="time_days_ago">%1$d d ago</string>
 
     <!-- Chat -->
     <string name="chat_placeholder">Message OpenCode</string>
@@ -253,6 +249,7 @@
     <string name="settings_pair_body">Run `opencode pair` on the server, then paste the code or its link. The app exchanges it for the password — no long token to type.</string>
     <string name="settings_pair_field">Pairing code or link</string>
     <string name="settings_pair_expired">That pairing link is no longer valid. Generate a fresh one on the server and scan or paste it right away — links work once and expire after five minutes.</string>
+    <string name="settings_pair_no_server">This pairing code has no server address. Open the Manual tab, enter your server URL, then scan or paste the code again.</string>
     <string name="settings_pair_failed">Pairing failed.</string>
     <string name="settings_pairing">Pairing…</string>
     <string name="action_pair">Pair</string>

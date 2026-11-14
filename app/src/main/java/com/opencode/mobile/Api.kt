@@ -224,11 +224,46 @@ object Pairing {
     suspend fun redeem(server: String, codeOrLink: String): Result =
         withContext(Dispatchers.IO) {
             val raw = codeOrLink.trim()
+            val configured = server.trim().trimEnd('/')
             val uri = runCatching { Uri.parse(raw) }.getOrNull()
             val scheme = uri?.scheme?.lowercase().orEmpty()
-            val configured = server.trim().trimEnd('/')
+            var explicitServer: String? = null
+
+            // The desktop app's QR is JSON: {"code":"…","url":"http://…"}.
+            val payload = if (raw.startsWith("{")) {
+                runCatching { JSONObject(raw) }.getOrNull()
+                    ?: throw ApiException(400, "Unreadable pairing QR")
+            } else {
+                null
+            }
 
             val target = when {
+                payload != null -> {
+                    val link = payload.optString("link").trim()
+                    val code = payload.optString("code").trim()
+                        .ifBlank { payload.optString("token").trim() }
+                    explicitServer = listOf(
+                        "url", "serverUrl", "server_url", "server",
+                        "base", "origin", "host", "endpoint", "address"
+                    )
+                        .map { payload.optString(it).trim() }
+                        .firstOrNull { it.isNotBlank() }
+                        ?.trimEnd('/')
+                        ?: payload.optJSONObject("server")
+                            ?.optString("url")
+                            ?.trim()
+                            ?.trimEnd('/')
+                    when {
+                        link.startsWith("http", true) -> rewriteLoopback(link, configured)
+                        code.isNotBlank() -> {
+                            val base = explicitServer ?: configured
+                            if (base.isBlank()) throw ApiException(400, "no_server")
+                            "${base.trimEnd('/')}/auth/connect/${Uri.encode(code)}"
+                        }
+                        else -> throw ApiException(400, "No pairing code in this QR")
+                    }
+                }
+
                 scheme == "http" || scheme == "https" -> rewriteLoopback(raw, configured)
 
                 scheme.isNotEmpty() && scheme != "file" -> {
@@ -244,11 +279,12 @@ object Pairing {
 
                 else -> {
                     val code = raw.substringAfterLast('/')
+                    if (configured.isBlank()) throw ApiException(400, "no_server")
                     "$configured/auth/connect/${Uri.encode(Uri.decode(code))}"
                 }
             }
-            if (target.isBlank() || target == "/auth/connect/") {
-                throw ApiException(400, "No server configured")
+            if (!target.startsWith("http://", true) && !target.startsWith("https://", true)) {
+                throw ApiException(400, "no_server")
             }
 
             val client = OkHttpClient.Builder()
