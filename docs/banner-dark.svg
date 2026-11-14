@@ -83,6 +83,7 @@
     <rect x="748" y="30" width="300" height="440" rx="44" fill="#05070E"/>
     <rect x="759" y="41" width="278" height="418" rx="34" fill="url(#screen)"/>
     <g clip-path="url(#frontScreen)">
+      <g transform="translate(0,-20)">
       <text x="776" y="72" font-family="Inter, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" fill="#C7CDE0">9:41</text>
       <circle cx="1006" cy="68" r="2.4" fill="#5C6683"/>
       <circle cx="1014" cy="68" r="2.4" fill="#5C6683"/>
@@ -123,6 +124,7 @@
       <circle cx="1006" cy="416" r="17" fill="#4A66FF"/>
       <rect x="1001" y="411" width="10" height="10" rx="2.5" fill="#FFFFFF"/>
       <rect x="884" y="448" width="68" height="5" rx="2.5" fill="#2A3247"/>
+      </g>
     </g>
   </g>
 </svg>
