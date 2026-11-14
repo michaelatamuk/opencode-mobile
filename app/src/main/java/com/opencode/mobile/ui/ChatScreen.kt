@@ -1623,6 +1623,11 @@ private fun TuneSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 10.dp)
                 )
+                Text(
+                    stringResource(R.string.chat_models_configured),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 var modelQuery by remember { mutableStateOf("") }
                 OutlinedTextField(
                     value = modelQuery,

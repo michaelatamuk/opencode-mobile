@@ -86,6 +86,7 @@
     <string name="chat_model_agent">Model &amp; agent</string>
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
+    <string name="chat_models_configured">Only providers enabled on your server.</string>
     <string name="chat_current_selection">Agent: %1$s · Model: %2$s</string>
     <string name="chat_agent_hint">Who handles this session. Changes apply to the next turn.</string>
     <string name="chat_search_models">Search models</string>

@@ -71,7 +71,7 @@ Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
 | **Agent activity** | Tool calls and reasoning collapse into one live line (`Working · Bash` / `Used 9 tools · Shell, Edit, Read`), expandable to full input/output. |
 | **Reviews** | Diff sheet with per-file stats, collapsed patches, branch/provider from VCS, file viewer, validated per-file revert (all-or-nothing), conversation fallback when the project has no git diff. |
 | **Sessions as branches** | Branch a session, branch before a message, undo the last turn, compact context, A/B replay on another model with a word-level diff (two columns on wide screens). |
-| **Models & cost** | Server-defined agent/model picker with search, per-session cost/tokens, context meter with the model window, daily/monthly budgets, 180-day spend history and CSV export. |
+| **Models & cost** | Model picker limited to providers **enabled on your server**, with search; per-session cost/tokens, context meter with the model window, daily/monthly budgets, 180-day spend history and CSV export. |
 | **Notifications** | Foreground watcher driven by server events; finish-only mode is silent while working; progress/elapsed mode; inline reply; Continue / Explain / Retry actions (editable); permissions/forms; watchdog; per-session and per-project mute; WorkManager catch-up. |
 | **Automation** | Schedules (interval/cron/at, optional run limit and shell `if`), shell runner with output, offline prompt queue with attachments, presets. |
 | **Connections** | Named server profiles (with theme/watchdog/budget defaults), fallback URL, pairing, MCP servers+resources, integration search with API-key linking. |

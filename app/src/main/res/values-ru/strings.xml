@@ -82,6 +82,7 @@
     <string name="chat_model_agent">Модель и агент</string>
     <string name="chat_agents">Агент</string>
     <string name="chat_models">Модель</string>
+    <string name="chat_models_configured">Только провайдеры, включённые на вашем сервере.</string>
     <string name="chat_current_selection">Агент: %1$s · Модель: %2$s</string>
     <string name="chat_agent_hint">Кто ведёт эту сессию. Изменения применятся к следующему ходу.</string>
     <string name="chat_search_models">Поиск моделей</string>

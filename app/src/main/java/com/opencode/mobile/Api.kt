@@ -415,13 +415,28 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         }
     }
 
-    suspend fun models(): List<ModelOption> = withContext(Dispatchers.IO) {        val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
+    suspend fun models(): List<ModelOption> = withContext(Dispatchers.IO) {
+        // Only providers explicitly enabled on this server ("defined on the
+        // computer"), not every model from the public catalog.
+        val activeProviders = runCatching {
+            val providers = getJson("/api/provider").optJSONArray("data") ?: JSONArray()
+            (0 until providers.length()).mapNotNull { index ->
+                val o = providers.optJSONObject(index) ?: return@mapNotNull null
+                if (o.optString("activation") == "enabled") o.optString("id") else null
+            }.filter { it.isNotBlank() }.toSet()
+        }.getOrDefault(emptySet())
+
+        val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
         (0 until data.length()).mapNotNull { i ->
             val o = data.getJSONObject(i)
             if (!o.optBoolean("enabled", true)) return@mapNotNull null
+            val providerID = o.optString("providerID")
+            if (activeProviders.isNotEmpty() && providerID !in activeProviders) {
+                return@mapNotNull null
+            }
             ModelOption(
                 id = o.optString("modelID").ifBlank { o.optString("id") },
-                providerID = o.optString("providerID"),
+                providerID = providerID,
                 name = o.optString("name").ifBlank { o.optString("modelID") },
                 family = o.optString("family"),
                 contextLimit = o.optJSONObject("limit")?.optLong("context") ?: 0L
