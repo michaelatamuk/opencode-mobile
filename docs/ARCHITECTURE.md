@@ -95,3 +95,6 @@ over each other.
 11. Activity headers report **turn** elapsed time, never tool elapsed time.
 12. Live work is always visible at the bottom of the active turn (bars + tool
     label), because the collapsed activity header scrolls away above.
+13. Chat scroll positions use **lazy block** indices, never message indices: one
+    block can hold a whole turn of messages, and mixing the two silently stops
+    follow-the-run and jumps to the wrong place when older pages load.

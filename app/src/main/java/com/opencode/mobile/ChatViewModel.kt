@@ -41,7 +41,14 @@ data class ChatUiState(
     val selecting: Boolean = false,
     val error: String? = null
 ) {
-    val busy: Boolean get() = messages.lastOrNull()?.pending == true
+    /**
+     * A run is live while the newest *assistant* message is still pending. Looking
+     * at the newest message of any role breaks steering: a steer prompt is a user
+     * message appended after the running assistant message, and user messages are
+     * never pending, so the composer would drop out of Stop while the turn runs.
+     */
+    val busy: Boolean get() =
+        messages.lastOrNull { it.role == "assistant" }?.pending == true
     val pendingPermission: PendingPermission? get() = permissions.firstOrNull()
     val pendingForm: FormRequest? get() = forms.firstOrNull()
 

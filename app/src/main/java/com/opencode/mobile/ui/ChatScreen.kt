@@ -28,6 +28,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -130,6 +132,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -339,10 +342,23 @@ fun ChatScreen(
     val blocks = remember(displayMessages) { buildChatBlocks(displayMessages) }
 
     val lastId = state.messages.lastOrNull()?.id
-    val lastLength = state.messages.lastOrNull()?.plainText?.length
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
     val seenStore = remember(context) { SeenStore(context) }
     var initialPositioned by remember(sessionID) { mutableStateOf(false) }
+    var restoreKey by remember(sessionID) { mutableStateOf<String?>(null) }
+    // Follow the live turn unless the reader has scrolled up. Lazy item indices
+    // are not message indices: one item can hold a whole turn of messages.
+    var stickToBottom by remember(sessionID) { mutableStateOf(true) }
+    val dragging by listState.interactionSource.collectIsDraggedAsState()
+
+    suspend fun snapToNewest() {
+        val last = blocks.lastIndex
+        if (last < 0) return
+        runCatching { listState.scrollToItem(last) }
+        // The last item may be a whole turn and taller than the viewport, so
+        // scrolling to its index stops at its top; continue to the real edge.
+        runCatching { listState.scrollBy(200_000f) }
+    }
 
     LaunchedEffect(lastId, state.updated) {
         if (sessionID == null) return@LaunchedEffect
@@ -355,20 +371,43 @@ fun ChatScreen(
         seenStore.markSeen(sessionID, stamp)
     }
 
+    LaunchedEffect(dragging) {
+        if (dragging) stickToBottom = false
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.canScrollForward }.collect { canForward ->
+            if (!canForward) stickToBottom = true
+        }
+    }
+
     // Jump straight to the newest message. Animating across dozens of items is what
     // left the view stranded mid-history on long sessions.
     LaunchedEffect(state.messages.size) {
-        if (!initialPositioned && state.messages.isNotEmpty()) {
-            listState.scrollToItem(state.messages.lastIndex)
+        if (!initialPositioned && blocks.isNotEmpty()) {
+            snapToNewest()
             initialPositioned = true
         }
     }
 
-    LaunchedEffect(lastId, lastLength) {
-        if (!initialPositioned || state.messages.isEmpty()) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (lastVisible >= state.messages.lastIndex - 2) {
-            runCatching { listState.animateScrollToItem(state.messages.lastIndex) }
+    LaunchedEffect(state.messages) {
+        if (!initialPositioned || blocks.isEmpty() || !stickToBottom) return@LaunchedEffect
+        snapToNewest()
+    }
+
+    LaunchedEffect(lastId) {
+        if (state.messages.lastOrNull()?.role == "user") {
+            stickToBottom = true
+            snapToNewest()
+        }
+    }
+
+    LaunchedEffect(blocks, restoreKey) {
+        val key = restoreKey ?: return@LaunchedEffect
+        val index = blocks.indexOfFirst { it.key == key }
+        if (index >= 0) {
+            runCatching { listState.scrollToItem(index) }
+            restoreKey = null
         }
     }
 
@@ -378,12 +417,14 @@ fun ChatScreen(
             listState.firstVisibleItemIndex <= 2 &&
             !state.loadingOlder
         ) {
+            // Remember what the reader was looking at; the request can add many
+            // messages but only a few lazy items. Day pills are rebuilt from the
+            // oldest loaded message, so they are not stable anchors.
+            val anchor = blocks.drop(listState.firstVisibleItemIndex)
+                .firstOrNull { it !is ChatBlock.DaySeparator }
+                ?.key
             vm.loadOlder { added ->
-                if (added > 0) {
-                    scope.launch {
-                        listState.scrollToItem(listState.firstVisibleItemIndex + added)
-                    }
-                }
+                if (added > 0) restoreKey = anchor
             }
         }
     }
@@ -591,7 +632,7 @@ fun ChatScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 14.dp,
-                    bottom = 32.dp
+                    bottom = 12.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -630,10 +671,9 @@ fun ChatScreen(
             if (listState.canScrollForward) {
                 FilledTonalIconButton(
                     onClick = {
-                        if (state.messages.isNotEmpty()) {
-                            scope.launch {
-                                listState.animateScrollToItem(state.messages.lastIndex)
-                            }
+                        scope.launch {
+                            stickToBottom = true
+                            snapToNewest()
                         }
                     },
                     modifier = Modifier
@@ -3787,24 +3827,30 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
 @Composable
 private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
     if (!busy) return
-    val turn = remember(messages) { messages.takeLastWhile { it.role != "user" } }
-    val start = remember(turn) {
-        turn.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
-    }
-    val tool = remember(turn) {
-        turn.flatMap { it.parts }
+    // Pending assistant messages are the live turn. Taking trailing messages up to
+    // the last user message breaks after a steer prompt, and resetting the timer to
+    // zero whenever no assistant message exists yet leaves "Working 0s" on screen.
+    val live = remember(messages) { messages.filter { it.pending } }
+    val tool = remember(live) {
+        live.flatMap { it.parts }
             .filterIsInstance<Part.Tool>()
             .lastOrNull { it.status == "running" || it.status == "streaming" }
             ?.name
     }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    var busySince by remember { mutableStateOf(0L) }
     LaunchedEffect(busy) {
-        while (busy) {
+        busySince = System.currentTimeMillis()
+        while (true) {
             now = System.currentTimeMillis()
             delay(1000)
         }
     }
-    val elapsed = if (start != null) (now - start).coerceAtLeast(0L) else 0L
+    val turnStart = remember(live) {
+        live.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
+    }
+    val start = turnStart ?: busySince
+    val elapsed = if (start > 0L) (now - start).coerceAtLeast(0L) else 0L
     val label = buildString {
         append(stringResource(R.string.chat_activity_working, formatElapsed(elapsed) ?: "…"))
         if (tool != null) append(" · ").append(tool.replaceFirstChar { it.uppercase() })
@@ -3813,7 +3859,7 @@ private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 4.dp),
+            .padding(horizontal = 20.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (tool != null) {
