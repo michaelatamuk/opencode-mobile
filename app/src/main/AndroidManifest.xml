@@ -55,5 +55,9 @@
         <receiver
             android:name=".ReplyReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".QuickActionReceiver"
+            android:exported="false" />
     </application>
 </manifest>

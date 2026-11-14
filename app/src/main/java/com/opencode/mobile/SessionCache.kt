@@ -22,6 +22,7 @@ class SessionCache(context: Context) {
                     created = o.optLong("created"),
                     cost = o.optDouble("cost", 0.0),
                     running = false,
+                    busyAt = o.optLong("busyAt"),
                     modelID = o.optString("modelID"),
                     modelProviderID = o.optString("modelProviderID"),
                     agentID = o.optString("agentID"),
@@ -41,6 +42,7 @@ class SessionCache(context: Context) {
                     .put("updated", s.updated)
                     .put("created", s.created)
                     .put("cost", s.cost)
+                    .put("busyAt", s.busyAt)
                     .put("modelID", s.modelID)
                     .put("modelProviderID", s.modelProviderID)
                     .put("agentID", s.agentID)

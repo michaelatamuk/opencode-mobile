@@ -33,6 +33,11 @@
     <string name="session_untitled">Untitled session</string>
     <string name="session_new">New session</string>
     <string name="sessions_search">Search sessions</string>
+    <string name="cost_title">Spend</string>
+    <string name="cost_total">Total across all sessions</string>
+    <string name="cost_by_model">By model</string>
+    <string name="cost_top_sessions">Most expensive sessions</string>
+    <string name="cost_empty">No cost recorded yet. Spend appears after a model call completes.</string>
     <string name="sessions_no_match">No sessions match your search.</string>
     <string name="sessions_today">Today</string>
     <string name="sessions_yesterday">Yesterday</string>
@@ -65,6 +70,9 @@
     <string name="chat_model_agent">Model &amp; agent</string>
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
+    <string name="chat_context">Context</string>
+    <string name="chat_context_used">%1$s / %2$s · %3$d%%</string>
+    <string name="chat_context_used_unknown">%1$s tokens</string>
     <string name="chat_session_stats">%1$s spent · %2$d in / %3$d out tokens</string>
     <string name="chat_changes">Changes</string>
     <string name="chat_actions">Session actions</string>
@@ -121,6 +129,15 @@
     <string name="settings_background_title">Background notifications</string>
     <string name="settings_background_body">Notify me when a session finishes while I\'m elsewhere. Keeps a low-priority notification while watching.</string>
     <string name="settings_test_notification">Send a test notification</string>
+    <string name="settings_notif_mode_title">Watcher notification</string>
+    <string name="settings_notif_mode_body">On finish keeps the shade clean: a quiet notice appears only while a turn is running, plus a finished notice. Always pins the watcher in the shade.</string>
+    <string name="settings_notif_mode_finish">Only on finish</string>
+    <string name="settings_notif_mode_always">Always</string>
+    <string name="settings_watchdog_title">Watchdog</string>    <string name="settings_watchdog_body">Stop a run automatically after it has worked this long. Off by default.</string>
+    <string name="settings_watchdog_off">Off</string>
+    <string name="settings_watchdog_30">30m</string>
+    <string name="settings_watchdog_60">1h</string>
+    <string name="settings_watchdog_120">2h</string>
     <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
     <string name="notif_test_title">Test notification</string>
     <string name="notif_test_body">If you can see this, notifications work. The watcher still needs a running session to report.</string>
@@ -147,6 +164,10 @@
     <string name="notif_finished">Finished — tap to open</string>
     <string name="notif_reply">Reply</string>
     <string name="notif_reply_hint">Reply to OpenCode</string>
+    <string name="notif_quick_continue">Continue</string>
+    <string name="notif_quick_stop">Stop</string>
+    <string name="notif_quick_explain">Explain</string>
+    <string name="notif_quick_retry">Retry</string>
     <string name="notif_form_title">Question from OpenCode</string>
     <string name="notif_form_fallback">OpenCode is waiting for an answer</string>
     <string name="notif_session_fallback">Session</string>

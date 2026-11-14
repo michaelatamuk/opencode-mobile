@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleIntent(intent)
+        Shortcuts.sync(this)
         setContent {
             OpenCodeTheme {
                 Surface(Modifier.fillMaxSize()) { Root() }
@@ -116,6 +117,8 @@ private fun Root() {
     var draft by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var watching by remember { mutableStateOf(prefs.getBoolean("watch", false)) }
+    var watchdogMinutes by remember { mutableStateOf(prefs.getInt("watchdog_minutes", 0)) }
+    var persistentWatch by remember { mutableStateOf(prefs.getBoolean("watch_persistent", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
 
     val repo = remember(server, password) {
@@ -123,13 +126,19 @@ private fun Root() {
     }
     val scope = AppScope
 
+    fun startWatcher() {
+        val intent = Intent(context, SessionWatcherService::class.java)
+        if (persistentWatch) {
+            ContextCompat.startForegroundService(context, intent)
+        } else {
+            context.startService(intent)
+        }
+    }
+
     fun startWatching() {
         prefs.edit().putBoolean("watch", true).apply()
         watching = true
-        ContextCompat.startForegroundService(
-            context,
-            Intent(context, SessionWatcherService::class.java)
-        )
+        startWatcher()
     }
 
     fun stopWatching() {
@@ -151,12 +160,7 @@ private fun Root() {
 
     LaunchedEffect(Unit) {
         if (watching) {
-            runCatching {
-                ContextCompat.startForegroundService(
-                    context,
-                    Intent(context, SessionWatcherService::class.java)
-                )
-            }
+            runCatching { startWatcher() }
         }
     }
 
@@ -200,7 +204,11 @@ private fun Root() {
                 canCancel = false,
                 watching = false,
                 notificationsEnabled = notificationsEnabled,
+                watchdogMinutes = watchdogMinutes,
+                persistentWatch = persistentWatch,
                 onWatchingChange = {},
+                onWatchdogChange = {},
+                onPersistentWatchChange = {},
                 onTestNotification = { Notify.test(context) },
                 onCancel = {},
                 onSave = { s, p ->
@@ -216,6 +224,23 @@ private fun Root() {
                 canCancel = true,
                 watching = watching,
                 notificationsEnabled = notificationsEnabled,
+                watchdogMinutes = watchdogMinutes,
+                persistentWatch = persistentWatch,
+                onWatchdogChange = { minutes ->
+                    watchdogMinutes = minutes
+                    prefs.edit().putInt("watchdog_minutes", minutes).apply()
+                },
+                onPersistentWatchChange = { enabled ->
+                    persistentWatch = enabled
+                    prefs.edit().putBoolean("watch_persistent", enabled).apply()
+                    if (watching) {
+                        // Restart so the service picks up the new mode.
+                        context.stopService(Intent(context, SessionWatcherService::class.java))
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            startWatcher()
+                        }, 250)
+                    }
+                },
                 onWatchingChange = { enabled ->
                     if (!enabled) {
                         stopWatching()

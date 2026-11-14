@@ -37,6 +37,15 @@ data class ChatUiState(
     val busy: Boolean get() = messages.lastOrNull()?.pending == true
     val pendingPermission: PendingPermission? get() = permissions.firstOrNull()
     val pendingForm: FormRequest? get() = forms.firstOrNull()
+
+    /** Approximate context size from the newest assistant message's usage. */
+    val contextUsed: Long
+        get() = messages.lastOrNull { it.role == "assistant" && it.tokensInput > 0 }
+            ?.let { it.tokensInput + it.tokensCacheRead } ?: 0L
+
+    val contextLimit: Long
+        get() = models.firstOrNull { it.id == modelID && it.providerID == modelProviderID }
+            ?.contextLimit ?: 0L
 }
 
 class ChatViewModel(

@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -134,6 +136,7 @@ fun SessionListScreen(
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
+    var showCost by remember { mutableStateOf(false) }
 
     val scoped = remember(state.sessions, projectFilter) {
         if (projectFilter == null) state.sessions
@@ -228,6 +231,14 @@ fun SessionListScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                    IconButton(onClick = { showCost = true }) {
+                        Icon(
+                            Icons.Rounded.Paid,
+                            contentDescription = stringResource(R.string.cost_title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(
                             Icons.Rounded.Settings,
@@ -309,7 +320,8 @@ fun SessionListScreen(
                             previews = state.previews,
                             onOpen = onOpen,
                             onRename = { renaming = it },
-                            onDelete = { deleting = it }
+                            onDelete = { deleting = it },
+                            onStop = { vm.stop(it.id) }
                         )
                     }
                 }
@@ -386,6 +398,10 @@ fun SessionListScreen(
     }
     }
 
+    if (showCost) {
+        CostSheet(sessions = state.sessions, onDismiss = { showCost = false })
+    }
+
     renaming?.let { session ->
         RenameDialog(
             initial = session.title,
@@ -430,7 +446,8 @@ private fun ActiveCards(
     previews: Map<String, String>,
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
-    onDelete: (SessionItem) -> Unit
+    onDelete: (SessionItem) -> Unit,
+    onStop: (SessionItem) -> Unit
 ) {
     var showAll by remember { mutableStateOf(false) }
     val visible = running.take(2)
@@ -447,7 +464,8 @@ private fun ActiveCards(
                 preview = previews[session.id],
                 onClick = { onOpen(session) },
                 onRename = { onRename(session) },
-                onDelete = { onDelete(session) }
+                onDelete = { onDelete(session) },
+                onStop = { onStop(session) }
             )
         }
 
@@ -506,6 +524,10 @@ private fun ActiveCards(
                         onDelete = {
                             showAll = false
                             onDelete(session)
+                        },
+                        onStop = {
+                            showAll = false
+                            onStop(session)
                         }
                     )
                     Spacer(Modifier.height(8.dp))
@@ -521,7 +543,8 @@ private fun ActiveCard(
     preview: String?,
     onClick: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onStop: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -538,13 +561,25 @@ private fun ActiveCard(
             ActivityBars(color = MaterialTheme.colorScheme.secondary)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    session.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        session.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    val elapsed = elapsedShort(session.busyAt)
+                    if (elapsed.isNotEmpty()) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            elapsed,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
                 Text(
                     preview?.takeIf { it.isNotBlank() } ?: stringResource(R.string.session_running),
                     style = MaterialTheme.typography.bodySmall,
@@ -568,6 +603,13 @@ private fun ActiveCard(
                     shape = RoundedCornerShape(14.dp),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_stop)) },
+                        onClick = {
+                            menuOpen = false
+                            onStop()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_rename)) },
                         onClick = {
@@ -729,6 +771,115 @@ private fun SessionRow(
                         onDelete()
                     }
                 )
+            }
+        }
+    }
+}
+
+private fun elapsedShort(since: Long): String {
+    if (since <= 0L) return ""
+    val minutes = (System.currentTimeMillis() - since) / 60_000L
+    return when {
+        minutes < 1L -> "<1m"
+        minutes < 60L -> "${minutes}m"
+        else -> "${minutes / 60L}h ${minutes % 60L}m"
+    }
+}
+
+/** Spend across sessions: total, by model, and the most expensive sessions. */@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val total = sessions.sumOf { it.cost }
+    val byModel = sessions.filter { it.cost > 0 }
+        .groupBy { s -> if (s.modelID.isBlank()) "—" else "${s.modelProviderID}/${s.modelID}" }
+        .map { (name, list) -> name to list.sumOf { it.cost } }
+        .sortedByDescending { it.second }
+    val top = sessions.filter { it.cost > 0 }.sortedByDescending { it.cost }.take(8)
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(stringResource(R.string.cost_title), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                stringResource(R.string.cost_total),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                formatCost(total),
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            if (byModel.isEmpty()) {
+                Text(
+                    stringResource(R.string.cost_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    stringResource(R.string.cost_by_model),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                byModel.forEach { (name, cost) ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            formatCost(cost),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Text(
+                    stringResource(R.string.cost_top_sessions),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 14.dp)
+                )
+                top.forEach { session ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            session.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            formatCost(session.cost),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }

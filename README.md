@@ -22,16 +22,23 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Permission prompts: allow once / always / reject
 - Single morphing send/stop button, plus steer while a turn is running
 - Model and agent picker with per-session cost and token usage
+- Context meter with the model's window size and one-tap compaction
+- Spend sheet: total, breakdown by model, and the most expensive sessions
 - Diff sheet with per-file statistics
+- Running cards show elapsed time and can be stopped from the row menu
 - Branch a session, branch from any user message, undo the last turn, and
   compact the context — all from the chat menu
 - In-session search, pagination, jump-to-latest, and draft sessions that are
   only created on the first send
 - Background watcher (foreground service) driven by server events:
-  - ongoing notification with the running session, current tool and a live
-    elapsed timer
-  - "finished" notification with an inline reply action
+  - two notification modes: "only on finish" (default, no permanent
+    notification) and "always" (watcher pinned in the shade)
+  - progress notification with the current tool and a live elapsed timer
+  - finished notification with inline reply and Continue / Stop / Explain /
+    Retry actions
   - permission and agent-form notifications with Allow / Reject actions
+  - optional watchdog that stops runs exceeding a chosen time
+- Launcher shortcuts for the three most recent sessions
 - Share target: send an image or text from any app into a session
 - Encrypted credential storage (keystore-backed preferences), session-list cache
 - App shortcuts and `opencode://session/<id>` deep links
@@ -72,6 +79,6 @@ Authentication is HTTP Basic, `opencode:<password>`.
 Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
-Known gaps: no QR pairing, no widget or quick-settings tile, no cost dashboard,
-no per-file revert in the diff sheet, no voice input, and R8 is disabled until
+Known gaps: no QR pairing, no widget or quick-settings tile, no per-file revert
+in the diff sheet, no voice input, no biometric lock, and R8 is disabled until
 a shrunk build can be verified on a device.

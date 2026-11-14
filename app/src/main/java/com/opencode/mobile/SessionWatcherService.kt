@@ -45,6 +45,7 @@ class SessionWatcherService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
+    private var watchdogJob: Job? = null
     private var lastActive: Set<String> = emptySet()
     private var titles: MutableMap<String, String> = mutableMapOf()
     private val notifiedPermissions = mutableSetOf<String>()
@@ -60,6 +61,9 @@ class SessionWatcherService : Service() {
     )
 
     private val runs = ConcurrentHashMap<String, LiveRun>()
+
+    /** True while this service is in the foreground state with an ongoing notification. */
+    private var foreground = false
 
     @Volatile
     private var status: String? = null
@@ -79,14 +83,35 @@ class SessionWatcherService : Service() {
         }
 
         val initial = ongoingNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(ONGOING_ID, initial, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        if (persistentNotification()) {
+            startForegroundCompat(initial)
         } else {
-            startForeground(ONGOING_ID, initial)
+            // No permanent notification: the service runs in the background and
+            // only takes the foreground (a quiet progress notice) while a turn runs.
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            foreground = false
+            if (runs.isNotEmpty()) startForegroundCompat(initial)
         }
 
         if (job == null) job = scope.launch { loop() }
+        if (watchdogJob == null) watchdogJob = scope.launch { watchdogLoop() }
         return START_STICKY
+    }
+
+    /** Stops runs that exceed the user's time limit, checked while streaming. */
+    private suspend fun watchdogLoop() {
+        while (scope.isActive) {
+            delay(30_000)
+            val minutes = SecurePrefs.get(this).getInt("watchdog_minutes", 0)
+            if (minutes <= 0) continue
+            val client = api() ?: continue
+            val cutoff = System.currentTimeMillis() - minutes * 60_000L
+            runs.filterValues { it.startedAt < cutoff }.keys.forEach { id ->
+                runCatching { client.interrupt(id) }
+                runs.remove(id)
+            }
+            updateOngoing()
+        }
     }
 
     private fun api(): Api? {
@@ -346,6 +371,19 @@ class SessionWatcherService : Service() {
             replyPending
         ).addRemoteInput(remoteInput).build()
 
+        fun quick(action: String, label: Int): NotificationCompat.Action {
+            val intent = Intent(this, QuickActionReceiver::class.java)
+                .putExtra("session_id", sessionID)
+                .putExtra("action", action)
+            val pending = PendingIntent.getBroadcast(
+                this,
+                (sessionID + action).hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            return NotificationCompat.Action(0, getString(label), pending)
+        }
+
         val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
             .setSmallIcon(R.drawable.ic_stat_opencode)
             .setContentTitle(title)
@@ -354,15 +392,43 @@ class SessionWatcherService : Service() {
             .setAutoCancel(true)
             .setContentIntent(sessionIntent(sessionID))
             .addAction(replyAction)
+            .addAction(quick(QuickActionReceiver.ACTION_CONTINUE, R.string.notif_quick_continue))
+            .addAction(quick(QuickActionReceiver.ACTION_STOP, R.string.notif_quick_stop))
+            .addAction(quick(QuickActionReceiver.ACTION_EXPLAIN, R.string.notif_quick_explain))
+            .addAction(quick(QuickActionReceiver.ACTION_RETRY, R.string.notif_quick_retry))
             .build()
 
         getSystemService(android.app.NotificationManager::class.java)
             .notify(sessionID.hashCode(), notification)
     }
 
+    private fun persistentNotification(): Boolean =
+        SecurePrefs.get(this).getBoolean("watch_persistent", false)
+
+    private fun startForegroundCompat(notification: Notification) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(ONGOING_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(ONGOING_ID, notification)
+            }
+            foreground = true
+        } catch (_: Exception) {
+            // The OS can refuse a foreground promotion from the background; the
+            // watcher keeps running as a normal service instead.
+            foreground = false
+        }
+    }
+
     private fun updateOngoing() {
-        getSystemService(android.app.NotificationManager::class.java)
-            .notify(ONGOING_ID, ongoingNotification())
+        if (!persistentNotification() && runs.isEmpty()) {
+            if (foreground) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                foreground = false
+            }
+            return
+        }
+        startForegroundCompat(ongoingNotification())
     }
 
     private fun titleFor(sessionID: String): String =

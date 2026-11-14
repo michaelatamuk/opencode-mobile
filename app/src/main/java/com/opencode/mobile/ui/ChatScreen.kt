@@ -83,6 +83,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -524,7 +525,11 @@ fun ChatScreen(
             state = state,
             onDismiss = { showTune = false },
             onAgent = { vm.selectAgent(it) },
-            onModel = { provider, model -> vm.selectModel(provider, model) }
+            onModel = { provider, model -> vm.selectModel(provider, model) },
+            onCompact = {
+                showTune = false
+                vm.compact()
+            }
         )
     }
 
@@ -682,7 +687,8 @@ private fun TuneSheet(
     state: ChatUiState,
     onDismiss: () -> Unit,
     onAgent: (String) -> Unit,
-    onModel: (String, String) -> Unit
+    onModel: (String, String) -> Unit,
+    onCompact: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -712,6 +718,67 @@ private fun TuneSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            if (state.contextUsed > 0L) {
+                val limit = state.contextLimit
+                val ratio = if (limit > 0) {
+                    (state.contextUsed.toFloat() / limit).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.chat_context),
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                if (limit > 0) {
+                                    stringResource(
+                                        R.string.chat_context_used,
+                                        compactTokens(state.contextUsed),
+                                        compactTokens(limit),
+                                        (ratio * 100).toInt()
+                                    )
+                                } else {
+                                    stringResource(
+                                        R.string.chat_context_used_unknown,
+                                        compactTokens(state.contextUsed)
+                                    )
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (limit > 0) {
+                            LinearProgressIndicator(
+                                progress = { ratio },
+                                modifier = Modifier.fillMaxWidth().height(6.dp),
+                                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                        }
+                        TextButton(
+                            onClick = onCompact,
+                            enabled = !state.busy,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                        ) {
+                            Text(stringResource(R.string.chat_compact))
+                        }
+                    }
+                }
+            }
 
             if (state.agents.isNotEmpty()) {
                 Text(
@@ -778,10 +845,15 @@ private fun TuneSheet(
     }
 }
 
+private fun compactTokens(value: Long): String = when {
+    value >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", value / 1_000_000.0)
+    value >= 1_000 -> String.format(java.util.Locale.US, "%.1fk", value / 1_000.0)
+    else -> value.toString()
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val values = remember(form.id) { mutableStateMapOf<String, Any>() }
 
     LaunchedEffect(form.id) {

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,7 +78,11 @@ fun SettingsScreen(
     canCancel: Boolean,
     watching: Boolean,
     notificationsEnabled: Boolean,
+    watchdogMinutes: Int,
+    persistentWatch: Boolean,
     onWatchingChange: (Boolean) -> Unit,
+    onWatchdogChange: (Int) -> Unit,
+    onPersistentWatchChange: (Boolean) -> Unit,
     onTestNotification: () -> Unit,
     onCancel: () -> Unit,
     onSave: (String, String) -> Unit
@@ -249,6 +254,74 @@ fun SettingsScreen(
                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
                     ) {
                         Text(stringResource(R.string.settings_test_notification))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_notif_mode_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_notif_mode_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !persistentWatch,
+                            onClick = { onPersistentWatchChange(false) },
+                            label = { Text(stringResource(R.string.settings_notif_mode_finish)) }
+                        )
+                        FilterChip(
+                            selected = persistentWatch,
+                            onClick = { onPersistentWatchChange(true) },
+                            label = { Text(stringResource(R.string.settings_notif_mode_always)) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_watchdog_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_watchdog_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            0 to R.string.settings_watchdog_off,
+                            30 to R.string.settings_watchdog_30,
+                            60 to R.string.settings_watchdog_60,
+                            120 to R.string.settings_watchdog_120
+                        ).forEach { (minutes, label) ->
+                            FilterChip(
+                                selected = watchdogMinutes == minutes,
+                                onClick = { onWatchdogChange(minutes) },
+                                label = { Text(stringResource(label)) }
+                            )
+                        }
                     }
                 }
             }

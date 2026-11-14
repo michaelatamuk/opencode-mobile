@@ -152,4 +152,18 @@ class SessionListViewModel(
             }
         }
     }
+
+    /** Interrupts a running turn from the session list. */
+    fun stop(id: String) {
+        viewModelScope.launch {
+            try {
+                repo.interrupt(id)
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
 }

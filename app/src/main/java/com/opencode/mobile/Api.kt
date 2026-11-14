@@ -23,6 +23,7 @@ data class SessionItem(
     val created: Long,
     val cost: Double,
     val running: Boolean = false,
+    val busyAt: Long = 0L,
     val modelID: String = "",
     val modelProviderID: String = "",
     val agentID: String = "",
@@ -39,7 +40,8 @@ data class ModelOption(
     val id: String,
     val providerID: String,
     val name: String,
-    val family: String
+    val family: String,
+    val contextLimit: Long = 0L
 )
 
 sealed interface Part {
@@ -61,7 +63,9 @@ data class Msg(
     val role: String,
     val parts: List<Part>,
     val pending: Boolean,
-    val created: Long = 0L
+    val created: Long = 0L,
+    val tokensInput: Long = 0L,
+    val tokensCacheRead: Long = 0L
 ) {
     val plainText: String
         get() = parts.filterIsInstance<Part.Text>().joinToString("\n\n") { it.text }
@@ -137,6 +141,7 @@ private fun JSONObject.toSession(): SessionItem {
         updated = time?.optLong("updated") ?: 0L,
         created = time?.optLong("created") ?: 0L,
         cost = optDouble("cost", 0.0),
+        busyAt = time?.optLong("busy") ?: 0L,
         modelID = model?.optString("id").orEmpty(),
         modelProviderID = model?.optString("providerID").orEmpty(),
         agentID = optString("agent"),
@@ -293,7 +298,8 @@ class Api(server: String, private val password: String) {
                 id = o.optString("modelID").ifBlank { o.optString("id") },
                 providerID = o.optString("providerID"),
                 name = o.optString("name").ifBlank { o.optString("modelID") },
-                family = o.optString("family")
+                family = o.optString("family"),
+                contextLimit = o.optJSONObject("limit")?.optLong("context") ?: 0L
             )
         }
     }
@@ -500,12 +506,15 @@ class Api(server: String, private val password: String) {
                     }
                 }
                 val done = o.optJSONObject("time")?.has("completed") == true
+                val usage = o.optJSONObject("tokens")
                 Msg(
                     id = id,
                     role = "assistant",
                     parts = parts,
                     pending = !done,
-                    created = o.optJSONObject("time")?.optLong("created") ?: 0L
+                    created = o.optJSONObject("time")?.optLong("created") ?: 0L,
+                    tokensInput = usage?.optLong("input") ?: 0L,
+                    tokensCacheRead = usage?.optJSONObject("cache")?.optLong("read") ?: 0L
                 )
             }
 
