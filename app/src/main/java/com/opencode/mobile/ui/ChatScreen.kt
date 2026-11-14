@@ -1,6 +1,9 @@
 package com.opencode.mobile.ui
 
+import android.content.Intent
 import android.net.Uri
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -72,6 +75,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -191,6 +195,31 @@ fun ChatScreen(
                 } catch (_: Exception) {
                 }
             }
+        }
+    }
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+        if (!spoken.isNullOrBlank()) {
+            input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
+        }
+    }
+    val voicePrompt = stringResource(R.string.chat_voice_prompt)
+    val tts = remember { TextToSpeech(context) { } }
+    DisposableEffect(Unit) {
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+        }
+    }
+    val speak: (String) -> Unit = { text ->
+        if (text.isNotBlank()) {
+            tts.stop()
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message")
         }
     }
 
@@ -438,7 +467,7 @@ fun ChatScreen(
                                     vm.fork(before) { child -> onSessionCreated(child) }
                                 }
                             )
-                            else -> AssistantMessage(message)
+                            else -> AssistantMessage(message, onSpeak = speak)
                         }
                     }
                 }
@@ -572,7 +601,16 @@ fun ChatScreen(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     vm.interrupt()
                 },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                onVoice = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                        .putExtra(
+                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                        )
+                        .putExtra(RecognizerIntent.EXTRA_PROMPT, voicePrompt)
+                    runCatching { voiceLauncher.launch(intent) }
+                }
             )
         }
     }
@@ -1682,7 +1720,7 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
 }
 
 @Composable
-private fun AssistantMessage(message: Msg) {
+private fun AssistantMessage(message: Msg, onSpeak: (String) -> Unit) {
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1721,6 +1759,17 @@ private fun AssistantMessage(message: Msg) {
             if (!message.pending && message.plainText.isNotBlank()) {
                 val clipboard = LocalClipboardManager.current
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(
+                        onClick = { onSpeak(message.plainText) },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.VolumeUp,
+                            contentDescription = stringResource(R.string.chat_read_aloud),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                     IconButton(
                         onClick = { clipboard.setText(AnnotatedString(message.plainText)) },
                         modifier = Modifier.size(30.dp)

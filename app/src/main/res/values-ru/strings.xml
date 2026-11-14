@@ -87,6 +87,17 @@
     <string name="chat_commands">Команды</string>
     <string name="chat_skills">Навыки</string>
     <string name="chat_library_empty">На этом сервере нет команд и навыков.</string>
+    <string name="chat_voice_input">Голосовой ввод</string>
+    <string name="chat_voice_prompt">Продиктуйте запрос</string>
+    <string name="chat_read_aloud">Прочитать вслух</string>
+    <string name="lock_title">Разблокировать OpenCode</string>
+    <string name="lock_subtitle">Для доступа к сессиям нужна биометрическая проверка.</string>
+    <string name="lock_unlock">Разблокировать</string>
+    <string name="settings_security_title">Безопасность</string>
+    <string name="settings_biometric_title">Биометрическая блокировка</string>
+    <string name="settings_biometric_body">Запрашивать отпечаток или лицо при каждом запуске.</string>
+    <string name="settings_screenshots_title">Блокировать скриншоты</string>
+    <string name="settings_screenshots_body">Скрывать содержимое сессий на скриншотах и в списке недавних.</string>
     <string name="chat_skill_details">Описание навыка</string>
     <string name="chat_save_preset">Сохранить пресет</string>
     <string name="chat_preset_name">Название пресета</string>

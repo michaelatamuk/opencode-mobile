@@ -108,6 +108,12 @@ fun SettingsScreen(
     var budget by remember {
         mutableStateOf(SecurePrefs.get(context).getString("budget_usd", "").orEmpty())
     }
+    var biometricLock by remember {
+        mutableStateOf(SecurePrefs.get(context).getBoolean("biometric_lock", false))
+    }
+    var blockShots by remember {
+        mutableStateOf(SecurePrefs.get(context).getBoolean("block_screenshots", false))
+    }
     var reveal by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
@@ -567,6 +573,76 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_security_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_biometric_title),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                stringResource(R.string.settings_biometric_body),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = biometricLock,
+                            onCheckedChange = { enabled ->
+                                biometricLock = enabled
+                                SecurePrefs.get(context).edit()
+                                    .putBoolean("biometric_lock", enabled)
+                                    .apply()
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_screenshots_title),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                stringResource(R.string.settings_screenshots_body),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = blockShots,
+                            onCheckedChange = { enabled ->
+                                blockShots = enabled
+                                SecurePrefs.get(context).edit()
+                                    .putBoolean("block_screenshots", enabled)
+                                    .apply()
+                                val window = (context as? android.app.Activity)?.window
+                                if (enabled) {
+                                    window?.addFlags(
+                                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                                    )
+                                } else {
+                                    window?.clearFlags(
+                                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
 

@@ -15,11 +15,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,7 +65,7 @@ object ShareTarget {
     val payload = MutableStateFlow<SharePayload?>(null)
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -72,8 +76,26 @@ class MainActivity : ComponentActivity() {
             val mode by UiPrefs.mode.collectAsState()
             val accent by UiPrefs.accent.collectAsState()
             OpenCodeTheme(mode = mode, accent = accent) {
-                Surface(Modifier.fillMaxSize()) { Root() }
+                Surface(Modifier.fillMaxSize()) {
+                    val secured = SecurePrefs.get(this).getBoolean("biometric_lock", false)
+                    var unlocked by rememberSaveable { mutableStateOf(!secured) }
+                    if (secured && !unlocked) {
+                        BiometricGate(onUnlocked = { unlocked = true })
+                    } else {
+                        Root()
+                    }
+                }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val secure = SecurePrefs.get(this).getBoolean("block_screenshots", false)
+        if (secure) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 
@@ -106,6 +128,79 @@ class MainActivity : ComponentActivity() {
             if (text != null || uri != null) {
                 ShareTarget.payload.value = SharePayload(text, uri)
             }
+        }
+    }
+}
+
+@Composable
+private fun BiometricGate(onUnlocked: () -> Unit) {
+    val context = LocalContext.current
+    val activity = context as? androidx.fragment.app.FragmentActivity
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun prompt() {
+        val act = activity
+        if (act == null) {
+            onUnlocked()
+            return
+        }
+        val manager = androidx.biometric.BiometricManager.from(context)
+        val can = manager.canAuthenticate(
+            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+        )
+        if (can != androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+            // No usable biometrics: never lock the user out.
+            onUnlocked()
+            return
+        }
+        val executor = ContextCompat.getMainExecutor(context)
+        val prompt = androidx.biometric.BiometricPrompt(
+            act,
+            executor,
+            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(
+                    result: androidx.biometric.BiometricPrompt.AuthenticationResult
+                ) {
+                    error = null
+                    onUnlocked()
+                }
+
+                override fun onAuthenticationError(code: Int, msg: CharSequence) {
+                    error = msg.toString()
+                }
+            }
+        )
+        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+            .setTitle(context.getString(R.string.lock_title))
+            .setSubtitle(context.getString(R.string.lock_subtitle))
+            .setNegativeButtonText(context.getString(R.string.action_cancel))
+            .build()
+        runCatching { prompt.authenticate(info) }
+            .onFailure { error = it.message }
+    }
+
+    LaunchedEffect(Unit) { prompt() }
+
+    androidx.compose.foundation.layout.Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            stringResource(R.string.lock_title),
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.lock_subtitle),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+        Button(onClick = { prompt() }, modifier = Modifier.padding(top = 20.dp)) {
+            Text(stringResource(R.string.lock_unlock))
         }
     }
 }

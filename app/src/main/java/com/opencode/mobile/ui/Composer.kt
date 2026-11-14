@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.FilledIconButton
@@ -73,7 +74,8 @@ fun Composer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
-    maxAttachments: Int = 8
+    maxAttachments: Int = 8,
+    onVoice: (() -> Unit)? = null
 ) {
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val primaryIsStop = busy && !hasContent
@@ -152,6 +154,16 @@ fun Composer(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+                if (onVoice != null) {
+                    IconButton(onClick = onVoice, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            Icons.Rounded.Mic,
+                            contentDescription = stringResource(R.string.chat_voice_input),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
                 BasicTextField(

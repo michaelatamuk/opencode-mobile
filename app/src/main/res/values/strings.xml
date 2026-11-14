@@ -91,6 +91,17 @@
     <string name="chat_commands">Commands</string>
     <string name="chat_skills">Skills</string>
     <string name="chat_library_empty">This server has no commands or skills to show.</string>
+    <string name="chat_voice_input">Voice input</string>
+    <string name="chat_voice_prompt">Speak your prompt</string>
+    <string name="chat_read_aloud">Read aloud</string>
+    <string name="lock_title">Unlock OpenCode</string>
+    <string name="lock_subtitle">Biometric confirmation is required to open your sessions.</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="settings_security_title">Security</string>
+    <string name="settings_biometric_title">Biometric lock</string>
+    <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>
+    <string name="settings_screenshots_title">Block screenshots</string>
+    <string name="settings_screenshots_body">Hide session content from screenshots and the recents preview.</string>
     <string name="chat_skill_details">Skill details</string>
     <string name="chat_save_preset">Save preset</string>
     <string name="chat_preset_name">Preset name</string>
