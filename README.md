@@ -105,9 +105,11 @@ Samsung devices may need Auto Blocker or Play Protect disabled to sideload.
 - **Subagents stay under their parent** — root sessions only by default; enable
   *Settings → Appearance → Subagent runs* to nest and expand child runs. Child
   runs never notify.
-- **Finish-only stays quiet** — Android still needs a foreground service to keep
-  watching, so finish-only holds a soundless placeholder in the silent
-  notification group (no status-bar icon) and only alerts when a turn stops.
+- **Finish-only stays quiet, but Android still shows the watcher.** Instant
+  background alerts need a foreground service, and Android always displays that
+  service's notification. In finish-only it is soundless, static, and never names
+  a session; no channel setting can hide it. Turn *Background notifications* off
+  if you prefer no entry at all — completions then rely on the periodic check.
 
 ## Requirements
 
@@ -145,6 +147,7 @@ sent to your own server.
 | Cost shows `$0.00` | The provider has no `cost` block on the server; the app shows exactly what the server reports. |
 | A session says “running” but nothing happens | The server still lists it in `/api/session/active`. Open it and stop the run from the activity header. |
 | No notification while a turn runs | Expected in *Only on finish* — the watcher stays silent until the turn stops. |
+| A silent `OpenCode` entry appears in the shade | Android requires a notification for the foreground watcher. It is soundless and static and cannot be hidden while background watching is on. |
 | No finished notification | Check the watcher switch, notification permission, and battery optimisation for the app. The 15-minute background check catches a missed run. |
 | Install fails over the old app | Different signing key, or Play Protect / Auto Blocker blocking the sideload. |
 | Schedules or Connections are empty | Server feature flag (`experimental.schedules`) or no MCP servers configured. |

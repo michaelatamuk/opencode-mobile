@@ -83,8 +83,9 @@ over each other.
 1. **One composer primary action**; never add a second send/stop/mic button.
 2. **No empty sessions**; drafts are created on first send.
 3. Unread = `session.updated > lastSeen`; mark seen on open and on new messages.
-4. Finish-only must not post a visible or audible ongoing notification; it may
-   keep only the silent foreground placeholder Android requires.
+4. Finish-only must never make a sound or mirror live run state. Android promotes
+   any foreground-service notification to at least LOW, so the placeholder is
+   shown; it must stay static, unnamed, and silent.
 5. Child/subagent completions must not notify; the parent does.
 6. Cursor pagination must not send `order` (server returns `InvalidCursorError`).
 7. Row backgrounds must be opaque or the swipe reveal shows through.
