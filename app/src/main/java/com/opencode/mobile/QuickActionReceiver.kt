@@ -27,9 +27,9 @@ class QuickActionReceiver : BroadcastReceiver() {
                 )
                 when (action) {
                     ACTION_STOP -> runBlocking { api.interrupt(sessionID) }
-                    ACTION_CONTINUE -> runBlocking { api.send(sessionID, PROMPT_CONTINUE) }
-                    ACTION_EXPLAIN -> runBlocking { api.send(sessionID, PROMPT_EXPLAIN) }
-                    ACTION_RETRY -> runBlocking { api.send(sessionID, PROMPT_RETRY) }
+                    ACTION_CONTINUE -> runBlocking { api.send(sessionID, prompt(context, ACTION_CONTINUE, PROMPT_CONTINUE)) }
+                    ACTION_EXPLAIN -> runBlocking { api.send(sessionID, prompt(context, ACTION_EXPLAIN, PROMPT_EXPLAIN)) }
+                    ACTION_RETRY -> runBlocking { api.send(sessionID, prompt(context, ACTION_RETRY, PROMPT_RETRY)) }
                 }
                 if (action != ACTION_STOP) {
                     context.getSystemService(NotificationManager::class.java)
@@ -54,5 +54,19 @@ class QuickActionReceiver : BroadcastReceiver() {
             "Explain what you changed and why, in a short summary."
         private const val PROMPT_RETRY =
             "That did not work. Try again with a different approach."
+
+        /** User-editable text per quick action, falling back to the defaults. */
+        fun prompt(context: Context, action: String, fallback: String): String =
+            SecurePrefs.get(context)
+                .getString("quick_prompt_$action", "")
+                .orEmpty()
+                .ifBlank { fallback }
+
+        fun defaultPrompt(action: String): String = when (action) {
+            ACTION_CONTINUE -> PROMPT_CONTINUE
+            ACTION_EXPLAIN -> PROMPT_EXPLAIN
+            ACTION_RETRY -> PROMPT_RETRY
+            else -> ""
+        }
     }
 }

@@ -38,6 +38,7 @@
     <string name="cost_today">Сегодня</string>
     <string name="cost_week">Последние 7 дней</string>
     <string name="cost_month">В этом месяце: %1$s · прогноз %2$s</string>
+    <string name="cost_export">Экспорт расходов в CSV</string>
     <string name="cost_empty">Расходов пока нет. Они появятся после первого вызова модели.</string>
     <string name="sessions_no_match">Ничего не найдено.</string>
     <string name="sessions_today">Сегодня</string>
@@ -55,6 +56,8 @@
     <string name="action_archive">В архив</string>
     <string name="action_unarchive">Из архива</string>
     <string name="sessions_archived">Архив</string>
+    <string name="action_mute_project">Отключить уведомления проекта</string>
+    <string name="action_unmute_project">Включить уведомления проекта</string>
     <string name="action_cancel">Отмена</string>
     <string name="session_rename_title">Переименовать сессию</string>
     <string name="session_delete_title">Удалить сессию?</string>
@@ -112,7 +115,10 @@
     <string name="settings_voice">Голос</string>
     <string name="settings_voice_summary">Язык диктовки и чтения</string>
     <string name="settings_voice_language">Языковой тег</string>
+    <string name="settings_voice_engine">Голос</string>
     <string name="settings_voice_hint">Тег BCP-47, например en-US, de-DE или ru-RU. Пусто — системный язык.</string>
+    <string name="settings_widget">Виджет</string>
+    <string name="settings_widget_summary">Названия, кнопка остановки, обновление</string>
     <string name="settings_security_title">Безопасность</string>
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Ожидание сессии</string>
@@ -210,6 +216,7 @@
     <string name="settings_about_storage">Учётные данные хранятся только на этом устройстве.</string>
     <string name="settings_background_title">Фоновые уведомления</string>
     <string name="settings_background_body">Сообщать, когда сессия завершится, пока вы в другом месте. Пока наблюдение включено, висит уведомление низкого приоритета.</string>
+    <string name="settings_quick_prompts_title">Тексты быстрых действий</string>
     <string name="settings_test_notification">Отправить тестовое уведомление</string>
     <string name="settings_notif_mode_title">Уведомление наблюдателя</string>
     <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход, и уведомляет только когда он остановился; периодическая проверка примерно каждые 15 минут ловит ходы, завершившиеся в фоне. «Всегда» держит живое уведомление наблюдателя с прогрессом.</string>
@@ -238,6 +245,8 @@
     <string name="notif_budget_month_body">Потрачено $%1$.2f из $%2$.2f за месяц.</string>
     <string name="settings_notifications_off">Уведомления для этого приложения отключены в настройках Android, поэтому ничего не появится. Разрешите их и отправьте тестовое.</string>
     <string name="settings_home_title">Настройки</string>
+    <string name="settings_search">Поиск настроек</string>
+    <string name="settings_search_empty">Ничего не найдено.</string>
     <string name="settings_home_subtitle">OpenCode mobile</string>
     <string name="settings_summary_not_configured">Не настроен</string>
     <string name="settings_summary_on">Вкл</string>
@@ -251,6 +260,9 @@
     <string name="settings_profile_hint">Переключение профиля заменяет активный сервер, пароль и резервный адрес везде.</string>
     <string name="settings_profile_name">Название профиля</string>
     <string name="settings_profile_rename">Переименовать профиль</string>
+    <string name="settings_profile_defaults">Агент и модель по умолчанию</string>
+    <string name="settings_profile_agent">Агент</string>
+    <string name="settings_profile_model">Модель</string>
     <string name="settings_profile_delete_title">Удалить профиль?</string>
     <string name="settings_profile_delete_body">Удалить «%1$s»? Сохранённые данные доступа будут стёрты с устройства.</string>
     <string name="settings_group_automation">Автоматизация</string>

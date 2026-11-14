@@ -50,6 +50,7 @@ class SessionWatcherService : Service() {
     private var watchdogJob: Job? = null
     private var lastActive: Set<String> = emptySet()
     private var titles: MutableMap<String, String> = mutableMapOf()
+    private val sessionProjects = mutableMapOf<String, String>()
     private val notifiedPermissions = mutableSetOf<String>()
     private val notifiedForms = mutableSetOf<String>()
     private var primed = false
@@ -260,6 +261,7 @@ class SessionWatcherService : Service() {
         val sessions = client.sessions()
         UsageStore.record(this, sessions)
         sessions.forEach { titles[it.id] = it.title }
+        sessions.forEach { sessionProjects[it.id] = it.projectID }
 
         val active = sessions.filter { it.running }.map { it.id }.toSet()
         if (primed) {
@@ -286,12 +288,26 @@ class SessionWatcherService : Service() {
     private suspend fun flushPending(client: Api) {
         PendingStore.all(this).forEach { prompt ->
             try {
+                val files = prompt.attachments.mapNotNull { att ->
+                    runCatching {
+                        Attachment(
+                            att.name,
+                            att.mime,
+                            android.util.Base64.encodeToString(
+                                java.io.File(att.path).readBytes(),
+                                android.util.Base64.NO_WRAP
+                            )
+                        )
+                    }.getOrNull()
+                }
                 client.send(
                     sessionID = prompt.sessionID,
                     text = prompt.text,
+                    files = files,
                     skillIDs = prompt.skillIDs
                 )
                 PendingStore.remove(this, prompt.id)
+                prompt.attachments.forEach { runCatching { java.io.File(it.path).delete() } }
             } catch (e: ApiException) {
                 if (e.status in 400..499) PendingStore.remove(this, prompt.id)
             } catch (_: Exception) {
@@ -371,8 +387,11 @@ class SessionWatcherService : Service() {
         }
     }
 
-    private fun muted(sessionID: String): Boolean =
-        sessionID in MutedStore.all(this)
+    private fun muted(sessionID: String): Boolean {
+        if (sessionID in MutedStore.all(this)) return true
+        val project = sessionProjects[sessionID] ?: return false
+        return project in MutedProjectStore.all(this)
+    }
 
     private fun sessionIntent(sessionID: String): PendingIntent =
         PendingIntent.getActivity(

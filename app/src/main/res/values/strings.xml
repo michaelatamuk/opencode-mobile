@@ -40,6 +40,7 @@
     <string name="cost_today">Today</string>
     <string name="cost_week">Last 7 days</string>
     <string name="cost_month">This month: %1$s · projected %2$s</string>
+    <string name="cost_export">Export usage CSV</string>
     <string name="cost_empty">No cost recorded yet. Spend appears after a model call completes.</string>
     <string name="sessions_no_match">No sessions match your search.</string>
     <string name="sessions_today">Today</string>
@@ -57,6 +58,8 @@
     <string name="action_archive">Archive</string>
     <string name="action_unarchive">Unarchive</string>
     <string name="sessions_archived">Archived</string>
+    <string name="action_mute_project">Mute project</string>
+    <string name="action_unmute_project">Unmute project</string>
     <string name="action_cancel">Cancel</string>
     <string name="session_rename_title">Rename session</string>
     <string name="session_delete_title">Delete session?</string>
@@ -123,7 +126,10 @@
     <string name="settings_voice">Voice</string>
     <string name="settings_voice_summary">Language for dictation and reading</string>
     <string name="settings_voice_language">Language tag</string>
+    <string name="settings_voice_engine">Voice</string>
     <string name="settings_voice_hint">BCP-47 tag such as en-US, de-DE or ru-RU. Empty uses the system default.</string>
+    <string name="settings_widget">Widget</string>
+    <string name="settings_widget_summary">Titles, stop action, refresh</string>
     <string name="settings_security_title">Security</string>
     <string name="settings_biometric_title">Biometric lock</string>
     <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>
@@ -216,6 +222,7 @@
     <string name="settings_about_storage">Credentials are stored on this device only.</string>
     <string name="settings_background_title">Background notifications</string>
     <string name="settings_background_body">Notify me when a session finishes while I\'m elsewhere. Keeps a low-priority notification while watching.</string>
+    <string name="settings_quick_prompts_title">Quick action prompts</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
     <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs and notifies you when it stops; a periodic check about every 15 minutes catches turns that finished while the app was in the background. Always keeps a live watcher notice with progress.</string>
@@ -243,6 +250,8 @@
     <string name="notif_budget_month_body">Spent $%1$.2f of $%2$.2f this month.</string>
     <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
     <string name="settings_home_title">Settings</string>
+    <string name="settings_search">Search settings</string>
+    <string name="settings_search_empty">No settings match.</string>
     <string name="settings_home_subtitle">OpenCode mobile</string>
     <string name="settings_summary_not_configured">Not configured</string>
     <string name="settings_summary_on">On</string>
@@ -256,6 +265,9 @@
     <string name="settings_profile_hint">Switching a profile replaces the active server, password and fallback everywhere.</string>
     <string name="settings_profile_name">Profile name</string>
     <string name="settings_profile_rename">Rename profile</string>
+    <string name="settings_profile_defaults">Default agent and model</string>
+    <string name="settings_profile_agent">Agent</string>
+    <string name="settings_profile_model">Model</string>
     <string name="settings_profile_delete_title">Delete profile?</string>
     <string name="settings_profile_delete_body">Remove “%1$s”? Its saved credentials are deleted from this device.</string>
     <string name="settings_group_automation">Automation</string>

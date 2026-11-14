@@ -16,7 +16,7 @@ object UsageStore {
     private const val FILE = "opencode_usage"
     private const val KEY_LAST = "last_cost"
     private const val KEY_DAYS = "days"
-    private const val KEEP_DAYS = 60
+    private const val KEEP_DAYS = 180
 
     data class Day(val label: String, val cost: Double)
 
@@ -107,6 +107,21 @@ object UsageStore {
             calendar.get(java.util.Calendar.DAY_OF_MONTH)
         val average = recent(context, 7).sumOf { it.cost } / 7.0
         return monthToDate(context) + average * remaining
+    }
+
+    /** CSV of every stored day, oldest first. */
+    fun csv(context: Context): String {
+        val days = prefs(context).getString(KEY_DAYS, null)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return "date,cost\n"
+        val keys = days.keys().asSequence().sorted()
+        return buildString {
+            appendLine("date,cost")
+            keys.forEach { key ->
+                append(key).append(',').append(days.optJSONObject(key)?.optDouble("total", 0.0) ?: 0.0)
+                appendLine()
+            }
+        }
     }
 
     /** Last [count] days, oldest first, including days with no spend. */

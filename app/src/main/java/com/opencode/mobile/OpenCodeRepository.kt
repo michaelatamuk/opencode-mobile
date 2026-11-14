@@ -77,8 +77,9 @@ class OpenCodeRepository(val api: Api) {
         text: String,
         files: List<Attachment> = emptyList(),
         delivery: String? = null,
-        skillIDs: List<String> = emptyList()
-    ) = api.send(sessionID, text, files, delivery, skillIDs)
+        skillIDs: List<String> = emptyList(),
+        onProgress: ((Float) -> Unit)? = null
+    ) = api.send(sessionID, text, files, delivery, skillIDs, onProgress)
 
     suspend fun interrupt(sessionID: String) = api.interrupt(sessionID)
 

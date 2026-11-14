@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +63,7 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +79,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -101,9 +105,13 @@ import androidx.compose.ui.unit.dp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
+import com.opencode.mobile.AgentOption
 import com.opencode.mobile.AppScope
+import com.opencode.mobile.Attachment
 import com.opencode.mobile.IntegrationItem
 import com.opencode.mobile.McpServer
+import com.opencode.mobile.ModelOption
+import com.opencode.mobile.OpenCodeWidgetProvider
 import com.opencode.mobile.Pairing
 import com.opencode.mobile.PendingStore
 import com.opencode.mobile.ProfileStore
@@ -114,7 +122,7 @@ import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
-private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Connections, Voice, Security, About }
+private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Connections, Voice, Widget, Security, About }
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
 
@@ -352,6 +360,7 @@ fun SettingsScreen(
             )
 
             SettingsPage.Notifications -> NotificationsPage(
+                context = context,
                 watching = watching,
                 onWatchingChange = onWatchingChange,
                 notificationsEnabled = notificationsEnabled,
@@ -407,6 +416,11 @@ fun SettingsScreen(
             )
 
             SettingsPage.Voice -> VoicePage(
+                context = context,
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Widget -> WidgetSettingsPage(
                 context = context,
                 onBack = { page = SettingsPage.Home }
             )
@@ -495,6 +509,108 @@ private fun SettingsHome(
                 .padding(top = 14.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            var query by rememberSaveable { mutableStateOf("") }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text(stringResource(R.string.settings_search)) },
+                singleLine = true,
+                colors = fieldColors(),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (query.isNotBlank()) {
+                data class Match(
+                    val page: SettingsPage,
+                    val icon: ImageVector,
+                    val title: String,
+                    val supporting: String
+                )
+
+                val entries = listOf(
+                    Match(
+                        SettingsPage.Connection,
+                        Icons.Rounded.Dns,
+                        stringResource(R.string.settings_section_connection),
+                        serverSummary
+                    ),
+                    Match(
+                        SettingsPage.Profiles,
+                        Icons.Rounded.Dns,
+                        stringResource(R.string.settings_profiles),
+                        ""
+                    ),
+                    Match(
+                        SettingsPage.Notifications,
+                        Icons.Rounded.Notifications,
+                        stringResource(R.string.settings_background_title),
+                        notificationsSummary
+                    ),
+                    Match(
+                        SettingsPage.Appearance,
+                        Icons.Rounded.Palette,
+                        stringResource(R.string.settings_appearance_title),
+                        appearanceSummary
+                    ),
+                    Match(
+                        SettingsPage.Connections,
+                        Icons.Rounded.Link,
+                        stringResource(R.string.settings_connections),
+                        stringResource(R.string.settings_connections_summary)
+                    ),
+                    Match(
+                        SettingsPage.Voice,
+                        Icons.Rounded.Notifications,
+                        stringResource(R.string.settings_voice),
+                        stringResource(R.string.settings_voice_summary)
+                    ),
+                    Match(
+                        SettingsPage.Automation,
+                        Icons.Rounded.Timer,
+                        stringResource(R.string.settings_group_automation),
+                        automationSummary
+                    ),
+                    Match(
+                        SettingsPage.Security,
+                        Icons.Rounded.Shield,
+                        stringResource(R.string.settings_security_title),
+                        securitySummary
+                    ),
+                    Match(
+                        SettingsPage.About,
+                        Icons.Rounded.Info,
+                        stringResource(R.string.settings_about_title),
+                        aboutSummary
+                    )
+                ).filter {
+                    it.title.contains(query, ignoreCase = true) ||
+                        it.supporting.contains(query, ignoreCase = true)
+                }
+
+                SettingsGroup {
+                    if (entries.isEmpty()) {
+                        Text(
+                            stringResource(R.string.settings_search_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        entries.forEachIndexed { index, entry ->
+                            SettingsRow(
+                                icon = entry.icon,
+                                title = entry.title,
+                                supporting = entry.supporting,
+                                onClick = { onOpen(entry.page) },
+                                showDivider = index < entries.lastIndex
+                            )
+                        }
+                    }
+                }
+                return@Column
+            }
+
             SettingsGroup {
                 SettingsRow(
                     icon = Icons.Rounded.Dns,
@@ -532,6 +648,13 @@ private fun SettingsHome(
                     title = stringResource(R.string.settings_voice),
                     supporting = stringResource(R.string.settings_voice_summary),
                     onClick = { onOpen(SettingsPage.Voice) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Info,
+                    title = stringResource(R.string.settings_widget),
+                    supporting = stringResource(R.string.settings_widget_summary),
+                    onClick = { onOpen(SettingsPage.Widget) }
                 )
                 SettingsDivider()
                 SettingsRow(
@@ -816,6 +939,7 @@ private fun ProfilesPage(
     var renaming by remember { mutableStateOf<ServerProfile?>(null) }
     var renameValue by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<ServerProfile?>(null) }
+    var defaultsFor by remember { mutableStateOf<ServerProfile?>(null) }
 
     PageScaffold(
         title = stringResource(R.string.settings_profiles),
@@ -890,6 +1014,16 @@ private fun ProfilesPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
+        Spacer(Modifier.height(12.dp))
+        val activeProfile = profiles.firstOrNull { it.id == active }
+        OutlinedButton(
+            onClick = { activeProfile?.let { defaultsFor = it } },
+            enabled = activeProfile != null,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.settings_profile_defaults))
+        }
     }
 
     if (showAdd) {
@@ -985,12 +1119,131 @@ private fun ProfilesPage(
             }
         )
     }
+
+    defaultsFor?.let { profile ->
+        ProfileDefaultsDialog(
+            context = context,
+            profile = profile,
+            onDismiss = { defaultsFor = null },
+            onSaved = { updated ->
+                ProfileStore.save(context, updated)
+                profiles = ProfileStore.all(context)
+                onSwitched(updated)
+                defaultsFor = null
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileDefaultsDialog(
+    context: Context,
+    profile: ServerProfile,
+    onDismiss: () -> Unit,
+    onSaved: (ServerProfile) -> Unit
+) {
+    val prefs = SecurePrefs.get(context)
+    val api = remember {
+        Api(
+            prefs.getString("server", "").orEmpty(),
+            prefs.getString("password", "").orEmpty(),
+            prefs.getString("fallback_server", "").orEmpty()
+        )
+    }
+    var agents by remember { mutableStateOf<List<AgentOption>?>(null) }
+    var models by remember { mutableStateOf<List<ModelOption>?>(null) }
+    var agent by remember { mutableStateOf(profile.agentID) }
+    var modelID by remember { mutableStateOf(profile.modelID) }
+    var provider by remember { mutableStateOf(profile.providerID) }
+
+    LaunchedEffect(Unit) {
+        agents = runCatching { api.agents() }.getOrDefault(emptyList())
+        models = runCatching { api.models() }.getOrDefault(emptyList())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_profile_defaults)) },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    stringResource(R.string.settings_profile_agent),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                val agentList = agents
+                if (agentList == null) {
+                    Text(
+                        stringResource(R.string.settings_connections_loading),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        agentList.forEach { option ->
+                            FilterChip(
+                                selected = agent == option.id,
+                                onClick = { agent = option.id },
+                                label = { Text(option.name) }
+                            )
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.settings_profile_model),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                val modelList = models
+                if (modelList == null) {
+                    Text(
+                        stringResource(R.string.settings_connections_loading),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        modelList.forEach { option ->
+                            FilterChip(
+                                selected = modelID == option.id && provider == option.providerID,
+                                onClick = {
+                                    modelID = option.id
+                                    provider = option.providerID
+                                },
+                                label = { Text(option.name) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSaved(
+                    profile.copy(
+                        agentID = agent,
+                        modelID = modelID,
+                        providerID = provider
+                    )
+                )
+            }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
 }
 
 /* --------------------------------------------------------- notifications */
 
 @Composable
 private fun NotificationsPage(
+    context: Context,
     watching: Boolean,
     onWatchingChange: (Boolean) -> Unit,
     notificationsEnabled: Boolean,
@@ -1064,6 +1317,66 @@ private fun NotificationsPage(
                 onClick = onTestNotification,
                 showDivider = false
             )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(R.string.settings_quick_prompts_title),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        val prefs = SecurePrefs.get(context)
+        var continueText by remember {
+            mutableStateOf(prefs.getString("quick_prompt_continue", "").orEmpty())
+        }
+        var explainText by remember {
+            mutableStateOf(prefs.getString("quick_prompt_explain", "").orEmpty())
+        }
+        var retryText by remember {
+            mutableStateOf(prefs.getString("quick_prompt_retry", "").orEmpty())
+        }
+        SettingsGroup {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = continueText,
+                    onValueChange = { value ->
+                        continueText = value
+                        prefs.edit().putString("quick_prompt_continue", value).apply()
+                    },
+                    label = { Text(stringResource(R.string.notif_quick_continue)) },
+                    placeholder = { Text("Continue.") },
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = explainText,
+                    onValueChange = { value ->
+                        explainText = value
+                        prefs.edit().putString("quick_prompt_explain", value).apply()
+                    },
+                    label = { Text(stringResource(R.string.notif_quick_explain)) },
+                    placeholder = {
+                        Text("Explain what you changed and why, in a short summary.")
+                    },
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = retryText,
+                    onValueChange = { value ->
+                        retryText = value
+                        prefs.edit().putString("quick_prompt_retry", value).apply()
+                    },
+                    label = { Text(stringResource(R.string.notif_quick_retry)) },
+                    placeholder = { Text("That did not work. Try again differently.") },
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -1334,23 +1647,45 @@ private fun PendingPage(context: Context, onBack: () -> Unit) {
                     SettingsRow(
                         icon = Icons.Rounded.Send,
                         title = prompt.text.replace('\n', ' '),
-                        supporting = listOf(prompt.title, prompt.sessionID)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" · "),
+                        supporting = listOf(
+                            prompt.title,
+                            prompt.sessionID,
+                            if (prompt.attachments.isNotEmpty()) {
+                                "${prompt.attachments.size} files"
+                            } else {
+                                ""
+                            }
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
                         trailing = {
                             Row {
                                 IconButton(
                                     onClick = {
                                         scope.launch {
+                                            val files = prompt.attachments.mapNotNull { att ->
+                                                runCatching {
+                                                    Attachment(
+                                                        att.name,
+                                                        att.mime,
+                                                        android.util.Base64.encodeToString(
+                                                            java.io.File(att.path).readBytes(),
+                                                            android.util.Base64.NO_WRAP
+                                                        )
+                                                    )
+                                                }.getOrNull()
+                                            }
                                             val ok = runCatching {
                                                 api.send(
                                                     sessionID = prompt.sessionID,
                                                     text = prompt.text,
+                                                    files = files,
                                                     skillIDs = prompt.skillIDs
                                                 )
                                             }.isSuccess
                                             if (ok) {
                                                 PendingStore.remove(context, prompt.id)
+                                                prompt.attachments.forEach {
+                                                    runCatching { java.io.File(it.path).delete() }
+                                                }
                                                 items = PendingStore.all(context)
                                             }
                                         }
@@ -1367,6 +1702,9 @@ private fun PendingPage(context: Context, onBack: () -> Unit) {
                                 IconButton(
                                     onClick = {
                                         PendingStore.remove(context, prompt.id)
+                                        prompt.attachments.forEach {
+                                            runCatching { java.io.File(it.path).delete() }
+                                        }
                                         items = PendingStore.all(context)
                                     },
                                     modifier = Modifier.size(34.dp)
@@ -1593,10 +1931,32 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
 
 /* ------------------------------------------------------------------ voice */
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VoicePage(context: Context, onBack: () -> Unit) {
     var language by remember {
         mutableStateOf(SecurePrefs.get(context).getString("voice_language", "").orEmpty())
+    }
+    var voiceName by remember {
+        mutableStateOf(SecurePrefs.get(context).getString("voice_name", "").orEmpty())
+    }
+    val tts = remember { android.speech.tts.TextToSpeech(context) { } }
+    var voices by remember { mutableStateOf<List<android.speech.tts.Voice>>(emptyList()) }
+    DisposableEffect(Unit) {
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+        }
+    }
+    LaunchedEffect(language) {
+        voices = runCatching {
+            val tag = language.ifBlank { java.util.Locale.getDefault().toLanguageTag() }
+            tts.voices
+                ?.filter { it.locale.toLanguageTag().startsWith(tag.take(2)) }
+                ?.sortedBy { it.name }
+                ?.take(16)
+                ?: emptyList()
+        }.getOrDefault(emptyList())
     }
     PageScaffold(
         title = stringResource(R.string.settings_voice),
@@ -1621,7 +1981,79 @@ private fun VoicePage(context: Context, onBack: () -> Unit) {
                     label = stringResource(R.string.settings_voice_language),
                     placeholder = "en-US"
                 )
+                if (voices.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        stringResource(R.string.settings_voice_engine),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        voices.forEach { voice ->
+                            FilterChip(
+                                selected = voiceName == voice.name,
+                                onClick = {
+                                    voiceName = if (voiceName == voice.name) "" else voice.name
+                                    SecurePrefs.get(context).edit()
+                                        .putString("voice_name", voiceName)
+                                        .apply()
+                                },
+                                label = {
+                                    Text(
+                                        voice.name.substringAfterLast('-').take(24),
+                                        maxLines = 1
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+/* ----------------------------------------------------------------- widget */
+
+@Composable
+private fun WidgetSettingsPage(context: Context, onBack: () -> Unit) {
+    val prefs = SecurePrefs.get(context)
+    var showTitles by remember {
+        mutableStateOf(prefs.getBoolean("widget_show_titles", true))
+    }
+    var showStop by remember {
+        mutableStateOf(prefs.getBoolean("widget_show_stop", true))
+    }
+    PageScaffold(
+        title = stringResource(R.string.settings_widget),
+        onBack = onBack
+    ) {
+        SettingsGroup {
+            SwitchRow(
+                icon = Icons.Rounded.Info,
+                title = stringResource(R.string.widget_show_titles),
+                supporting = "",
+                checked = showTitles,
+                onChange = { enabled ->
+                    showTitles = enabled
+                    prefs.edit().putBoolean("widget_show_titles", enabled).apply()
+                    OpenCodeWidgetProvider.refresh(context)
+                }
+            )
+            SettingsDivider()
+            SwitchRow(
+                icon = Icons.Rounded.Send,
+                title = stringResource(R.string.widget_show_stop),
+                supporting = "",
+                checked = showStop,
+                onChange = { enabled ->
+                    showStop = enabled
+                    prefs.edit().putBoolean("widget_show_stop", enabled).apply()
+                    OpenCodeWidgetProvider.refresh(context)
+                },
+                showDivider = false
+            )
         }
     }
 }

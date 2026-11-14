@@ -53,6 +53,16 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Shell runner per session: execute a command and read its output
 - Attach any file (up to 8 MB), not just images
 - A/B comparison highlights added and removed words
+- Profile agent/model defaults applied to new sessions
+- Offline queue stores attachments on disk and delivers them with the text
+- Settings search; per-project notification mute
+- Schedule run limit and shell `if` condition
+- A/B comparison uses two columns on wide screens
+- Widget settings page (titles, stop action) and last-updated time
+- Byte-level upload progress for prompts with attachments
+- 180-day usage history with CSV export; monthly budget cap
+- Voice engine picker; tap read-aloud again to stop
+- Editable prompts for notification quick actions
 - Named server profiles: add the current server, switch, rename, delete
 - Finish-only safety net: a periodic check catches turns that ended while the
   watcher was paused

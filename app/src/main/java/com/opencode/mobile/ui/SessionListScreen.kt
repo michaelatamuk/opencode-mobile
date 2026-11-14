@@ -1,5 +1,7 @@
 package com.opencode.mobile.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -83,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.MutedStore
+import com.opencode.mobile.MutedProjectStore
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.R
@@ -138,6 +141,7 @@ fun SessionListScreen(
     var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
     var muted by remember { mutableStateOf(MutedStore.all(context)) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
+    var mutedProjects by remember { mutableStateOf(MutedProjectStore.all(context)) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
@@ -407,6 +411,7 @@ fun SessionListScreen(
                                     pinned = session.id in pinned,
                                     muted = session.id in muted,
                                     archived = session.archived,
+                                    projectMuted = session.projectID in mutedProjects,
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
                                     onDelete = { deleting = session },
@@ -416,7 +421,15 @@ fun SessionListScreen(
                                     onToggleMute = {
                                         muted = MutedStore.toggle(context, session.id)
                                     },
-                                    onArchive = { vm.archive(session.id, !session.archived) }
+                                    onArchive = { vm.archive(session.id, !session.archived) },
+                                    onToggleProjectMute = {
+                                        if (session.projectID.isNotBlank()) {
+                                            mutedProjects = MutedProjectStore.toggle(
+                                                context,
+                                                session.projectID
+                                            )
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -673,12 +686,14 @@ private fun SessionRow(
     pinned: Boolean,
     muted: Boolean,
     archived: Boolean,
+    projectMuted: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
-    onArchive: () -> Unit
+    onArchive: () -> Unit,
+    onToggleProjectMute: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val cost = formatCost(session.cost)
@@ -807,6 +822,22 @@ private fun SessionRow(
                         onToggleMute()
                     }
                 )
+                if (session.projectID.isNotBlank()) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (projectMuted) R.string.action_unmute_project
+                                    else R.string.action_mute_project
+                                )
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onToggleProjectMute()
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -964,6 +995,22 @@ private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val exportLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.CreateDocument("text/csv")
+                    ) { uri ->
+                        if (uri != null) {
+                            runCatching {
+                                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                                    stream.write(UsageStore.csv(context).toByteArray())
+                                }
+                            }
+                        }
+                    }
+                    TextButton(onClick = {
+                        exportLauncher.launch("opencode-usage.csv")
+                    }) {
+                        Text(stringResource(R.string.cost_export))
+                    }
                 }
             }
 

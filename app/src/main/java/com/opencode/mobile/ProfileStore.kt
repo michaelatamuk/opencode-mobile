@@ -14,7 +14,10 @@ data class ServerProfile(
     val themeMode: String = "",
     val accent: String = "",
     val persistentWatch: Boolean = false,
-    val watchdogMinutes: Int = 0
+    val watchdogMinutes: Int = 0,
+    val agentID: String = "",
+    val modelID: String = "",
+    val providerID: String = ""
 )
 
 /**
@@ -45,7 +48,10 @@ object ProfileStore {
                     themeMode = o.optString("themeMode"),
                     accent = o.optString("accent"),
                     persistentWatch = o.optBoolean("persistentWatch", false),
-                    watchdogMinutes = o.optInt("watchdogMinutes", 0)
+                    watchdogMinutes = o.optInt("watchdogMinutes", 0),
+                    agentID = o.optString("agentID"),
+                    modelID = o.optString("modelID"),
+                    providerID = o.optString("providerID")
                 )
             }
         }.getOrDefault(emptyList())
@@ -169,6 +175,9 @@ object ProfileStore {
                     .put("accent", p.accent)
                     .put("persistentWatch", p.persistentWatch)
                     .put("watchdogMinutes", p.watchdogMinutes)
+                    .put("agentID", p.agentID)
+                    .put("modelID", p.modelID)
+                    .put("providerID", p.providerID)
             )
         }
         SecurePrefs.get(context).edit().putString(KEY, arr.toString()).apply()

@@ -36,6 +36,7 @@ data class ChatUiState(
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
+    val sendProgress: Float = 0f,
     val error: String? = null
 ) {
     val busy: Boolean get() = messages.lastOrNull()?.pending == true
@@ -228,6 +229,19 @@ class ChatViewModel(
                     activeID = created
                     _state.update { it.copy(sessionID = created) }
                     startPolling()
+                    // Fresh sessions inherit the active profile's defaults.
+                    appContext?.let { ctx ->
+                        ProfileStore.active(ctx)?.let { profile ->
+                            if (profile.agentID.isNotBlank()) {
+                                runCatching { repo.setAgent(created, profile.agentID) }
+                            }
+                            if (profile.modelID.isNotBlank()) {
+                                runCatching {
+                                    repo.setModel(created, profile.providerID, profile.modelID)
+                                }
+                            }
+                        }
+                    }
                 }
                 // A leading /command is routed to the command endpoint so the
                 // server parses its arguments; ordinary prompts stay a prompt.
@@ -242,7 +256,10 @@ class ChatViewModel(
                         text = text,
                         files = files,
                         delivery = if (_state.value.busy) "steer" else null,
-                        skillIDs = skillIDs
+                        skillIDs = skillIDs,
+                        onProgress = { progress ->
+                            _state.update { it.copy(sendProgress = progress) }
+                        }
                     )
                 }
                 ok = true
@@ -252,7 +269,28 @@ class ChatViewModel(
             } catch (e: Exception) {
                 val target = _state.value.sessionID
                 if (e is java.io.IOException && target.isNotBlank() && appContext != null) {
-                    PendingStore.add(appContext, target, _state.value.title, text, skillIDs)
+                    val saved = files.mapIndexedNotNull { index, file ->
+                        runCatching {
+                            val dir = java.io.File(appContext.filesDir, "pending")
+                            dir.mkdirs()
+                            val out = java.io.File(
+                                dir,
+                                "p-${System.currentTimeMillis()}-$index"
+                            )
+                            out.writeBytes(
+                                android.util.Base64.decode(file.base64, android.util.Base64.DEFAULT)
+                            )
+                            PendingAttachment(file.name, file.mime, out.absolutePath)
+                        }.getOrNull()
+                    }
+                    PendingStore.add(
+                        appContext,
+                        target,
+                        _state.value.title,
+                        text,
+                        skillIDs,
+                        saved
+                    )
                     _state.update {
                         it.copy(error = "Queued - will send when the server is back.")
                     }
@@ -261,7 +299,7 @@ class ChatViewModel(
                     _state.update { it.copy(error = friendlyError(e)) }
                 }
             } finally {
-                _state.update { it.copy(sending = false) }
+                _state.update { it.copy(sending = false, sendProgress = 0f) }
                 onDone(ok)
             }
         }

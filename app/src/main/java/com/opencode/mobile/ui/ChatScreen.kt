@@ -239,11 +239,20 @@ fun ChatScreen(
     val voiceLanguage = remember {
         SecurePrefs.get(context).getString("voice_language", "").orEmpty()
     }
+    val voiceName = remember {
+        SecurePrefs.get(context).getString("voice_name", "").orEmpty()
+    }
     val tts = remember {
         var reference: TextToSpeech? = null
         TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS && voiceLanguage.isNotBlank()) {
-                reference?.language = java.util.Locale.forLanguageTag(voiceLanguage)
+            if (status == TextToSpeech.SUCCESS) {
+                if (voiceLanguage.isNotBlank()) {
+                    reference?.language = java.util.Locale.forLanguageTag(voiceLanguage)
+                }
+                if (voiceName.isNotBlank()) {
+                    reference?.voice = reference?.voices?.firstOrNull { it.name == voiceName }
+                        ?: reference?.voice
+                }
             }
         }.also { reference = it }
     }
@@ -263,6 +272,9 @@ fun ChatScreen(
                 tts.stop()
                 if (voiceLanguage.isNotBlank()) {
                     tts.language = java.util.Locale.forLanguageTag(voiceLanguage)
+                }
+                if (voiceName.isNotBlank()) {
+                    tts.voice = tts.voices?.firstOrNull { it.name == voiceName } ?: tts.voice
                 }
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message")
                 speakingText = text
@@ -630,14 +642,26 @@ fun ChatScreen(
                 }
             }
             if (state.sending) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp)
-                        .height(2.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                )
+                if (state.sendProgress > 0f) {
+                    LinearProgressIndicator(
+                        progress = { state.sendProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp)
+                            .height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp)
+                            .height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                }
             }
             state.error?.let {
                 Text(
@@ -1824,6 +1848,7 @@ private fun SchedulesSheet(
     var cron by remember { mutableStateOf("") }
     var at by remember { mutableStateOf("") }
     var endsTimes by remember { mutableStateOf("") }
+    var ifRun by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -1920,6 +1945,14 @@ private fun SchedulesSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            OutlinedTextField(
+                value = ifRun,
+                onValueChange = { ifRun = it },
+                label = { Text("Wake only if this command succeeds (optional)") },
+                placeholder = { Text("git diff --quiet") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             Button(
                 onClick = {
                     if (prompt.isNotBlank() && whenReady) {
@@ -1934,9 +1967,16 @@ private fun SchedulesSheet(
                                 endsTimes.toIntOrNull()?.takeIf { it > 0 }?.let { times ->
                                     spec.put("ends", org.json.JSONObject().put("times", times))
                                 }
+                                if (ifRun.isNotBlank()) {
+                                    spec.put(
+                                        "if",
+                                        org.json.JSONObject().put("run", ifRun.trim())
+                                    )
+                                }
                                 repo.createSchedule(sessionID, prompt.trim(), spec)
                                 prompt = ""
                                 endsTimes = ""
+                                ifRun = ""
                                 reload()
                             } catch (e: Exception) {
                                 error = friendlyError(e)
@@ -2208,47 +2248,67 @@ private fun CompareSheet(
                     color = MaterialTheme.colorScheme.error
                 )
             }
-            Text(
-                stringResource(R.string.chat_compare_original),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(Modifier.padding(14.dp)) {
-                    if (original == null && error == null) {
-                        CircularProgressIndicator(Modifier.size(22.dp))
-                    } else {
-                        SelectionContainer {
-                            Text(
-                                diff?.first
-                                    ?: AnnotatedString((original ?: "—").ifBlank { "—" }),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+            val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+            val originalText = diff?.first
+                ?: AnnotatedString((original ?: "—").ifBlank { "—" })
+            val branchAnnotated = diff?.second
+                ?: AnnotatedString(branchText.ifBlank { "—" })
+            if (wide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CompareSection(
+                        label = stringResource(R.string.chat_compare_original),
+                        text = originalText,
+                        loading = original == null && error == null,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompareSection(
+                        label = stringResource(R.string.chat_compare_branch),
+                        text = branchAnnotated,
+                        loading = false,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+            } else {
+                CompareSection(
+                    label = stringResource(R.string.chat_compare_original),
+                    text = originalText,
+                    loading = original == null && error == null
+                )
+                Spacer(Modifier.height(4.dp))
+                CompareSection(
+                    label = stringResource(R.string.chat_compare_branch),
+                    text = branchAnnotated,
+                    loading = false
+                )
             }
-            Text(
-                stringResource(R.string.chat_compare_branch),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(Modifier.padding(14.dp)) {
+        }
+    }
+}
+
+@Composable
+private fun CompareSection(
+    label: String,
+    text: AnnotatedString,
+    loading: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(Modifier.padding(14.dp)) {
+                if (loading) {
+                    CircularProgressIndicator(Modifier.size(22.dp))
+                } else {
                     SelectionContainer {
-                        Text(
-                            diff?.second ?: AnnotatedString(branchText.ifBlank { "—" }),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }

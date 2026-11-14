@@ -10,6 +10,7 @@ import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -704,7 +705,8 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         text: String,
         files: List<Attachment> = emptyList(),
         delivery: String? = null,
-        skillIDs: List<String> = emptyList()
+        skillIDs: List<String> = emptyList(),
+        onProgress: ((Float) -> Unit)? = null
     ): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject().put("text", text)
         if (files.isNotEmpty()) {
@@ -725,7 +727,30 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             body.put("skills", arr)
         }
         if (delivery != null) body.put("delivery", delivery)
-        postJson("/api/session/$sessionID/prompt", body.toString())
+        val payload = body.toString()
+        val payloadBytes = payload.toByteArray()
+        val requestBody: RequestBody = if (onProgress == null) {
+            payload.toRequestBody(jsonType)
+        } else {
+            object : RequestBody() {
+                override fun contentType() = jsonType
+                override fun contentLength() = payloadBytes.size.toLong()
+                override fun writeTo(sink: okio.BufferedSink) {
+                    var offset = 0
+                    while (offset < payloadBytes.size) {
+                        val count = minOf(8192, payloadBytes.size - offset)
+                        sink.write(payloadBytes, offset, count)
+                        offset += count
+                        onProgress(offset.toFloat() / payloadBytes.size)
+                    }
+                }
+            }
+        }
+        val req = request("/api/session/$sessionID/prompt").post(requestBody).build()
+        client.newCall(req).execute().use { r ->
+            val responseBody = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw ApiException(r.code, responseBody.take(300))
+        }
     }
 
     suspend fun commands(): List<CommandOption> = withContext(Dispatchers.IO) {
