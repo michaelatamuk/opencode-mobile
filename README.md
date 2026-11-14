@@ -38,12 +38,15 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
   text files only
 - Skills detail view with the skill's full markdown content
-- Schedules per session: one-off/interval prompts with pause, resume, delete
-- Connections page: MCP servers with connect/disconnect, integration search and
-  API-key linking
+- Schedules per session: interval, cron or one-off time, pause, resume, delete,
+  last output shown
+- Profile switching also applies its theme, accent, notification mode and watchdog
+- Widget configuration at add time: session titles and stop action toggles
+- Connections page: MCP servers with connect/disconnect, integration search, API-key
+  linking and required env names
+- Queued messages can be edited (cancel + resend), steered or cancelled
 - Shell runner per session: execute a command and read its output
-- Attach any file (up to 2 MB), not just images
-- Queued messages can be steered or cancelled; pending prompts support send-now
+- Attach any file (up to 8 MB), not just images
 - A/B comparison highlights added and removed words
 - Named server profiles: add the current server, switch, rename, delete
 - Finish-only safety net: a periodic check catches turns that ended while the

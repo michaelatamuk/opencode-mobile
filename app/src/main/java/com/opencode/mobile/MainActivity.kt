@@ -248,6 +248,8 @@ private fun Root() {
         server = prefs.getString("server", "").orEmpty()
         password = prefs.getString("password", "").orEmpty()
         fallback = prefs.getString("fallback_server", "").orEmpty()
+        watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
+        persistentWatch = prefs.getBoolean("watch_persistent", false)
     }
 
     val repo = remember(server, password, fallback) {

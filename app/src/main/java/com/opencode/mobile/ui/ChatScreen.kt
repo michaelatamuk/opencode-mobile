@@ -66,6 +66,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
@@ -797,6 +798,7 @@ fun ChatScreen(
             queued = state.queued,
             onCancel = vm::cancelQueued,
             onSteer = vm::steerQueued,
+            onEdit = { inboxID, text, delivery -> vm.editQueued(inboxID, text, delivery) },
             onDismiss = { showQueue = false }
         )
     }
@@ -1762,6 +1764,9 @@ private fun SchedulesSheet(
     var error by remember { mutableStateOf<String?>(null) }
     var prompt by remember { mutableStateOf("") }
     var minutes by remember { mutableStateOf(60) }
+    var mode by remember { mutableStateOf("interval") }
+    var cron by remember { mutableStateOf("") }
+    var at by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -1809,20 +1814,60 @@ private fun SchedulesSheet(
                 modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(15 to "15m", 60 to "1h", 1440 to "1d").forEach { (value, label) ->
+                listOf("interval" to "Every", "cron" to "Cron", "at" to "At").forEach { (value, label) ->
                     FilterChip(
-                        selected = minutes == value,
-                        onClick = { minutes = value },
+                        selected = mode == value,
+                        onClick = { mode = value },
                         label = { Text(label) }
                     )
                 }
             }
+            when (mode) {
+                "interval" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(15 to "15m", 60 to "1h", 1440 to "1d").forEach { (value, label) ->
+                        FilterChip(
+                            selected = minutes == value,
+                            onClick = { minutes = value },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                "cron" -> OutlinedTextField(
+                    value = cron,
+                    onValueChange = { cron = it },
+                    label = { Text("Cron") },
+                    placeholder = { Text("0 9 * * 1-5") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                else -> OutlinedTextField(
+                    value = at,
+                    onValueChange = { at = it },
+                    label = { Text("At") },
+                    placeholder = { Text("2026-11-20T09:00") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            val whenReady = when (mode) {
+                "interval" -> true
+                "cron" -> cron.isNotBlank()
+                else -> at.isNotBlank()
+            }
             Button(
                 onClick = {
-                    if (prompt.isNotBlank()) {
+                    if (prompt.isNotBlank() && whenReady) {
                         scope.launch {
                             try {
-                                repo.createSchedule(sessionID, prompt.trim(), minutes)
+                                val spec = when (mode) {
+                                    "cron" -> org.json.JSONObject().put("cron", cron.trim())
+                                    "at" -> org.json.JSONObject().put("at", at.trim())
+                                    else -> org.json.JSONObject()
+                                        .put("every", "$minutes minutes")
+                                }
+                                repo.createSchedule(sessionID, prompt.trim(), spec)
                                 prompt = ""
                                 reload()
                             } catch (e: Exception) {
@@ -1831,7 +1876,7 @@ private fun SchedulesSheet(
                         }
                     }
                 },
-                enabled = prompt.isNotBlank(),
+                enabled = prompt.isNotBlank() && whenReady,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1877,6 +1922,15 @@ private fun SchedulesSheet(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (schedule.lastOutput.isNotBlank()) {
+                                    Text(
+                                        schedule.lastOutput.replace('\n', ' '),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                             IconButton(
                                 onClick = {
@@ -2140,9 +2194,12 @@ private fun QueueSheet(
     queued: List<QueuedMessage>,
     onCancel: (String) -> Unit,
     onSteer: (String) -> Unit,
+    onEdit: (String, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var editing by remember { mutableStateOf<QueuedMessage?>(null) }
+    var editText by remember { mutableStateOf("") }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -2189,6 +2246,20 @@ private fun QueueSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        IconButton(
+                            onClick = {
+                                editing = item
+                                editText = item.text
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = stringResource(R.string.chat_queue_edit),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         if (item.delivery != "steer") {
                             TextButton(onClick = { onSteer(item.id) }) {
                                 Text(
@@ -2212,6 +2283,31 @@ private fun QueueSheet(
                 }
             }
         }
+    }
+    editing?.let { item ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(stringResource(R.string.chat_queue_edit_title)) },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onEdit(item.id, editText, item.delivery)
+                    editing = null
+                }) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 

@@ -77,6 +77,11 @@
             android:name=".WidgetActionReceiver"
             android:exported="false" />
 
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.OpenCodeMobile" />
+
         <service
             android:name=".OpenCodeTileService"
             android:exported="true"

@@ -110,6 +110,10 @@
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Ожидание сессии</string>
     <string name="widget_stop">Остановить первый запуск</string>
+    <string name="widget_config_title">Виджет</string>
+    <string name="widget_config_hint">Выберите, что показывать. Это можно изменить, добавив виджет заново.</string>
+    <string name="widget_show_titles">Показывать названия сессий</string>
+    <string name="widget_show_stop">Показывать кнопку остановки</string>
     <string name="settings_biometric_title">Биометрическая блокировка</string>
     <string name="settings_biometric_body">Запрашивать отпечаток или лицо при каждом запуске.</string>
     <string name="settings_screenshots_title">Блокировать скриншоты</string>
@@ -121,6 +125,8 @@
     <string name="chat_queue_title">Очередь сообщений</string>
     <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_queue_steer">Вклинить</string>
+    <string name="chat_queue_edit">Изменить</string>
+    <string name="chat_queue_edit_title">Изменить сообщение в очереди</string>
     <string name="chat_attach_file">Прикрепить файл</string>
     <string name="chat_schedules">Расписания</string>
     <string name="chat_schedules_hint">Разбудить сессию позже или по интервалу. Требует experimental.schedules на сервере.</string>

@@ -132,7 +132,8 @@ data class ScheduleItem(
     val prompt: String,
     val status: String,
     val nextDueAt: Long,
-    val runCount: Int
+    val runCount: Int,
+    val lastOutput: String = ""
 )
 
 data class McpServer(val name: String, val status: String)
@@ -869,7 +870,8 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                 prompt = o.optJSONObject("action")?.optString("prompt").orEmpty(),
                 status = status,
                 nextDueAt = o.optLong("nextDueAt"),
-                runCount = o.optInt("runCount")
+                runCount = o.optInt("runCount"),
+                lastOutput = o.optString("lastOutput")
             )
         }
     }
@@ -877,12 +879,12 @@ class Api(server: String, private val password: String, fallbackServer: String? 
     suspend fun createSchedule(
         sessionID: String,
         prompt: String,
-        everyMinutes: Int
+        whenSpec: JSONObject
     ): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("sessionID", sessionID)
             .put("prompt", prompt)
-            .put("when", JSONObject().put("every", "$everyMinutes minutes"))
+            .put("when", whenSpec)
         postJson("/api/experimental/schedule", body.toString())
         Unit
     }

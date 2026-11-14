@@ -29,6 +29,19 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        fun refresh(context: Context) {
+            val prefs = SecurePrefs.get(context)
+            val status = prefs.getString("watch_status", "")
+                .orEmpty()
+                .ifBlank { context.getString(R.string.widget_waiting) }
+            updateAll(
+                context,
+                status,
+                prefs.getString("watch_lines", "").orEmpty(),
+                prefs.getString("watch_stop_id", "").orEmpty().ifBlank { null }
+            )
+        }
+
         fun updateAll(context: Context, status: String, lines: String, stopSessionID: String?) {
             SecurePrefs.get(context).edit()
                 .putString("watch_lines", lines)
@@ -52,8 +65,11 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
             stopSessionID: String?
         ): RemoteViews =
             RemoteViews(context.packageName, R.layout.widget_opencode).apply {
+                val prefs = SecurePrefs.get(context)
+                val showTitles = prefs.getBoolean("widget_show_titles", true)
+                val showStop = prefs.getBoolean("widget_show_stop", true)
                 setTextViewText(R.id.widget_status, status)
-                if (lines.isBlank()) {
+                if (lines.isBlank() || !showTitles) {
                     setViewVisibility(R.id.widget_lines, View.GONE)
                 } else {
                     setViewVisibility(R.id.widget_lines, View.VISIBLE)
@@ -68,7 +84,7 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                 )
-                if (stopSessionID.isNullOrBlank()) {
+                if (stopSessionID.isNullOrBlank() || !showStop) {
                     setViewVisibility(R.id.widget_stop, View.GONE)
                 } else {
                     setViewVisibility(R.id.widget_stop, View.VISIBLE)

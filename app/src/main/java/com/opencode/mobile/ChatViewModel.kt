@@ -387,6 +387,23 @@ class ChatViewModel(
         }
     }
 
+    /** Edits a queued item by cancelling it and re-sending the new text. */
+    fun editQueued(inboxID: String, text: String, delivery: String) {
+        val id = activeID ?: return
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repo.cancelInbox(id, inboxID)
+                repo.send(id, text.trim(), delivery = delivery)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+            refreshNow()
+        }
+    }
+
     /**
      * Branches the conversation before the last user prompt and replays that
      * prompt on [providerID]/[modelID], so the two answers can be compared.

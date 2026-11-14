@@ -101,6 +101,10 @@
     <string name="widget_title">OpenCode</string>
     <string name="widget_waiting">Waiting for a session</string>
     <string name="widget_stop">Stop first run</string>
+    <string name="widget_config_title">Widget</string>
+    <string name="widget_config_hint">Choose what the widget shows. You can change this later by re-adding the widget.</string>
+    <string name="widget_show_titles">Show session titles</string>
+    <string name="widget_show_stop">Show stop action</string>
     <string name="settings_connections">Connections</string>
     <string name="settings_connections_summary">MCP and providers</string>
     <string name="settings_connections_hint">MCP servers connect at runtime. Integrations with an API key can be linked here; OAuth providers need the web UI.</string>
@@ -125,6 +129,8 @@
     <string name="chat_queue_title">Queued messages</string>
     <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_queue_steer">Steer</string>
+    <string name="chat_queue_edit">Edit</string>
+    <string name="chat_queue_edit_title">Edit queued message</string>
     <string name="chat_attach_file">Attach file</string>
     <string name="chat_schedules">Schedules</string>
     <string name="chat_schedules_hint">Wake this session later or on an interval. Requires experimental.schedules on the server.</string>

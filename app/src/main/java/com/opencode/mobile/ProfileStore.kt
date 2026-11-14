@@ -10,7 +10,11 @@ data class ServerProfile(
     val name: String,
     val server: String,
     val password: String,
-    val fallback: String
+    val fallback: String,
+    val themeMode: String = "",
+    val accent: String = "",
+    val persistentWatch: Boolean = false,
+    val watchdogMinutes: Int = 0
 )
 
 /**
@@ -37,7 +41,11 @@ object ProfileStore {
                     name = o.optString("name"),
                     server = o.optString("server"),
                     password = o.optString("password"),
-                    fallback = o.optString("fallback")
+                    fallback = o.optString("fallback"),
+                    themeMode = o.optString("themeMode"),
+                    accent = o.optString("accent"),
+                    persistentWatch = o.optBoolean("persistentWatch", false),
+                    watchdogMinutes = o.optInt("watchdogMinutes", 0)
                 )
             }
         }.getOrDefault(emptyList())
@@ -64,7 +72,11 @@ object ProfileStore {
             name = "Default",
             server = server,
             password = prefs.getString("password", "").orEmpty(),
-            fallback = prefs.getString("fallback_server", "").orEmpty()
+            fallback = prefs.getString("fallback_server", "").orEmpty(),
+            themeMode = UiPrefs.mode.value,
+            accent = UiPrefs.accent.value,
+            persistentWatch = prefs.getBoolean("watch_persistent", false),
+            watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
         )
         write(context, listOf(profile))
         prefs.edit().putString(ACTIVE, profile.id).apply()
@@ -86,7 +98,11 @@ object ProfileStore {
             name = name.ifBlank { "Server" },
             server = prefs.getString("server", "").orEmpty(),
             password = prefs.getString("password", "").orEmpty(),
-            fallback = prefs.getString("fallback_server", "").orEmpty()
+            fallback = prefs.getString("fallback_server", "").orEmpty(),
+            themeMode = UiPrefs.mode.value,
+            accent = UiPrefs.accent.value,
+            persistentWatch = prefs.getBoolean("watch_persistent", false),
+            watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
         )
         write(context, all(context) + profile)
         prefs.edit().putString(ACTIVE, profile.id).apply()
@@ -102,7 +118,11 @@ object ProfileStore {
             .putString("password", profile.password)
             .putString("fallback_server", profile.fallback)
             .putString(ACTIVE, profile.id)
+            .putBoolean("watch_persistent", profile.persistentWatch)
+            .putInt("watchdog_minutes", profile.watchdogMinutes)
             .apply()
+        if (profile.themeMode.isNotBlank()) UiPrefs.setMode(context, profile.themeMode)
+        if (profile.accent.isNotBlank()) UiPrefs.setAccent(context, profile.accent)
         revision.value += 1
     }
 
@@ -126,7 +146,11 @@ object ProfileStore {
             profile.copy(
                 server = prefs.getString("server", "").orEmpty(),
                 password = prefs.getString("password", "").orEmpty(),
-                fallback = prefs.getString("fallback_server", "").orEmpty()
+                fallback = prefs.getString("fallback_server", "").orEmpty(),
+                themeMode = UiPrefs.mode.value,
+                accent = UiPrefs.accent.value,
+                persistentWatch = prefs.getBoolean("watch_persistent", false),
+                watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
             )
         )
     }
@@ -141,6 +165,10 @@ object ProfileStore {
                     .put("server", p.server)
                     .put("password", p.password)
                     .put("fallback", p.fallback)
+                    .put("themeMode", p.themeMode)
+                    .put("accent", p.accent)
+                    .put("persistentWatch", p.persistentWatch)
+                    .put("watchdogMinutes", p.watchdogMinutes)
             )
         }
         SecurePrefs.get(context).edit().putString(KEY, arr.toString()).apply()

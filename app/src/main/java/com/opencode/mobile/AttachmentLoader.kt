@@ -72,8 +72,8 @@ object AttachmentLoader {
         val name = displayName(context, uri) ?: "file_${System.currentTimeMillis()}"
         val raw = resolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IllegalStateException("Could not read the selected file")
-        if (raw.size > 2_000_000) {
-            throw IllegalStateException("File is larger than 2 MB")
+        if (raw.size > 8_000_000) {
+            throw IllegalStateException("File is larger than 8 MB")
         }
         return Attachment(name, mime, Base64.encodeToString(raw, Base64.NO_WRAP))
     }

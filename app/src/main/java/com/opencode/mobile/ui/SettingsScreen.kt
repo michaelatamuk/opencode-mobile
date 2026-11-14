@@ -1492,7 +1492,12 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
                         supporting = if (item.connected) {
                             stringResource(R.string.settings_connected_label)
                         } else {
-                            item.methods.joinToString(" / ")
+                            val base = item.methods.joinToString(" / ")
+                            if (item.envNames.isNotEmpty()) {
+                                "$base · ${item.envNames.joinToString(", ")}"
+                            } else {
+                                base
+                            }
                         },
                         onClick = {
                             if (!item.connected && item.methods.contains("key")) {

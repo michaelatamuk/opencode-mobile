@@ -97,8 +97,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun schedules(sessionID: String): List<ScheduleItem> = api.schedules(sessionID)
 
-    suspend fun createSchedule(sessionID: String, prompt: String, everyMinutes: Int) =
-        api.createSchedule(sessionID, prompt, everyMinutes)
+    suspend fun createSchedule(sessionID: String, prompt: String, whenSpec: org.json.JSONObject) =
+        api.createSchedule(sessionID, prompt, whenSpec)
 
     suspend fun setSchedulePaused(scheduleID: String, paused: Boolean) =
         api.setSchedulePaused(scheduleID, paused)
