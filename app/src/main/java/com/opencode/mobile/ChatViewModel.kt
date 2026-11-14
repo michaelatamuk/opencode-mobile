@@ -31,6 +31,7 @@ data class ChatUiState(
     val cost: Double = 0.0,
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L,
+    val directory: String = "",
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
@@ -96,7 +97,8 @@ class ChatViewModel(
                     agentID = session.agentID,
                     cost = session.cost,
                     tokensInput = session.tokensInput,
-                    tokensOutput = session.tokensOutput
+                    tokensOutput = session.tokensOutput,
+                    directory = session.directory
                 )
             }
         } catch (e: CancellationException) {

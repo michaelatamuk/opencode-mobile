@@ -28,6 +28,7 @@ data class SessionItem(
     val modelProviderID: String = "",
     val agentID: String = "",
     val projectID: String = "",
+    val directory: String = "",
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L
 )
@@ -154,6 +155,7 @@ private fun JSONObject.toSession(): SessionItem {
         modelProviderID = model?.optString("providerID").orEmpty(),
         agentID = optString("agent"),
         projectID = optString("projectID"),
+        directory = optJSONObject("location")?.optString("directory").orEmpty(),
         tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
         tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
     )
@@ -393,6 +395,22 @@ class Api(server: String, private val password: String) {
     suspend fun compactSession(sessionID: String): Unit = withContext(Dispatchers.IO) {
         postJson("/api/session/$sessionID/compact", "{}")
         Unit
+    }
+
+    /** Reads a text file relative to [directory] (or an absolute path). */
+    suspend fun readFile(path: String, directory: String): String = withContext(Dispatchers.IO) {
+        val normalized = path.replace('\\', '/').removePrefix("/")
+        val encodedPath = Uri.encode(normalized, "/:")
+        val query = if (directory.isBlank()) {
+            ""
+        } else {
+            "?location[directory]=" + Uri.encode(directory)
+        }
+        client.newCall(request("/api/fs/read/$encodedPath$query").get().build()).execute().use { r ->
+            val body = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
+            body
+        }
     }
 
     /** IDs of sessions the server reports as currently running. */

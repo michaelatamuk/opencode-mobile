@@ -50,6 +50,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun compactSession(sessionID: String) = api.compactSession(sessionID)
 
+    suspend fun readFile(path: String, directory: String): String = api.readFile(path, directory)
+
     suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)
 
     suspend fun deleteSession(id: String) = api.deleteSession(id)

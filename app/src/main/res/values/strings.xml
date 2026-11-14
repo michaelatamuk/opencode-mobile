@@ -87,6 +87,9 @@
     <string name="chat_commands">Commands</string>
     <string name="chat_skills">Skills</string>
     <string name="chat_library_empty">This server has no commands or skills to show.</string>
+    <string name="chat_save_preset">Save preset</string>
+    <string name="chat_preset_name">Preset name</string>
+    <string name="chat_presets">Presets</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_diff_from_tools">The server has no diff for this project. Files the agent edited in this conversation:</string>
     <string name="chat_search">Search in session</string>

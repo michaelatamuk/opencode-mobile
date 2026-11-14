@@ -131,8 +131,10 @@ import com.opencode.mobile.Msg
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
+import com.opencode.mobile.PresetStore
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
+import com.opencode.mobile.SessionPreset
 import com.opencode.mobile.SkillOption
 import com.opencode.mobile.WatchState
 import com.opencode.mobile.friendlyError
@@ -156,6 +158,8 @@ fun ChatScreen(
     }
     val state by vm.state.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+
     var input by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
     var showTune by remember { mutableStateOf(false) }
@@ -166,7 +170,9 @@ fun ChatScreen(
     var confirmUndo by remember { mutableStateOf(false) }
     var showLibrary by remember { mutableStateOf(false) }
     var pickedSkills by remember { mutableStateOf<List<SkillOption>>(emptyList()) }
-    val context = LocalContext.current
+    var presets by remember { mutableStateOf(PresetStore.all(context)) }
+    var savePreset by remember { mutableStateOf(false) }
+    var presetName by remember { mutableStateOf("") }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -387,6 +393,14 @@ fun ChatScreen(
                                 showLibrary = true
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_save_preset)) },
+                            onClick = {
+                                menuOpen = false
+                                presetName = ""
+                                savePreset = true
+                            }
+                        )
                     }
                 }
             }
@@ -563,12 +577,66 @@ fun ChatScreen(
     if (showTune) {
         TuneSheet(
             state = state,
+            presets = presets,
             onDismiss = { showTune = false },
             onAgent = { vm.selectAgent(it) },
             onModel = { provider, model -> vm.selectModel(provider, model) },
             onCompact = {
                 showTune = false
                 vm.compact()
+            },
+            onApplyPreset = { preset ->
+                if (preset.agentID.isNotBlank()) vm.selectAgent(preset.agentID)
+                if (preset.modelID.isNotBlank()) {
+                    vm.selectModel(preset.providerID, preset.modelID)
+                }
+                if (preset.prompt.isNotBlank()) input = preset.prompt
+                showTune = false
+            },
+            onDeletePreset = { preset ->
+                PresetStore.delete(context, preset.id)
+                presets = PresetStore.all(context)
+            }
+        )
+    }
+
+    if (savePreset) {
+        AlertDialog(
+            onDismissRequest = { savePreset = false },
+            title = { Text(stringResource(R.string.chat_save_preset)) },
+            text = {
+                OutlinedTextField(
+                    value = presetName,
+                    onValueChange = { presetName = it },
+                    label = { Text(stringResource(R.string.chat_preset_name)) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (presetName.isNotBlank()) {
+                            PresetStore.save(
+                                context,
+                                SessionPreset(
+                                    id = System.currentTimeMillis().toString(),
+                                    name = presetName.trim(),
+                                    agentID = state.agentID,
+                                    modelID = state.modelID,
+                                    providerID = state.modelProviderID,
+                                    prompt = input
+                                )
+                            )
+                            presets = PresetStore.all(context)
+                        }
+                        savePreset = false
+                    }
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { savePreset = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }
@@ -578,6 +646,7 @@ fun ChatScreen(
             repo = repo,
             sessionID = sessionID,
             messages = state.messages,
+            directory = state.directory,
             onDismiss = { showDiff = false }
         )
     }
@@ -628,11 +697,13 @@ private fun DiffSheet(
     repo: OpenCodeRepository,
     sessionID: String,
     messages: List<Msg>,
+    directory: String,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var diffs by remember { mutableStateOf<List<FileDiff>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var viewFile by remember { mutableStateOf<String?>(null) }
 
     // When the project has no VCS diff (or the session lives outside the repo),
     // fall back to the files the agent actually edited in this conversation.
@@ -710,6 +781,7 @@ private fun DiffSheet(
                     }
                     items(touched) { (path, status) ->
                         Surface(
+                            onClick = { viewFile = path },
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -738,6 +810,87 @@ private fun DiffSheet(
                 ) {
                     items(diffs!!) { diff ->
                         DiffCard(diff)
+                    }
+                }
+            }
+        }
+    }
+
+    if (viewFile != null) {
+        FileSheet(
+            repo = repo,
+            path = viewFile!!,
+            directory = directory,
+            onDismiss = { viewFile = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileSheet(
+    repo: OpenCodeRepository,
+    path: String,
+    directory: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var content by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(path) {
+        try {
+            content = repo.readFile(path, directory).take(120_000)
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 700.dp)
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                path.replace('\\', '/').substringAfterLast('/'),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                path,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            when {
+                error != null -> Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                content == null -> CircularProgressIndicator(Modifier.size(28.dp))
+
+                else -> Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    SelectionContainer {
+                        Text(
+                            content!!,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.5.sp,
+                            lineHeight = 17.sp
+                        )
                     }
                 }
             }
@@ -809,10 +962,13 @@ private fun DiffCard(diff: FileDiff) {
 @Composable
 private fun TuneSheet(
     state: ChatUiState,
+    presets: List<SessionPreset>,
     onDismiss: () -> Unit,
     onAgent: (String) -> Unit,
     onModel: (String, String) -> Unit,
-    onCompact: () -> Unit
+    onCompact: () -> Unit,
+    onApplyPreset: (SessionPreset) -> Unit,
+    onDeletePreset: (SessionPreset) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -899,6 +1055,52 @@ private fun TuneSheet(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                         ) {
                             Text(stringResource(R.string.chat_compact))
+                        }
+                    }
+                }
+            }
+
+            if (presets.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_presets),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                presets.forEach { preset ->
+                    Surface(
+                        onClick = { onApplyPreset(preset) },
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(preset.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    listOf(preset.agentID, preset.modelID)
+                                        .filter { it.isNotBlank() }
+                                        .joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDeletePreset(preset) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }

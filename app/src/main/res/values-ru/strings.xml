@@ -83,6 +83,9 @@
     <string name="chat_commands">Команды</string>
     <string name="chat_skills">Навыки</string>
     <string name="chat_library_empty">На этом сервере нет команд и навыков.</string>
+    <string name="chat_save_preset">Сохранить пресет</string>
+    <string name="chat_preset_name">Название пресета</string>
+    <string name="chat_presets">Пресеты</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
     <string name="chat_search">Поиск в сессии</string>
