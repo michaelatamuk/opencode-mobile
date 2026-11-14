@@ -196,38 +196,13 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
                         // A URL wrapped in backticks is still a URL: keep the code
                         // look but make it tappable.
                         withLink(LinkAnnotation.Url(url, linkStyles(linkColor))) {
-                            withStyle(
-                                SpanStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    background = inlineBg,
-                                    fontSize = 13.sp,
-                                    color = linkColor
-                                )
-                            ) {
-                                append(url)
-                            }
+                            appendInlineCode(url, inlineBg)
                         }
                         if (url.length < inner.length) {
-                            withStyle(
-                                SpanStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    background = inlineBg,
-                                    fontSize = 13.sp
-                                )
-                            ) {
-                                append(inner.substring(url.length))
-                            }
+                            appendInlineCode(inner.substring(url.length), inlineBg)
                         }
                     } else {
-                        withStyle(
-                            SpanStyle(
-                                fontFamily = FontFamily.Monospace,
-                                background = inlineBg,
-                                fontSize = 13.sp
-                            )
-                        ) {
-                            append(inner)
-                        }
+                        appendInlineCode(inner, inlineBg)
                     }
                     i = end + 1
                 } else {
@@ -247,6 +222,25 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
 private fun linkStyles(color: Color) = TextLinkStyles(
     style = SpanStyle(color = color, textDecoration = TextDecoration.Underline)
 )
+
+/**
+ * Inline code shares the body font size (13sp inside 18sp body used to jump the
+ * baseline) and gets hair-space padding so the highlight does not look like a
+ * stray gray rectangle.
+ */
+private fun AnnotatedString.Builder.appendInlineCode(text: String, background: Color) {
+    withStyle(
+        SpanStyle(
+            fontFamily = FontFamily.Monospace,
+            background = background,
+            letterSpacing = 0.2.sp
+        )
+    ) {
+        append('\u2009')
+        append(text)
+        append('\u2009')
+    }
+}
 
 @Composable
 private fun proseAnnotated(src: String): AnnotatedString {
@@ -284,15 +278,15 @@ private fun proseAnnotated(src: String): AnnotatedString {
 }
 
 @Composable
-fun MarkdownText(text: String, modifier: Modifier = Modifier) {
+fun MarkdownText(text: String, modifier: Modifier = Modifier, contentAlpha: Float = 1f) {
     val blocks = remember(text) { parseMarkdown(text) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEach { block ->
             when (block) {
                 is MdBlock.Prose -> Text(
                     text = proseAnnotated(block.text),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
 
                 is MdBlock.Code -> CodeBlock(block.lang, block.code)

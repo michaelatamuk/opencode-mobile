@@ -60,6 +60,7 @@
     <string name="sessions_show_subagents">Показать запуски субагентов: %1$d</string>
     <string name="sessions_hide_subagents">Скрыть запуски субагентов: %1$d</string>
     <string name="session_subagent_count">%1$d субагентов</string>
+    <string name="session_subagent_label">субагент</string>
     <string name="chat_attach_photo">Фото</string>
     <string name="action_mute_project">Отключить уведомления проекта</string>
     <string name="action_unmute_project">Включить уведомления проекта</string>
@@ -74,7 +75,7 @@
     <string name="time_days_ago">%1$d дн назад</string>
 
     <string name="chat_placeholder">Сообщение OpenCode</string>
-    <string name="chat_placeholder_busy">Направить OpenCode…</string>
+    <string name="chat_placeholder_busy">Вклиниться в текущий ход…</string>
     <string name="chat_jump_latest">К последнему сообщению</string>
     <string name="chat_queued">В очереди: %1$d</string>
     <string name="form_submit">Отправить</string>
@@ -82,6 +83,12 @@
     <string name="chat_agents">Агент</string>
     <string name="chat_models">Модель</string>
     <string name="chat_models_configured">Только провайдеры, включённые на вашем сервере.</string>
+    <string name="chat_model_current">текущая</string>
+    <string name="chat_context_caption">Контекст %1$s</string>
+    <string name="chat_tokens_label">Токены</string>
+    <string name="chat_spend_label">Расход</string>
+    <string name="chat_cost_not_reported">Сервер не сообщает</string>
+    <string name="chat_compact_hint">Сжать историю, чтобы освободить контекст</string>
     <string name="chat_current_selection">Агент: %1$s · Модель: %2$s</string>
     <string name="chat_agent_hint">Кто ведёт эту сессию. Изменения применятся к следующему ходу.</string>
     <string name="chat_search_models">Поиск моделей</string>
@@ -149,13 +156,18 @@
     <string name="chat_queue_title">Очередь сообщений</string>
     <string name="chat_activity_thought">Размышление</string>
     <string name="chat_activity_thought_for">Размышление %1$d с</string>
-    <string name="chat_activity_running">Выполняется %1$s</string>
+    <string name="chat_activity_working">Работа %1$s</string>
+    <string name="chat_activity_running_short">Выполняется %1$s</string>
+    <string name="chat_activity_stop_run">Остановить этот ход</string>
     <string name="chat_activity_steps">Шагов: %1$d</string>
     <string name="chat_activity_worked">Работа %1$s</string>
     <string name="chat_activity_expand">развернуть</string>
     <string name="chat_activity_collapse">свернуть</string>
     <string name="chat_activity_toggle">%1$s, %2$s</string>
     <string name="chat_step_details">подробности</string>
+    <string name="chat_message_actions">Действия с сообщением</string>
+    <string name="chat_day_today">Сегодня</string>
+    <string name="chat_day_yesterday">Вчера</string>
     <string name="chat_status_completed">завершено</string>
     <string name="chat_status_failed">ошибка</string>
     <string name="chat_status_running">выполняется</string>

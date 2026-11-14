@@ -62,6 +62,7 @@
     <string name="sessions_show_subagents">Show %1$d subagent runs</string>
     <string name="sessions_hide_subagents">Hide %1$d subagent runs</string>
     <string name="session_subagent_count">%1$d subagents</string>
+    <string name="session_subagent_label">subagent</string>
     <string name="chat_attach_photo">Photo</string>
     <string name="action_mute_project">Mute project</string>
     <string name="action_unmute_project">Unmute project</string>
@@ -78,7 +79,7 @@
 
     <!-- Chat -->
     <string name="chat_placeholder">Message OpenCode</string>
-    <string name="chat_placeholder_busy">Steer OpenCode…</string>
+    <string name="chat_placeholder_busy">Steer the run…</string>
     <string name="chat_jump_latest">Jump to latest</string>
     <string name="chat_queued">%1$d queued</string>
     <string name="form_submit">Submit</string>
@@ -86,6 +87,12 @@
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
     <string name="chat_models_configured">Only providers enabled on your server.</string>
+    <string name="chat_model_current">current</string>
+    <string name="chat_context_caption">%1$s context</string>
+    <string name="chat_tokens_label">Tokens</string>
+    <string name="chat_spend_label">Spend</string>
+    <string name="chat_cost_not_reported">Not reported by server</string>
+    <string name="chat_compact_hint">Summarise the history to free context</string>
     <string name="chat_current_selection">Agent: %1$s · Model: %2$s</string>
     <string name="chat_agent_hint">Who handles this session. Changes apply to the next turn.</string>
     <string name="chat_search_models">Search models</string>
@@ -153,13 +160,18 @@
     <string name="chat_queue_title">Queued messages</string>
     <string name="chat_activity_thought">Thought</string>
     <string name="chat_activity_thought_for">Thought for %1$ds</string>
-    <string name="chat_activity_running">Running %1$s</string>
+    <string name="chat_activity_working">Working %1$s</string>
+    <string name="chat_activity_running_short">Running %1$s</string>
+    <string name="chat_activity_stop_run">Stop this run</string>
     <string name="chat_activity_steps">%1$d steps</string>
     <string name="chat_activity_worked">Worked %1$s</string>
     <string name="chat_activity_expand">expand</string>
     <string name="chat_activity_collapse">collapse</string>
     <string name="chat_activity_toggle">%1$s, %2$s</string>
     <string name="chat_step_details">details</string>
+    <string name="chat_message_actions">Message actions</string>
+    <string name="chat_day_today">Today</string>
+    <string name="chat_day_yesterday">Yesterday</string>
     <string name="chat_status_completed">completed</string>
     <string name="chat_status_failed">failed</string>
     <string name="chat_status_running">running</string>

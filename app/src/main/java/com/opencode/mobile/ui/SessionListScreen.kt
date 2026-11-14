@@ -11,6 +11,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -35,21 +37,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsOff
-import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -102,6 +105,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.delay
 
 private enum class SessionGroup { Today, Yesterday, Week, Earlier }
 
@@ -178,6 +182,9 @@ fun SessionListScreen(
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
     val grouped = remember(history) { history.groupBy { groupOf(it.updated) } }
+    val projectNames = remember(state.projects) {
+        state.projects.associate { it.id to it.name }
+    }
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(searchOpen) {
@@ -258,7 +265,7 @@ fun SessionListScreen(
                     }
                     IconButton(onClick = { showCost = true }) {
                         Icon(
-                            Icons.Rounded.Paid,
+                            Icons.Rounded.AttachMoney,
                             contentDescription = stringResource(R.string.cost_title),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
@@ -269,16 +276,6 @@ fun SessionListScreen(
                             Icons.Rounded.Settings,
                             contentDescription = stringResource(R.string.action_settings),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    FilledIconButton(
-                        onClick = onNewSession,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.action_new_session),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -298,7 +295,12 @@ fun SessionListScreen(
                         FilterChip(
                             selected = projectFilter == null,
                             onClick = { projectFilter = null },
-                            label = { Text(stringResource(R.string.sessions_all_projects)) }
+                            label = {
+                                Text(
+                                    stringResource(R.string.sessions_all_projects),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         )
                     }
                     items(state.projects, key = { it.id }) { project ->
@@ -307,7 +309,9 @@ fun SessionListScreen(
                             onClick = {
                                 projectFilter = if (projectFilter == project.id) null else project.id
                             },
-                            label = { Text(project.name) }
+                            label = {
+                                Text(project.name, style = MaterialTheme.typography.labelMedium)
+                            }
                         )
                     }
                 }
@@ -354,7 +358,7 @@ fun SessionListScreen(
             ) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp)
+                    contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
@@ -377,12 +381,13 @@ fun SessionListScreen(
                     stickyHeader(key = "header-$group") {
                         Text(
                             stringResource(labelOf(group)),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.background)
-                                .padding(start = 20.dp, top = 18.dp, bottom = 6.dp)
+                                .padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
                         )
                     }
 
@@ -428,6 +433,11 @@ fun SessionListScreen(
                                     muted = session.id in muted,
                                     archived = session.archived,
                                     projectMuted = session.projectID in mutedProjects,
+                                    projectName = if (projectFilter == null) {
+                                        projectNames[session.projectID].orEmpty()
+                                    } else {
+                                        ""
+                                    },
                                     subagents = if (showSubagents) {
                                         childCounts[session.id] ?: 0
                                     } else {
@@ -519,6 +529,25 @@ fun SessionListScreen(
             }
         }
     }
+
+        // Primary creation action: bottom-right, in thumb reach, 56 dp.
+        Box(Modifier.fillMaxWidth().height(0.dp)) {
+            FloatingActionButton(
+                onClick = onNewSession,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-18).dp, y = (-96).dp)
+                    .size(56.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = stringResource(R.string.action_new_session),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
     }
 
     if (showCost) {
@@ -674,6 +703,14 @@ private fun ActiveCard(
     onStop: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(session.id) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val elapsed = elapsedClock(session.busyAt, now)
 
     Surface(
         onClick = onClick,
@@ -682,7 +719,7 @@ private fun ActiveCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            Modifier.padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ActivityBars(color = MaterialTheme.colorScheme.secondary)
@@ -697,30 +734,39 @@ private fun ActiveCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    val elapsed = elapsedShort(session.busyAt)
-                    if (elapsed.isNotEmpty()) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            elapsed,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                        )
-                    }
                     if (subagents > 0) {
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            stringResource(R.string.session_subagent_count, subagents),
+                            "$subagents",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
+                        )
+                        Icon(
+                            Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
                 Text(
-                    preview?.takeIf { it.isNotBlank() } ?: stringResource(R.string.session_running),
+                    buildString {
+                        append(stringResource(R.string.chat_activity_running_short, elapsed))
+                        val line = preview?.let { cleanPreview(it) }
+                        if (!line.isNullOrBlank()) append(" · ").append(line)
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = onStop, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Rounded.Stop,
+                    contentDescription = stringResource(R.string.action_stop),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Box {
@@ -738,13 +784,6 @@ private fun ActiveCard(
                     shape = RoundedCornerShape(14.dp),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_stop)) },
-                        onClick = {
-                            menuOpen = false
-                            onStop()
-                        }
-                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_rename)) },
                         onClick = {
@@ -772,35 +811,6 @@ private fun ActiveCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SubagentExpander(count: Int, expanded: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 34.dp, end = 16.dp, top = 2.dp, bottom = 6.dp)
-            .clickable(onClick = onToggle),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            stringResource(
-                if (expanded) R.string.sessions_hide_subagents
-                else R.string.sessions_show_subagents,
-                count
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        Icon(
-            if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
 private fun SessionRow(
     session: SessionItem,
     preview: String?,
@@ -810,6 +820,7 @@ private fun SessionRow(
     archived: Boolean,
     projectMuted: Boolean,
     subagents: Int,
+    projectName: String = "",
     subagent: Boolean = false,
     subagentsExpanded: Boolean = false,
     onToggleSubagents: (() -> Unit)? = null,
@@ -822,226 +833,252 @@ private fun SessionRow(
     onToggleProjectMute: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val cost = formatCost(session.cost)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val cleanPreview = remember(preview) { cleanPreview(preview) }
+    val meta = remember(projectName, cleanPreview) {
+        listOfNotNull(
+            projectName.takeIf { it.isNotBlank() },
+            cleanPreview
+        ).joinToString(" · ")
+    }
 
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .combinedClickable(
-                onClick = onOpen,
-                onLongClick = { menuOpen = true }
-            )
-            .padding(start = 20.dp, end = 6.dp, top = 11.dp, bottom = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (session.running) {
-                    PulsingDot(color = MaterialTheme.colorScheme.secondary, pulsing = true, size = 6)
-                    Spacer(Modifier.width(7.dp))
-                } else if (unread) {
-                    Box(
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .combinedClickable(
+                    onClick = onOpen,
+                    onLongClick = { menuOpen = true }
+                )
+                .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Reserved gutter: dots never shift titles out of alignment.
+            Box(Modifier.width(10.dp).height(30.dp), contentAlignment = Alignment.CenterStart) {
+                when {
+                    session.running -> PulsingDot(
+                        color = MaterialTheme.colorScheme.secondary,
+                        pulsing = true,
+                        size = 6
+                    )
+
+                    unread -> Box(
                         Modifier
                             .size(6.dp)
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                     )
-                    Spacer(Modifier.width(7.dp))
                 }
-                Text(
-                    session.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (subagent) {
-                    Spacer(Modifier.width(6.dp))
+            }
+            Spacer(Modifier.width(6.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "subagent",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        session.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-                if (pinned) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                        Icons.Rounded.PushPin,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-                if (muted) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                        Icons.Rounded.NotificationsOff,
-                        contentDescription = stringResource(R.string.action_unmute),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-                if (subagents > 0) {
-                    Spacer(Modifier.width(6.dp))
-                    Row(
-                        Modifier
-                            .clickable(enabled = onToggleSubagents != null) {
-                                onToggleSubagents?.invoke()
-                            }
-                            .padding(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    if (subagent) {
+                        Spacer(Modifier.width(6.dp))
                         Text(
-                            stringResource(R.string.session_subagent_count, subagents),
+                            stringResource(R.string.session_subagent_label),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (onToggleSubagents != null) {
-                            Icon(
-                                if (subagentsExpanded) Icons.Rounded.ExpandLess
-                                else Icons.Rounded.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(14.dp)
-                            )
+                    }
+                    if (pinned) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Rounded.PushPin,
+                            contentDescription = stringResource(R.string.action_pin),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    if (muted) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Rounded.NotificationsOff,
+                            contentDescription = stringResource(R.string.action_unmute),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    if (archived) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            stringResource(R.string.sessions_archived),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (meta.isNotBlank() || subagents > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            meta,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (subagents > 0) {
+                            Spacer(Modifier.width(6.dp))
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(enabled = onToggleSubagents != null) {
+                                        onToggleSubagents?.invoke()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "$subagents",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (onToggleSubagents != null) {
+                                    Icon(
+                                        if (subagentsExpanded) Icons.Rounded.ExpandLess
+                                        else Icons.Rounded.ExpandMore,
+                                        contentDescription = stringResource(
+                                            if (subagentsExpanded) R.string.sessions_hide_subagents
+                                            else R.string.sessions_show_subagents,
+                                            subagents
+                                        ),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    relativeTime(session.updated),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-            if (!preview.isNullOrBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    preview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else if (cost.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    cost,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                relativeTime(session.updated),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        Box {
-            IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Rounded.MoreVert,
-                    contentDescription = stringResource(R.string.session_more),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                shape = RoundedCornerShape(14.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_rename)) },
-                    onClick = {
-                        menuOpen = false
-                        onRename()
-                    }
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(
-                                if (pinned) R.string.action_unpin else R.string.action_pin
-                            )
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onTogglePin()
-                    }
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(
-                                if (muted) R.string.action_unmute else R.string.action_mute
-                            )
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onToggleMute()
-                    }
-                )
-                if (session.projectID.isNotBlank()) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (projectMuted) R.string.action_unmute_project
-                                    else R.string.action_mute_project
-                                )
-                            )
-                        },
-                        onClick = {
-                            menuOpen = false
-                            onToggleProjectMute()
-                        }
-                    )
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+            modifier = Modifier.align(Alignment.TopEnd),
+            shape = RoundedCornerShape(14.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_rename)) },
+                onClick = {
+                    menuOpen = false
+                    onRename()
                 }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (pinned) R.string.action_unpin else R.string.action_pin
+                        )
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onTogglePin()
+                }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (muted) R.string.action_unmute else R.string.action_mute
+                        )
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onToggleMute()
+                }
+            )
+            if (session.projectID.isNotBlank()) {
                 DropdownMenuItem(
                     text = {
                         Text(
                             stringResource(
-                                if (archived) R.string.action_unarchive else R.string.action_archive
+                                if (projectMuted) R.string.action_unmute_project
+                                else R.string.action_mute_project
                             )
                         )
                     },
                     onClick = {
                         menuOpen = false
-                        onArchive()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_copy_id)) },
-                    onClick = {
-                        menuOpen = false
-                        clipboard.setText(AnnotatedString(session.id))
-                    }
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(R.string.action_delete),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onDelete()
+                        onToggleProjectMute()
                     }
                 )
             }
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (archived) R.string.action_unarchive else R.string.action_archive
+                        )
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onArchive()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_copy_id)) },
+                onClick = {
+                    menuOpen = false
+                    clipboard.setText(AnnotatedString(session.id))
+                }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    onDelete()
+                }
+            )
         }
     }
 }
 
-private fun elapsedShort(since: Long): String {
-    if (since <= 0L) return ""
-    val minutes = (System.currentTimeMillis() - since) / 60_000L
+/** Drops absolute paths and long command dumps from the one-line preview. */
+private fun cleanPreview(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    var value = raw
+        .replace(Regex("[A-Za-z]:\\\\[^\\s]+"), "…")
+        .replace(Regex("(?:/[\\w.-]+){3,}"), "…")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    if (value.length > 110) value = value.take(107).trimEnd() + "…"
+    return value.ifBlank { null }
+}
+
+/** Live `10m 07s` clock for a running session. */
+private fun elapsedClock(since: Long, now: Long): String {
+    if (since <= 0L || now <= since) return "0s"
+    val total = (now - since) / 1000L
     return when {
-        minutes < 1L -> "<1m"
-        minutes < 60L -> "${minutes}m"
-        else -> "${minutes / 60L}h ${minutes % 60L}m"
+        total < 60L -> "${total}s"
+        total < 3600L -> "${total / 60L}m ${(total % 60L).toString().padStart(2, '0')}s"
+        else -> "${total / 3600L}h ${((total % 3600L) / 60L).toString().padStart(2, '0')}m"
     }
 }
 

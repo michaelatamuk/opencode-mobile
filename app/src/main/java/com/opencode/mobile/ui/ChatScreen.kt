@@ -74,7 +74,6 @@ import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
@@ -93,6 +92,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.UnfoldLess
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -113,6 +113,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -142,6 +144,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -161,6 +164,7 @@ import com.opencode.mobile.CommandOption
 import com.opencode.mobile.DraftStore
 import com.opencode.mobile.FileDiff
 import com.opencode.mobile.Msg
+import com.opencode.mobile.AgentOption
 import com.opencode.mobile.ModelOption
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.Part
@@ -178,6 +182,10 @@ import com.opencode.mobile.WatchState
 import com.opencode.mobile.friendlyError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -432,6 +440,23 @@ fun ChatScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val agentName = state.agents.firstOrNull { it.id == state.agentID }?.name
+                        .orEmpty()
+                    val modelName = state.models.firstOrNull {
+                        it.id == state.modelID && it.providerID == state.modelProviderID
+                    }?.name.orEmpty()
+                    val subtitle = listOf(agentName, modelName)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 IconButton(onClick = { searchOpen = true }) {
                     Icon(
@@ -450,14 +475,6 @@ fun ChatScreen(
                     )
                 }
                 if (sessionID != null) {
-                    IconButton(onClick = { showDiff = true }) {
-                        Icon(
-                            Icons.Rounded.Difference,
-                            contentDescription = stringResource(R.string.chat_changes),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                     Box {
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(
@@ -471,6 +488,13 @@ fun ChatScreen(
                             expanded = menuOpen,
                             onDismissRequest = { menuOpen = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_changes)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showDiff = true
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_branch_session)) },
                                 onClick = {
@@ -549,6 +573,13 @@ fun ChatScreen(
 
         if (state.busy) {
             StreamingHairline()
+        } else {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+            )
         }
 
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
@@ -566,6 +597,7 @@ fun ChatScreen(
                 items(blocks, key = { it.key }) { block ->
                     Box(Modifier.animateItem()) {
                         when (block) {
+                            is ChatBlock.DaySeparator -> DayPill(block.at)
                             is ChatBlock.UserBlock -> UserMessage(
                                 message = block.message,
                                 onBranch = { before ->
@@ -575,7 +607,8 @@ fun ChatScreen(
                             is ChatBlock.TurnBlock -> TurnMessage(
                                 messages = block.messages,
                                 directory = state.directory,
-                                onSpeak = speak
+                                onSpeak = speak,
+                                onStop = { vm.interrupt() }
                             )
                         }
                     }
@@ -1425,7 +1458,15 @@ private fun TuneSheet(
     onApplyPreset: (SessionPreset) -> Unit,
     onDeletePreset: (SessionPreset) -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    var tab by remember { mutableStateOf(0) }
+    var modelQuery by remember { mutableStateOf("") }
+
+    val currentAgent = state.agents.firstOrNull { it.id == state.agentID }?.name
+        ?: state.agentID.ifBlank { "—" }
+    val currentModel = state.models.firstOrNull {
+        it.id == state.modelID && it.providerID == state.modelProviderID
+    }?.name ?: state.modelID.ifBlank { "—" }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1435,34 +1476,36 @@ private fun TuneSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 640.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .navigationBarsPadding()
+                .imePadding()
         ) {
-            Text(stringResource(R.string.chat_model_agent), style = MaterialTheme.typography.headlineSmall)
-
-            Text(
-                stringResource(
-                    R.string.chat_session_stats,
-                    String.format(java.util.Locale.getDefault(), "$%.2f", state.cost),
-                    state.tokensInput,
-                    state.tokensOutput
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            val currentAgent = state.agents.firstOrNull { it.id == state.agentID }?.name
-                ?: state.agentID.ifBlank { "—" }
-            val currentModel = state.models.firstOrNull {
-                it.id == state.modelID && it.providerID == state.modelProviderID
-            }?.name ?: state.modelID.ifBlank { "—" }
-            Text(
-                stringResource(R.string.chat_current_selection, currentAgent, currentModel),
-                style = MaterialTheme.typography.labelLarge
-            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.chat_model_agent),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "$currentAgent · $currentModel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel)
+                    )
+                }
+            }
             if (state.selecting) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().height(2.dp),
@@ -1470,242 +1513,436 @@ private fun TuneSheet(
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
             }
-
-            if (state.contextUsed > 0L) {
-                val limit = state.contextLimit
-                val ratio = if (limit > 0) {
-                    (state.contextUsed.toFloat() / limit).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                stringResource(R.string.chat_context),
-                                style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                if (limit > 0) {
-                                    stringResource(
-                                        R.string.chat_context_used,
-                                        compactTokens(state.contextUsed),
-                                        compactTokens(limit),
-                                        (ratio * 100).toInt()
-                                    )
-                                } else {
-                                    stringResource(
-                                        R.string.chat_context_used_unknown,
-                                        compactTokens(state.contextUsed)
-                                    )
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (limit > 0) {
-                            LinearProgressIndicator(
-                                progress = { ratio },
-                                modifier = Modifier.fillMaxWidth().height(6.dp),
-                                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                            )
-                        }
-                        TextButton(
-                            onClick = onCompact,
-                            enabled = !state.busy,
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Text(stringResource(R.string.chat_compact))
-                        }
-                    }
-                }
-            }
-
-            if (presets.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.chat_presets),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-                presets.forEach { preset ->
-                    Surface(
-                        onClick = { onApplyPreset(preset) },
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(preset.name, style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    listOf(preset.agentID, preset.modelID)
-                                        .filter { it.isNotBlank() }
-                                        .joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            IconButton(
-                                onClick = { onDeletePreset(preset) },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = stringResource(R.string.action_delete),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (state.agents.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.chat_agents),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-                Text(
-                    stringResource(R.string.chat_agent_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.agents.forEach { agent ->
-                        FilterChip(
-                            selected = agent.id == state.agentID,
-                            onClick = { onAgent(agent.id) },
-                            enabled = !state.selecting,
-                            label = { Text(agent.name) },
-                            leadingIcon = if (agent.id == state.agentID) {
-                                {
-                                    Icon(
-                                        Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            } else {
-                                null
-                            }
-                        )
-                    }
-                }
-                state.agents.firstOrNull { it.id == state.agentID }
-                    ?.description
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { description ->
+            TabRow(
+                selectedTabIndex = tab,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Tab(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    text = {
                         Text(
-                            description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            stringResource(R.string.chat_models),
+                            style = MaterialTheme.typography.labelLarge
                         )
                     }
+                )
+                Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = {
+                        Text(
+                            stringResource(R.string.chat_agents),
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                )
             }
-
-            if (state.models.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.chat_models),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                Text(
-                    stringResource(R.string.chat_models_configured),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                var modelQuery by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = modelQuery,
-                    onValueChange = { modelQuery = it },
-                    label = { Text(stringResource(R.string.chat_search_models)) },
-                    singleLine = true,
-                    colors = androidx.compose.material3.TextFieldDefaults.colors(
-                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                state.models.filter { model ->
-                    modelQuery.isBlank() ||
-                        model.name.contains(modelQuery, ignoreCase = true) ||
-                        model.id.contains(modelQuery, ignoreCase = true) ||
-                        model.providerID.contains(modelQuery, ignoreCase = true)
-                }.sortedWith(
-                    compareByDescending<ModelOption> {
-                        it.id == state.modelID && it.providerID == state.modelProviderID
-                    }.thenBy { it.name }
-                ).forEach { model ->
-                    val selected = model.id == state.modelID &&
-                        model.providerID == state.modelProviderID
-                    Surface(
-                        onClick = { onModel(model.providerID, model.id) },
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (tab == 0) {
+                    ModelsTab(
+                        models = state.models,
+                        selectedID = state.modelID,
+                        selectedProvider = state.modelProviderID,
+                        query = modelQuery,
+                        onQuery = { modelQuery = it },
                         enabled = !state.selecting,
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(model.name, style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    "${model.providerID} · ${model.id}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                        onSelect = onModel
+                    )
+                } else {
+                    AgentsTab(
+                        agents = state.agents,
+                        selectedID = state.agentID,
+                        enabled = !state.selecting,
+                        onSelect = onAgent
+                    )
+                    if (presets.isNotEmpty()) {
+                        PresetsSection(
+                            presets = presets,
+                            onApply = onApplyPreset,
+                            onDelete = onDeletePreset
+                        )
+                    }
+                }
+                SessionFooter(state = state, onCompact = onCompact)
+                state.error?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelsTab(
+    models: List<ModelOption>,
+    selectedID: String,
+    selectedProvider: String,
+    query: String,
+    onQuery: (String) -> Unit,
+    enabled: Boolean,
+    onSelect: (String, String) -> Unit
+) {
+    TextField(
+        value = query,
+        onValueChange = onQuery,
+        placeholder = {
+            Text(
+                stringResource(R.string.chat_search_models),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        leadingIcon = {
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        ),
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    val filtered = remember(models, query, selectedID, selectedProvider) {
+        models
+            .filter { model ->
+                query.isBlank() ||
+                    model.name.contains(query, ignoreCase = true) ||
+                    model.id.contains(query, ignoreCase = true) ||
+                    model.providerID.contains(query, ignoreCase = true) ||
+                    model.providerName.contains(query, ignoreCase = true)
+            }
+            .sortedWith(
+                compareByDescending<ModelOption> {
+                    it.id == selectedID && it.providerID == selectedProvider
+                }.thenBy { it.providerName.ifBlank { it.providerID } }
+                    .thenBy { it.name }
+            )
+    }
+
+    if (filtered.isEmpty()) {
+        Text(
+            stringResource(R.string.sessions_no_match),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+        return
+    }
+
+    filtered.groupBy { it.providerName.ifBlank { it.providerID } }
+        .forEach { (provider, list) ->
+            Text(
+                provider,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)
+            )
+            list.forEach { model ->
+                val selected = model.id == selectedID && model.providerID == selectedProvider
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.secondaryContainer
+                            else Color.Transparent
+                        )
+                        .clickable(enabled = enabled) { onSelect(model.providerID, model.id) }
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            model.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            buildString {
+                                append(
+                                    stringResource(
+                                        R.string.chat_context_caption,
+                                        if (model.contextLimit > 0) {
+                                            compactTokens(model.contextLimit)
+                                        } else {
+                                            "—"
+                                        }
+                                    )
                                 )
-                            }
-                            if (selected) {
-                                Icon(
-                                    Icons.Rounded.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
+                                if (model.family.isNotBlank()) {
+                                    append(" · ").append(model.family)
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (selected) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.chat_model_current),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
-            state.error?.let { message ->
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
+        }
+}
+
+@Composable
+private fun AgentsTab(
+    agents: List<AgentOption>,
+    selectedID: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit
+) {
+    Text(
+        stringResource(R.string.chat_agent_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp)
+    )
+    agents.forEach { agent ->
+        val selected = agent.id == selectedID
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.secondaryContainer
+                    else Color.Transparent
+                )
+                .clickable(enabled = enabled) { onSelect(agent.id) }
+                .heightIn(min = 56.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(agent.name, style = MaterialTheme.typography.titleSmall)
+                if (agent.description.isNotBlank()) {
+                    Text(
+                        agent.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (selected) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
 }
+
+@Composable
+private fun PresetsSection(
+    presets: List<SessionPreset>,
+    onApply: (SessionPreset) -> Unit,
+    onDelete: (SessionPreset) -> Unit
+) {
+    Text(
+        stringResource(R.string.chat_presets),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 14.dp)
+    )
+    presets.forEach { preset ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onApply(preset) }
+                .heightIn(min = 48.dp)
+                .padding(start = 12.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(preset.name, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    listOf(preset.agentID, preset.modelID)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = { onDelete(preset) }, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.action_delete),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionFooter(state: ChatUiState, onCompact: () -> Unit) {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 12.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    )
+
+    if (state.contextUsed > 0L) {
+        val limit = state.contextLimit
+        val ratio = if (limit > 0) {
+            (state.contextUsed.toFloat() / limit).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.chat_context),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                if (limit > 0) {
+                    stringResource(
+                        R.string.chat_context_used,
+                        compactTokens(state.contextUsed),
+                        compactTokens(limit),
+                        (ratio * 100).toInt()
+                    )
+                } else {
+                    stringResource(
+                        R.string.chat_context_used_unknown,
+                        compactTokens(state.contextUsed)
+                    )
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (limit > 0) {
+            LinearProgressIndicator(
+                progress = { ratio },
+                modifier = Modifier.fillMaxWidth().height(5.dp),
+                color = if (ratio > 0.85f) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+        }
+    }
+
+    if (state.tokensInput > 0L || state.tokensOutput > 0L || state.cost > 0.0) {
+        Row(Modifier.padding(top = 10.dp)) {
+            Text(
+                stringResource(R.string.chat_tokens_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                buildString {
+                    append(compactTokens(state.tokensInput)).append(" in")
+                    if (state.tokensOutput > 0L) {
+                        append(" · ").append(compactTokens(state.tokensOutput)).append(" out")
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Row(Modifier.padding(top = 6.dp)) {
+            Text(
+                stringResource(R.string.chat_spend_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                if (state.cost > 0.0) {
+                    String.format(java.util.Locale.getDefault(), "$%.2f", state.cost)
+                } else {
+                    stringResource(R.string.chat_cost_not_reported)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = !state.busy, onClick = onCompact)
+            .heightIn(min = 52.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Rounded.UnfoldLess,
+            contentDescription = null,
+            tint = if (state.busy) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.chat_compact),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (state.busy) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                stringResource(R.string.chat_compact_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+
 
 private fun compactTokens(value: Long): String = when {
     value >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", value / 1_000_000.0)
@@ -2718,10 +2955,16 @@ private fun Base64Image(mime: String, base64: String, modifier: Modifier = Modif
 
 @Composable
 private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    val text = message.parts.filterIsInstance<Part.Text>()
+        .joinToString("\n\n") { it.text }
+        .trim()
+
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             message.parts.forEach { part ->
                 when (part) {
@@ -2758,16 +3001,39 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
                 }
             }
             if (message.id.isNotBlank()) {
-                IconButton(
-                    onClick = { onBranch(message.id) },
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.CallSplit,
-                        contentDescription = stringResource(R.string.chat_branch_from_here),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.size(15.dp)
-                    )
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = stringResource(R.string.chat_message_actions),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        if (text.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_copy_message)) },
+                                onClick = {
+                                    menuOpen = false
+                                    clipboard.setText(AnnotatedString(text))
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_branch_from_here)) },
+                            onClick = {
+                                menuOpen = false
+                                onBranch(message.id)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -2776,6 +3042,10 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
 
 private sealed interface ChatBlock {
     val key: String
+
+    data class DaySeparator(val at: Long) : ChatBlock {
+        override val key: String = "day-$at"
+    }
 
     data class UserBlock(val message: Msg) : ChatBlock {
         override val key: String = message.id
@@ -2786,16 +3056,32 @@ private sealed interface ChatBlock {
     }
 }
 
+private fun dayOf(ts: Long): LocalDate? {
+    if (ts <= 0L) return null
+    return runCatching {
+        Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate()
+    }.getOrNull()
+}
+
 private fun buildChatBlocks(messages: List<Msg>): List<ChatBlock> {
     val blocks = mutableListOf<ChatBlock>()
     val turn = mutableListOf<Msg>()
+    var lastDay: LocalDate? = null
+
     fun flush() {
         if (turn.isNotEmpty()) {
             blocks += ChatBlock.TurnBlock(turn.toList())
             turn.clear()
         }
     }
+
     messages.forEach { message ->
+        val day = dayOf(message.created)
+        if (day != null && day != lastDay) {
+            flush()
+            blocks += ChatBlock.DaySeparator(message.created)
+            lastDay = day
+        }
         if (message.role == "user") {
             flush()
             blocks += ChatBlock.UserBlock(message)
@@ -2808,14 +3094,53 @@ private fun buildChatBlocks(messages: List<Msg>): List<ChatBlock> {
 }
 
 @Composable
-private fun TurnMessage(messages: List<Msg>, directory: String, onSpeak: (String) -> Unit) {
+private fun DayPill(at: Long) {
+    val day = remember(at) { dayOf(at) } ?: return
+    val today = remember { LocalDate.now() }
+    val label = when (day) {
+        today -> stringResource(R.string.chat_day_today)
+        today.minusDays(1) -> stringResource(R.string.chat_day_yesterday)
+        else -> remember(day) { day.format(DateTimeFormatter.ofPattern("d MMM")) }
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = CircleShape
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TurnMessage(
+    messages: List<Msg>,
+    directory: String,
+    onSpeak: (String) -> Unit,
+    onStop: () -> Unit
+) {
     val parts = remember(messages) { messages.flatMap { it.parts } }
     val activity = parts.filter { it is Part.Tool || it is Part.Reasoning }
-    val text = parts.filterIsInstance<Part.Text>()
-        .map { it.text }
-        .filter { it.isNotBlank() }
-        .joinToString("\n\n")
+    val paragraphs = remember(messages) {
+        messages.mapNotNull { message ->
+            message.parts.filterIsInstance<Part.Text>()
+                .map { it.text }
+                .filter { it.isNotBlank() }
+                .joinToString("\n\n")
+                .takeIf { it.isNotBlank() }
+        }
+    }
+    val fullText = paragraphs.joinToString("\n\n")
     val pending = messages.lastOrNull()?.pending == true
+    val toolRunning = activity.lastOrNull { it is Part.Tool }
+        ?.let { (it as Part.Tool).status == "running" || it.status == "streaming" }
+        ?: false
+    val showDots = pending && !toolRunning
 
     val start = remember(messages) {
         messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
@@ -2847,36 +3172,41 @@ private fun TurnMessage(messages: List<Msg>, directory: String, onSpeak: (String
                 directory = directory,
                 elapsedMs = elapsed,
                 pending = pending,
+                onStop = onStop,
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        if (text.isNotBlank()) {
-            SelectionContainer { MarkdownText(text) }
+        paragraphs.forEachIndexed { index, paragraph ->
+            // Intermediate narration stays quieter; the latest block is the answer.
+            val isLatest = index == paragraphs.lastIndex
+            SelectionContainer {
+                MarkdownText(paragraph, contentAlpha = if (isLatest) 1f else 0.72f)
+            }
         }
-        if (pending) TypingIndicator(compact = true)
-        if (!pending && text.isNotBlank()) {
+        if (showDots) TypingIndicator(compact = true)
+        if (!pending && fullText.isNotBlank()) {
             val clipboard = LocalClipboardManager.current
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(
-                    onClick = { onSpeak(text) },
-                    modifier = Modifier.size(30.dp)
+                    onClick = { onSpeak(fullText) },
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         Icons.Rounded.VolumeUp,
                         contentDescription = stringResource(R.string.chat_read_aloud),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.size(14.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
                 IconButton(
-                    onClick = { clipboard.setText(AnnotatedString(text)) },
-                    modifier = Modifier.size(30.dp)
+                    onClick = { clipboard.setText(AnnotatedString(fullText)) },
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         Icons.Rounded.ContentCopy,
                         contentDescription = stringResource(R.string.chat_copy_message),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.size(14.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -2914,6 +3244,7 @@ private fun ActivityGroup(
     directory: String,
     elapsedMs: Long,
     pending: Boolean,
+    onStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -2929,8 +3260,8 @@ private fun ActivityGroup(
     val stepsLabel = stringResource(R.string.chat_activity_steps, steps.size)
     val summary = when {
         running -> buildString {
-            append(stringResource(R.string.chat_activity_running, currentName ?: "…"))
-            if (elapsedLabel != null) append(" · ").append(elapsedLabel)
+            append(stringResource(R.string.chat_activity_working, elapsedLabel ?: "…"))
+            if (currentName != null) append(" · ").append(currentName)
         }
 
         elapsedLabel != null -> buildString {
@@ -2979,6 +3310,17 @@ private fun ActivityGroup(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (running && !expanded) {
+                    Text(
+                        stringResource(R.string.action_stop),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(role = Role.Button) { onStop() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
                 Icon(
                     if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = null,
@@ -2990,6 +3332,29 @@ private fun ActivityGroup(
                 Column(
                     Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                 ) {
+                    if (running) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(role = Role.Button) { onStop() }
+                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.Stop,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.chat_activity_stop_run),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     steps.forEachIndexed { index, part ->
                         when (part) {
                             is Part.Tool -> ToolStep(part, directory)
