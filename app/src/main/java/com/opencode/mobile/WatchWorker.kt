@@ -1,9 +1,6 @@
 package com.opencode.mobile
 
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -46,37 +43,15 @@ class WatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         (previous - running).forEach { id ->
             val session = sessions.firstOrNull { it.id == id }
             if (session?.parentID?.isNotBlank() == true) return@forEach
-            if (id != WatchState.activeSessionID && id !in muted) {
+            val onScreen = WatchState.appForeground && id == WatchState.activeSessionID
+            if (!onScreen && id !in muted) {
                 val title = session?.title
                     ?: applicationContext.getString(R.string.notif_session_fallback)
-                postFinished(title, id)
+                Notify.finished(applicationContext, id, title)
             }
         }
         prefs.edit().putStringSet("worker_active", running).apply()
         Result.success()
-    }
-
-    private fun postFinished(title: String, sessionID: String) {
-        val context = applicationContext
-        Notify.ensureChannels(context)
-        val open = PendingIntent.getActivity(
-            context,
-            sessionID.hashCode(),
-            Intent(context, MainActivity::class.java)
-                .putExtra("session_id", sessionID)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(context, Notify.CHANNEL_SESSIONS)
-            .setSmallIcon(R.drawable.ic_stat_opencode)
-            .setContentTitle(title)
-            .setContentText(context.getString(R.string.notif_finished))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(open)
-            .build()
-        context.getSystemService(android.app.NotificationManager::class.java)
-            .notify(sessionID.hashCode(), notification)
     }
 
     companion object {

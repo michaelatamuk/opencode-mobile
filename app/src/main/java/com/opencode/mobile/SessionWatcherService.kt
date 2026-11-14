@@ -27,6 +27,10 @@ import java.util.concurrent.ConcurrentHashMap
 object WatchState {
     @Volatile
     var activeSessionID: String? = null
+
+    /** True while any activity is resumed, so "seen" suppression only applies then. */
+    @Volatile
+    var appForeground: Boolean = false
 }
 
 /**
@@ -65,6 +69,7 @@ class SessionWatcherService : Service() {
     )
 
     private val runs = ConcurrentHashMap<String, LiveRun>()
+    private val lastFinished = ConcurrentHashMap<String, Long>()
 
     /** True while this service is in the foreground state with an ongoing notification. */
     private var foreground = false
@@ -87,15 +92,11 @@ class SessionWatcherService : Service() {
         }
 
         val initial = ongoingNotification()
-        if (persistentNotification()) {
-            startForegroundCompat(initial)
-        } else {
-            // "Only on finish": never hold a progress notification. The watcher
-            // runs as a normal service and only speaks when a turn stops.
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            getSystemService(android.app.NotificationManager::class.java).cancel(ONGOING_ID)
-            foreground = false
-        }
+        // Both modes run as a foreground service: a plain background service is
+        // stopped by Android shortly after the app leaves the screen, which is
+        // why "only on finish" used to miss every completion. Finish-only uses a
+        // silent, status-bar-less notification instead of the live progress one.
+        startForegroundCompat(initial)
 
         if (job == null) job = scope.launch { loop() }
         if (watchdogJob == null) watchdogJob = scope.launch { watchdogLoop() }
@@ -176,9 +177,7 @@ class SessionWatcherService : Service() {
                 if (id.isNotEmpty()) {
                     runs.remove(id)
                     updateOngoing()
-                    if (id != WatchState.activeSessionID && !muted(id) && !isChild(id)) {
-                        notifyFinished(id)
-                    }
+                    if (shouldNotify(id)) notifyFinished(id)
                 }
             }
 
@@ -188,8 +187,11 @@ class SessionWatcherService : Service() {
                     when (data?.optJSONObject("status")?.optString("type")) {
                         "busy", "retry" -> markRunning(id)
                         "idle" -> {
-                            runs.remove(id)
+                            // Some server builds report completion as a status
+                            // change instead of a session.idle event.
+                            val wasRunning = runs.remove(id) != null
                             updateOngoing()
+                            if (wasRunning && shouldNotify(id)) notifyFinished(id)
                         }
                     }
                 }
@@ -270,9 +272,7 @@ class SessionWatcherService : Service() {
         val active = sessions.filter { it.running }.map { it.id }.toSet()
         if (primed) {
             (lastActive - active).forEach { id ->
-                if (id != WatchState.activeSessionID && !muted(id) && !isChild(id)) {
-                    notifyFinished(id)
-                }
+                if (shouldNotify(id)) notifyFinished(id)
             }
         }
         lastActive = active
@@ -403,6 +403,16 @@ class SessionWatcherService : Service() {
     private fun isChild(sessionID: String): Boolean =
         !sessionParents[sessionID].isNullOrBlank()
 
+    /**
+     * A run only stays quiet when the session is genuinely on screen. With the
+     * app in the background the chat still counted as "active", which used to
+     * swallow every finish notification.
+     */
+    private fun shouldNotify(sessionID: String): Boolean =
+        !muted(sessionID) &&
+            !isChild(sessionID) &&
+            !(WatchState.appForeground && sessionID == WatchState.activeSessionID)
+
     private fun sessionIntent(sessionID: String): PendingIntent =
         PendingIntent.getActivity(
             this,
@@ -463,54 +473,13 @@ class SessionWatcherService : Service() {
     }
 
     private fun notifyFinished(sessionID: String) {
-        val title = titles[sessionID] ?: getString(R.string.notif_session_fallback)
-
-        val remoteInput = androidx.core.app.RemoteInput.Builder(ReplyReceiver.KEY)
-            .setLabel(getString(R.string.notif_reply_hint))
-            .build()
-        val replyIntent = Intent(this, ReplyReceiver::class.java)
-            .putExtra("session_id", sessionID)
-        val replyPending = PendingIntent.getBroadcast(
-            this,
-            sessionID.hashCode() + 7,
-            replyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-        val replyAction = NotificationCompat.Action.Builder(
-            0,
-            getString(R.string.notif_reply),
-            replyPending
-        ).addRemoteInput(remoteInput).build()
-
-        fun quick(action: String, label: Int): NotificationCompat.Action {
-            val intent = Intent(this, QuickActionReceiver::class.java)
-                .putExtra("session_id", sessionID)
-                .putExtra("action", action)
-            val pending = PendingIntent.getBroadcast(
-                this,
-                (sessionID + action).hashCode(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            return NotificationCompat.Action(0, getString(label), pending)
-        }
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
-            .setSmallIcon(R.drawable.ic_stat_opencode)
-            .setContentTitle(title)
-            .setContentText(getString(R.string.notif_finished))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(sessionIntent(sessionID))
-            .addAction(replyAction)
-            .addAction(quick(QuickActionReceiver.ACTION_CONTINUE, R.string.notif_quick_continue))
-            .addAction(quick(QuickActionReceiver.ACTION_STOP, R.string.notif_quick_stop))
-            .addAction(quick(QuickActionReceiver.ACTION_EXPLAIN, R.string.notif_quick_explain))
-            .addAction(quick(QuickActionReceiver.ACTION_RETRY, R.string.notif_quick_retry))
-            .build()
-
-        getSystemService(android.app.NotificationManager::class.java)
-            .notify(sessionID.hashCode(), notification)
+        // `session.status: idle` and `session.idle` can both arrive for the same
+        // turn; keep the second one from alerting again.
+        val now = System.currentTimeMillis()
+        val previous = lastFinished[sessionID]
+        if (previous != null && now - previous < 10_000L) return
+        lastFinished[sessionID] = now
+        Notify.finished(this, sessionID, titleFor(sessionID))
     }
 
     private fun persistentNotification(): Boolean =
@@ -550,16 +519,8 @@ class SessionWatcherService : Service() {
             )
         }
 
-        if (!persistentNotification()) {
-            // Finish-only mode: status still feeds the widget and tile, but no
-            // notification is posted for running work.
-            if (foreground) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                foreground = false
-            }
-            getSystemService(android.app.NotificationManager::class.java).cancel(ONGOING_ID)
-            return
-        }
+        // Both modes keep a foreground service so the event stream survives in
+        // the background; finish-only simply uses the silent channel.
         startForegroundCompat(ongoingNotification())
     }
 
@@ -589,18 +550,23 @@ class SessionWatcherService : Service() {
 
         val single = runs.entries.firstOrNull()
         val text = statusLabel()
+        val silent = !persistentNotification()
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ONGOING)
+        val builder = NotificationCompat.Builder(
+            this,
+            if (silent) Notify.CHANNEL_WATCH_SILENT else CHANNEL_ONGOING
+        )
             .setSmallIcon(R.drawable.ic_stat_opencode)
             .setContentTitle(getString(R.string.notif_watching_title))
             .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(if (silent) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_LOW)
+            .setSilent(silent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
             .addAction(0, getString(R.string.action_stop_watching), stop)
 
-        if (status == null && runs.size == 1 && single != null) {
+        if (!silent && status == null && runs.size == 1 && single != null) {
             // The system clock ticks the elapsed time for free; tool changes
             // arrive as events, so no polling timer is needed here.
             val run = single.value

@@ -244,7 +244,7 @@
     <string name="settings_quick_prompts_title">Тексты быстрых действий</string>
     <string name="settings_test_notification">Отправить тестовое уведомление</string>
     <string name="settings_notif_mode_title">Уведомление наблюдателя</string>
-    <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход, и уведомляет только когда он остановился; периодическая проверка примерно каждые 15 минут ловит ходы, завершившиеся в фоне. «Всегда» держит живое уведомление наблюдателя с прогрессом.</string>
+    <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход: в группе тихих уведомлений висит заглушка без значка и звука, чтобы Android продолжал следить, а когда ход останавливается, приходит обычное уведомление. «Всегда» показывает живой прогресс в шторке.</string>
     <string name="settings_notif_mode_finish">По завершении</string>
     <string name="settings_notif_mode_always">Всегда</string>
     <string name="settings_appearance_title">Оформление</string>
@@ -322,6 +322,8 @@
 
     <string name="notif_channel_watch">Наблюдение</string>
     <string name="notif_channel_watch_desc">Поддерживает соединение, пока приложение следит за сессиями</string>
+    <string name="notif_channel_watch_silent">Наблюдение (тихо)</string>
+    <string name="notif_channel_watch_silent_desc">Тихая заглушка, благодаря которой Android продолжает следить в фоне, если нужны только уведомления о завершении</string>
     <string name="notif_channel_sessions">Сессия завершена</string>
     <string name="notif_channel_sessions_desc">Сообщает, когда сессия перестала работать</string>
     <string name="notif_channel_permissions">Запросы разрешений</string>

@@ -84,7 +84,10 @@ Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
 - **Subagents stay under their parent** — root sessions only by default; enable
   Settings → Appearance → *Subagent runs* to nest and expand child runs. Child
   completions never notify.
-- **Finish-only means silent** — no ongoing notification while a turn runs.
+- **Finish-only means silent** — Android still needs a foreground service to
+  watch in the background, so finish-only keeps a minimized, soundless
+  placeholder in the silent notification group (no status-bar icon) and only
+  alerts when a turn stops.
 
 ## Configure
 
@@ -181,7 +184,8 @@ install over each other.
 1. **One composer primary action**; never add a second send/stop/mic button.
 2. **No empty sessions**; drafts are created on first send.
 3. Unread = `session.updated > lastSeen`; mark seen on open and on new messages.
-4. Finish-only must never post an ongoing/progress notification.
+4. Finish-only must not post a visible or audible ongoing notification; it may
+   keep only the silent foreground placeholder Android requires.
 5. Child/subagent completions must not notify; the parent does.
 6. Cursor pagination must not send `order` (server returns `InvalidCursorError`).
 7. Row backgrounds must be opaque or swipe reveal shows through.
@@ -206,7 +210,7 @@ install over each other.
 | `$0.00` cost | The provider has no `cost` block on the server (e.g. `deepseek-site-toga2`); the app displays the server value. |
 | Session shows “running” but nothing happens | The server still reports it in `/api/session/active`; open it or Stop it from the row. |
 | No notification while a turn runs | Expected in *Only on finish*; switch to *Always* for progress. |
-| No finished notification after the app was closed a long time | Android paused the watcher; the 15-minute WorkManager check catches it on reconnect. |
+| No finished notification | Check that the watcher switch is on and notifications are allowed; a chat left open used to swallow them while the app was in the background (fixed in 0.31). |
 | Install fails over the old app | Different signing key or Play Protect/Auto Blocker blocking sideload. |
 | Schedules/connections empty or forbidden | Server feature flag (`experimental.schedules`) or no MCP servers configured. |
 

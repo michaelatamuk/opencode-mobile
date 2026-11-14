@@ -260,11 +260,9 @@ private fun Root() {
 
     fun startWatcher() {
         val intent = Intent(context, SessionWatcherService::class.java)
-        if (persistentWatch) {
-            ContextCompat.startForegroundService(context, intent)
-        } else {
-            context.startService(intent)
-        }
+        // The watcher is always a foreground service now (with a silent
+        // notification in finish-only mode), so it survives in the background.
+        ContextCompat.startForegroundService(context, intent)
         WatchWorker.schedule(context)
         WatchWorker.runNow(context)
     }

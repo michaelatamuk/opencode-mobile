@@ -250,7 +250,7 @@
     <string name="settings_quick_prompts_title">Quick action prompts</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
-    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs and notifies you when it stops; a periodic check about every 15 minutes catches turns that finished while the app was in the background. Always keeps a live watcher notice with progress.</string>
+    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs: a placeholder sits in the silent notification group (no icon, no sound) so Android keeps watching, and you get a normal notification when a turn stops. Always shows live progress in the shade.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
     <string name="settings_appearance_title">Appearance</string>
@@ -329,6 +329,8 @@
     <!-- Notifications -->
     <string name="notif_channel_watch">Watcher</string>
     <string name="notif_channel_watch_desc">Keeps the app connected while it watches your sessions</string>
+    <string name="notif_channel_watch_silent">Watcher (silent)</string>
+    <string name="notif_channel_watch_silent_desc">Silent placeholder that lets Android keep watching in the background when you only want finished-run alerts</string>
     <string name="notif_channel_sessions">Session finished</string>
     <string name="notif_channel_sessions_desc">Tells you when a session stops working</string>
     <string name="notif_channel_permissions">Permission requests</string>
