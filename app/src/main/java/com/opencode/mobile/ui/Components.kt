@@ -186,14 +186,46 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
             text[i] == '`' -> {
                 val end = text.indexOf('`', i + 1)
                 if (end > i + 1) {
-                    withStyle(
-                        SpanStyle(
-                            fontFamily = FontFamily.Monospace,
-                            background = inlineBg,
-                            fontSize = 13.sp
-                        )
-                    ) {
-                        append(text.substring(i + 1, end))
+                    val inner = text.substring(i + 1, end)
+                    val url = inner.trimEnd('.', ',', ')', ']', '"', '\'', '>')
+                    val isUrl = (inner.startsWith("http://") || inner.startsWith("https://")) &&
+                        inner.none { it.isWhitespace() }
+                    if (isUrl) {
+                        // A URL wrapped in backticks is still a URL: keep the code
+                        // look but make it tappable.
+                        withLink(LinkAnnotation.Url(url, linkStyles(linkColor))) {
+                            withStyle(
+                                SpanStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    background = inlineBg,
+                                    fontSize = 13.sp,
+                                    color = linkColor
+                                )
+                            ) {
+                                append(url)
+                            }
+                        }
+                        if (url.length < inner.length) {
+                            withStyle(
+                                SpanStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    background = inlineBg,
+                                    fontSize = 13.sp
+                                )
+                            ) {
+                                append(inner.substring(url.length))
+                            }
+                        }
+                    } else {
+                        withStyle(
+                            SpanStyle(
+                                fontFamily = FontFamily.Monospace,
+                                background = inlineBg,
+                                fontSize = 13.sp
+                            )
+                        ) {
+                            append(inner)
+                        }
                     }
                     i = end + 1
                 } else {
