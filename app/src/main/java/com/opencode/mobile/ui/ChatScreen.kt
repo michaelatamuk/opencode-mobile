@@ -632,9 +632,9 @@ fun ChatScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 14.dp,
-                    bottom = 12.dp
+                    bottom = 40.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom)
             ) {
                 items(blocks, key = { it.key }) { block ->
                     Box(Modifier.animateItem()) {
@@ -688,10 +688,23 @@ fun ChatScreen(
                     )
                 }
             }
+
+            // The strip is an overlay, not a sibling above the composer: giving it
+            // layout height would shrink the list whenever a run starts or stops,
+            // and a list sitting at its end would lose its last lines and show the
+            // jump-to-latest button. The list reserves 40dp for it instead.
+            LiveStatusStrip(
+                busy = state.busy,
+                messages = state.messages,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(start = 20.dp, end = 60.dp, bottom = 6.dp)
+            )
         }
 
         Column(Modifier.navigationBarsPadding()) {
-            LiveStatusStrip(busy = state.busy, messages = state.messages)
             if (state.queued.isNotEmpty()) {
                 Row(
                     Modifier
@@ -3825,7 +3838,11 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
  * bottom "Working" line instead of duplicating it inside the transcript.
  */
 @Composable
-private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
+private fun LiveStatusStrip(
+    busy: Boolean,
+    messages: List<Msg>,
+    modifier: Modifier = Modifier
+) {
     if (!busy) return
     // Pending assistant messages are the live turn. Taking trailing messages up to
     // the last user message breaks after a steer prompt, and resetting the timer to
@@ -3849,7 +3866,9 @@ private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
     val turnStart = remember(live) {
         live.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
     }
-    val start = turnStart ?: busySince
+    // If the server clock runs ahead of the phone, a server timestamp would keep
+    // the timer pinned at zero; fall back to when this strip appeared instead.
+    val start = turnStart?.takeIf { it <= now + 2_000L } ?: busySince
     val elapsed = if (start > 0L) (now - start).coerceAtLeast(0L) else 0L
     val label = buildString {
         append(stringResource(R.string.chat_activity_working, formatElapsed(elapsed) ?: "…"))
@@ -3857,9 +3876,7 @@ private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>) {
     }
 
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 2.dp),
+        modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (tool != null) {
