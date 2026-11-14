@@ -52,6 +52,17 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun readFile(path: String, directory: String): String = api.readFile(path, directory)
 
+    /**
+     * Reverts one file by reverse-applying its patch. Returns false without
+     * writing anything when the patch no longer matches the file.
+     */
+    suspend fun revertFile(path: String, directory: String, patch: String): Boolean {
+        val current = api.readFile(path, directory)
+        val reverted = DiffRevert.revert(current, patch) ?: return false
+        api.writeFile(path, directory, reverted)
+        return true
+    }
+
     suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)
 
     suspend fun deleteSession(id: String) = api.deleteSession(id)

@@ -68,6 +68,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
 import com.opencode.mobile.Pairing
 import com.opencode.mobile.R
@@ -107,6 +110,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val themeMode by UiPrefs.mode.collectAsState()
     val themeAccent by UiPrefs.accent.collectAsState()
+    val scanPrompt = stringResource(R.string.settings_scan_prompt)
 
     fun test() {
         state = ConnState.Testing
@@ -121,6 +125,33 @@ fun SettingsScreen(
                 detail = e.message
             }
         }
+    }
+
+    fun redeemPairing(target: String) {
+        val value = target.trim()
+        if (value.isBlank() || pairing) return
+        pairing = true
+        pairError = null
+        scope.launch {
+            try {
+                val token = Pairing.redeem(server, value)
+                if (value.contains("/auth/connect/")) {
+                    server = value.substringBefore("/auth/connect/")
+                }
+                password = token
+                pairInput = value
+                state = ConnState.Unknown
+                test()
+            } catch (e: Exception) {
+                pairError = e.message
+            } finally {
+                pairing = false
+            }
+        }
+    }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let { redeemPairing(it) }
     }
 
     Column(
@@ -290,36 +321,31 @@ fun SettingsScreen(
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            val target = pairInput.trim()
-                            if (target.isBlank() || pairing) return@OutlinedButton
-                            pairing = true
-                            pairError = null
-                            scope.launch {
-                                try {
-                                    val token = Pairing.redeem(server, target)
-                                    if (target.contains("/auth/connect/")) {
-                                        server = target.substringBefore("/auth/connect/")
-                                    }
-                                    password = token
-                                    state = ConnState.Unknown
-                                    test()
-                                } catch (e: Exception) {
-                                    pairError = e.message
-                                } finally {
-                                    pairing = false
-                                }
-                            }
-                        },
-                        enabled = pairInput.isNotBlank() && !pairing,
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (pairing) R.string.settings_pairing else R.string.action_pair
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { redeemPairing(pairInput) },
+                            enabled = pairInput.isNotBlank() && !pairing,
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (pairing) R.string.settings_pairing else R.string.action_pair
+                                )
                             )
-                        )
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                scanLauncher.launch(
+                                    ScanOptions()
+                                        .setPrompt(scanPrompt)
+                                        .setBeepEnabled(false)
+                                        .setOrientationLocked(false)
+                                )
+                            },
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(stringResource(R.string.settings_scan_qr))
+                        }
                     }
                 }
             }

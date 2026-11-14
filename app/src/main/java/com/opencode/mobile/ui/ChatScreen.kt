@@ -704,6 +704,10 @@ private fun DiffSheet(
     var diffs by remember { mutableStateOf<List<FileDiff>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var viewFile by remember { mutableStateOf<String?>(null) }
+    var pendingRevert by remember { mutableStateOf<FileDiff?>(null) }
+    var revertNote by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     // When the project has no VCS diff (or the session lives outside the repo),
     // fall back to the files the agent actually edited in this conversation.
@@ -727,7 +731,7 @@ private fun DiffSheet(
             .distinctBy { it.first }
     }
 
-    LaunchedEffect(sessionID) {
+    LaunchedEffect(sessionID, reload) {
         try {
             diffs = repo.sessionDiff(sessionID)
         } catch (e: Exception) {
@@ -747,6 +751,15 @@ private fun DiffSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)
             )
+
+            if (revertNote != null) {
+                Text(
+                    revertNote!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+            }
 
             when {
                 error != null -> Text(
@@ -809,7 +822,7 @@ private fun DiffSheet(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(diffs!!) { diff ->
-                        DiffCard(diff)
+                        DiffCard(diff) { pendingRevert = diff }
                     }
                 }
             }
@@ -822,6 +835,34 @@ private fun DiffSheet(
             path = viewFile!!,
             directory = directory,
             onDismiss = { viewFile = null }
+        )
+    }
+
+    val revertedText = stringResource(R.string.chat_diff_reverted)
+    val revertFailedText = stringResource(R.string.chat_diff_revert_failed)
+
+    pendingRevert?.let { diff ->
+        AlertDialog(
+            onDismissRequest = { pendingRevert = null },
+            title = { Text(stringResource(R.string.chat_diff_revert_title)) },
+            text = { Text(stringResource(R.string.chat_diff_revert_body, diff.file)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRevert = null
+                    scope.launch {
+                        val ok = runCatching {
+                            repo.revertFile(diff.file, directory, diff.patch)
+                        }.getOrDefault(false)
+                        revertNote = if (ok) revertedText else revertFailedText
+                        if (ok) reload += 1
+                    }
+                }) { Text(stringResource(R.string.chat_diff_revert)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRevert = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 }
@@ -899,7 +940,7 @@ private fun FileSheet(
 }
 
 @Composable
-private fun DiffCard(diff: FileDiff) {
+private fun DiffCard(diff: FileDiff, onRevert: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(14.dp),
@@ -927,6 +968,17 @@ private fun DiffCard(diff: FileDiff) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error
                 )
+            }
+            if (diff.patch.isNotBlank()) {
+                TextButton(
+                    onClick = onRevert,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.chat_diff_revert),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
             Surface(

@@ -485,6 +485,29 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         }
     }
 
+    suspend fun writeFile(path: String, directory: String, content: String): Unit =
+        withContext(Dispatchers.IO) {
+            val query = buildString {
+                append("?path=").append(Uri.encode(path))
+                if (directory.isNotBlank()) {
+                    append("&location[directory]=").append(Uri.encode(directory))
+                }
+            }
+            withFallback {
+                val req = request("/api/experimental/fs/write$query")
+                    .post(
+                        content.toByteArray()
+                            .toRequestBody("application/octet-stream".toMediaType())
+                    )
+                    .build()
+                client.newCall(req).execute().use { r ->
+                    if (!r.isSuccessful) {
+                        throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+                    }
+                }
+            }
+        }
+
     /** IDs of sessions the server reports as currently running. */
     suspend fun activeSessions(): Set<String> = withContext(Dispatchers.IO) {
         val data = getJson("/api/session/active").optJSONObject("data") ?: JSONObject()

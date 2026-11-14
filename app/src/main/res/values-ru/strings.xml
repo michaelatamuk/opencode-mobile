@@ -92,6 +92,11 @@
     <string name="chat_presets">Пресеты</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
+    <string name="chat_diff_revert">Откатить файл</string>
+    <string name="chat_diff_revert_title">Откатить этот файл?</string>
+    <string name="chat_diff_revert_body">Обратить изменения в %1$s? Если патч больше не совпадает, ничего не будет записано.</string>
+    <string name="chat_diff_reverted">Файл откачен.</string>
+    <string name="chat_diff_revert_failed">Не удалось применить обратный патч — файл не изменён.</string>
     <string name="chat_search">Поиск в сессии</string>
     <string name="chat_attach">Прикрепить скриншот</string>
     <string name="chat_remove_attachment">Удалить вложение</string>
@@ -130,6 +135,8 @@
     <string name="settings_pair_field">Код или ссылка сопряжения</string>
     <string name="settings_pairing">Сопряжение…</string>
     <string name="action_pair">Сопрячь</string>
+    <string name="settings_scan_qr">Сканировать QR</string>
+    <string name="settings_scan_prompt">Наведите на QR-код сопряжения</string>
     <string name="settings_show_password">Показать пароль</string>
     <string name="settings_hide_password">Скрыть пароль</string>
     <string name="settings_connected">Подключено</string>

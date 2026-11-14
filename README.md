@@ -33,8 +33,10 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
   opened in a monospace viewer
 - Fallback server URL, tried automatically when the main address stops
   answering (LAN at home, tunnel outside)
-- Pairing code entry: paste `opencode pair`'s code or link and the app trades
-  it for the password itself
+- Pairing code entry or QR scan: paste `opencode pair`'s code/link or scan it,
+  and the app trades it for the password itself
+- Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
+  text files only
 - Saved presets: agent + model + opening prompt, applied in one tap
 - Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
   choice of four accent colors
@@ -92,7 +94,6 @@ Authentication is HTTP Basic, `opencode:<password>`.
 Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
-Known gaps: no camera QR scanner (pairing is by pasted code/link), no widget or
-quick-settings tile, no per-file revert or accept in the diff sheet, no voice
-input, no biometric lock, no artifact gallery (disabled on most servers), and
-R8 is disabled until a shrunk build can be verified on a device.
+Known gaps: no widget or quick-settings tile, no voice input, no biometric
+lock, no artifact gallery (disabled on most servers), and R8 is disabled until
+a shrunk build can be verified on a device.
