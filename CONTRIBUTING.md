@@ -5,7 +5,8 @@ unofficial Android client for the OpenCode HTTP API.
 
 ## Before you start
 
-- Read [`README.md`](README.md) — especially **Invariants** and **Limitations**.
+- Read [`README.md`](README.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) —
+  especially **Invariants** and **Limitations**.
 - The API contract notes live in [`docs/server-api-notes.md`](docs/server-api-notes.md).
 - Check existing issues before opening a new one.
 

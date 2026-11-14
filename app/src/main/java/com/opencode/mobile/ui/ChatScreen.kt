@@ -607,8 +607,7 @@ fun ChatScreen(
                             is ChatBlock.TurnBlock -> TurnMessage(
                                 messages = block.messages,
                                 directory = state.directory,
-                                onSpeak = speak,
-                                onStop = { vm.interrupt() }
+                                onSpeak = speak
                             )
                         }
                     }
@@ -651,6 +650,11 @@ fun ChatScreen(
         }
 
         Column(Modifier.navigationBarsPadding()) {
+            LiveStatusStrip(
+                busy = state.busy,
+                messages = state.messages,
+                onStop = { vm.interrupt() }
+            )
             if (state.queued.isNotEmpty()) {
                 Row(
                     Modifier
@@ -3121,8 +3125,7 @@ private fun DayPill(at: Long) {
 private fun TurnMessage(
     messages: List<Msg>,
     directory: String,
-    onSpeak: (String) -> Unit,
-    onStop: () -> Unit
+    onSpeak: (String) -> Unit
 ) {
     val parts = remember(messages) { messages.flatMap { it.parts } }
     val activity = parts.filter { it is Part.Tool || it is Part.Reasoning }
@@ -3137,13 +3140,6 @@ private fun TurnMessage(
     }
     val fullText = paragraphs.joinToString("\n\n")
     val pending = messages.lastOrNull()?.pending == true
-    val toolRunning = activity.lastOrNull { it is Part.Tool }
-        ?.let { (it as Part.Tool).status == "running" || it.status == "streaming" }
-        ?: false
-    val liveToolName = activity.filterIsInstance<Part.Tool>()
-        .lastOrNull { it.status == "running" || it.status == "streaming" }
-        ?.name
-        ?.replaceFirstChar { it.uppercase() }
 
     val start = remember(messages) {
         messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
@@ -3175,7 +3171,6 @@ private fun TurnMessage(
                 directory = directory,
                 elapsedMs = elapsed,
                 pending = pending,
-                onStop = onStop,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -3187,32 +3182,7 @@ private fun TurnMessage(
             }
         }
         if (pending) {
-            // Keep live feedback at the bottom of the turn: the collapsed
-            // activity header sits at the top and is usually scrolled away.
-            Row(
-                Modifier.padding(top = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (toolRunning) {
-                    ActivityBars()
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        buildString {
-                            append(
-                                stringResource(
-                                    R.string.chat_activity_working,
-                                    formatElapsed(elapsed) ?: "…"
-                                )
-                            )
-                            if (liveToolName != null) append(" · ").append(liveToolName)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    TypingIndicator(compact = true)
-                }
-            }
+            TypingIndicator(compact = true)
         }
         if (!pending && fullText.isNotBlank()) {
             val clipboard = LocalClipboardManager.current
@@ -3274,7 +3244,6 @@ private fun ActivityGroup(
     directory: String,
     elapsedMs: Long,
     pending: Boolean,
-    onStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -3284,22 +3253,16 @@ private fun ActivityGroup(
         it.status == "running" || it.status == "streaming"
     }
     val running = pending && runningTool != null
-    val currentName = (runningTool?.name ?: tools.lastOrNull()?.name)
-        ?.replaceFirstChar { it.uppercase() }
     val elapsedLabel = remember(elapsedMs) { formatElapsed(elapsedMs) }
     val stepsLabel = stringResource(R.string.chat_activity_steps, steps.size)
-    val summary = when {
-        running -> buildString {
-            append(stringResource(R.string.chat_activity_working, elapsedLabel ?: "…"))
-            if (currentName != null) append(" · ").append(currentName)
-        }
-
-        elapsedLabel != null -> buildString {
-            append(stringResource(R.string.chat_activity_worked, elapsedLabel))
-            append(" · ").append(stepsLabel)
-        }
-
-        else -> stepsLabel
+    // While running, the live timer and tool live in the status strip above the
+    // composer; the turn header only reports how much has happened.
+    val summary = if (running) {
+        stepsLabel
+    } else if (elapsedLabel != null) {
+        stringResource(R.string.chat_activity_worked, elapsedLabel) + " · " + stepsLabel
+    } else {
+        stepsLabel
     }
     val expandLabel = stringResource(
         if (expanded) R.string.chat_activity_collapse else R.string.chat_activity_expand
@@ -3340,17 +3303,6 @@ private fun ActivityGroup(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                if (running && !expanded) {
-                    Text(
-                        stringResource(R.string.action_stop),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(role = Role.Button) { onStop() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
                 Icon(
                     if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = null,
@@ -3362,29 +3314,6 @@ private fun ActivityGroup(
                 Column(
                     Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                 ) {
-                    if (running) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable(role = Role.Button) { onStop() }
-                                .padding(horizontal = 4.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Rounded.Stop,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.chat_activity_stop_run),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
                     steps.forEachIndexed { index, part ->
                         when (part) {
                             is Part.Tool -> ToolStep(part, directory)
@@ -3638,6 +3567,69 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
                 )
             }
         }
+    }
+}
+
+/**
+ * The single live indicator for a running turn: sits above the composer, so it
+ * stays visible no matter where the transcript is scrolled. Mirrors the TUI's
+ * bottom "Working" line instead of duplicating it inside the transcript.
+ */
+@Composable
+private fun LiveStatusStrip(busy: Boolean, messages: List<Msg>, onStop: () -> Unit) {
+    if (!busy) return
+    val turn = remember(messages) { messages.takeLastWhile { it.role != "user" } }
+    val start = remember(turn) {
+        turn.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
+    }
+    val tool = remember(turn) {
+        turn.flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .lastOrNull { it.status == "running" || it.status == "streaming" }
+            ?.name
+    }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(busy) {
+        while (busy) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val elapsed = if (start != null) (now - start).coerceAtLeast(0L) else 0L
+    val label = buildString {
+        append(stringResource(R.string.chat_activity_working, formatElapsed(elapsed) ?: "…"))
+        if (tool != null) append(" · ").append(tool.replaceFirstChar { it.uppercase() })
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (tool != null) {
+            ActivityBars()
+        } else {
+            TypingIndicator(compact = true)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            stringResource(R.string.action_stop),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(role = Role.Button, onClick = onStop)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        )
     }
 }
 
