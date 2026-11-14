@@ -84,6 +84,7 @@
     <string name="chat_skills">Навыки</string>
     <string name="chat_library_empty">На этом сервере нет команд и навыков.</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
+    <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
     <string name="chat_search">Поиск в сессии</string>
     <string name="chat_attach">Прикрепить скриншот</string>
     <string name="chat_remove_attachment">Удалить вложение</string>
@@ -131,6 +132,12 @@
     <string name="settings_notif_mode_body">«По завершении» держит шторку чистой: тихое уведомление видно только во время хода, а по завершении приходит отдельное. «Всегда» закрепляет наблюдатель в шторке.</string>
     <string name="settings_notif_mode_finish">По завершении</string>
     <string name="settings_notif_mode_always">Всегда</string>
+    <string name="settings_appearance_title">Оформление</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_wallpaper">Обои</string>
+    <string name="settings_theme_classic">Классика</string>
+    <string name="settings_theme_amoled">AMOLED</string>
+    <string name="settings_accent">Акцент</string>
     <string name="settings_watchdog_title">Сторож</string>
     <string name="settings_watchdog_body">Автоматически останавливать запуск после указанного времени. По умолчанию выключено.</string>
     <string name="settings_watchdog_off">Выкл</string>

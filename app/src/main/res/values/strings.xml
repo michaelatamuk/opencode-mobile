@@ -88,6 +88,7 @@
     <string name="chat_skills">Skills</string>
     <string name="chat_library_empty">This server has no commands or skills to show.</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
+    <string name="chat_diff_from_tools">The server has no diff for this project. Files the agent edited in this conversation:</string>
     <string name="chat_search">Search in session</string>
     <string name="chat_attach">Attach screenshot</string>
     <string name="chat_remove_attachment">Remove attachment</string>
@@ -137,6 +138,12 @@
     <string name="settings_notif_mode_body">On finish keeps the shade clean: a quiet notice appears only while a turn is running, plus a finished notice. Always pins the watcher in the shade.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_wallpaper">Wallpaper</string>
+    <string name="settings_theme_classic">Classic</string>
+    <string name="settings_theme_amoled">AMOLED</string>
+    <string name="settings_accent">Accent</string>
     <string name="settings_watchdog_title">Watchdog</string>    <string name="settings_watchdog_body">Stop a run automatically after it has worked this long. Off by default.</string>
     <string name="settings_watchdog_off">Off</string>
     <string name="settings_watchdog_30">30m</string>

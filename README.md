@@ -26,7 +26,10 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Model and agent picker with per-session cost and token usage
 - Context meter with the model's window size and one-tap compaction
 - Spend sheet: total, breakdown by model, and the most expensive sessions
-- Diff sheet with per-file statistics
+- Diff sheet with per-file statistics; when the project has no VCS diff it
+  lists the files the agent edited in the conversation
+- Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
+  choice of four accent colors
 - Running cards show elapsed time and can be stopped from the row menu
 - Branch a session, branch from any user message, undo the last turn, and
   compact the context — all from the chat menu

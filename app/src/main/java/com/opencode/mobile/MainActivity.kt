@@ -27,6 +27,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -66,8 +67,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleIntent(intent)
         Shortcuts.sync(this)
+        UiPrefs.load(this)
         setContent {
-            OpenCodeTheme {
+            val mode by UiPrefs.mode.collectAsState()
+            val accent by UiPrefs.accent.collectAsState()
+            OpenCodeTheme(mode = mode, accent = accent) {
                 Surface(Modifier.fillMaxSize()) { Root() }
             }
         }

@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -49,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import com.opencode.mobile.Api
 import com.opencode.mobile.R
 import com.opencode.mobile.AppScope
+import com.opencode.mobile.UiPrefs
 import kotlinx.coroutines.launch
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
@@ -93,6 +98,9 @@ fun SettingsScreen(
     var state by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
     val scope = AppScope
+    val context = LocalContext.current
+    val themeMode by UiPrefs.mode.collectAsState()
+    val themeAccent by UiPrefs.accent.collectAsState()
 
     fun test() {
         state = ConnState.Testing
@@ -287,6 +295,71 @@ fun SettingsScreen(
                             onClick = { onPersistentWatchChange(true) },
                             label = { Text(stringResource(R.string.settings_notif_mode_always)) }
                         )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_appearance_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.settings_theme),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            "dynamic" to R.string.settings_theme_wallpaper,
+                            "standard" to R.string.settings_theme_classic,
+                            "amoled" to R.string.settings_theme_amoled
+                        ).forEach { (mode, label) ->
+                            FilterChip(
+                                selected = themeMode == mode,
+                                onClick = { UiPrefs.setMode(context, mode) },
+                                label = { Text(stringResource(label)) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        stringResource(R.string.settings_accent),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf(
+                            "blue" to Color(0xFF8FB4FF),
+                            "mint" to Color(0xFF9FE7C3),
+                            "violet" to Color(0xFFE7C6FF),
+                            "amber" to Color(0xFFFFD59B)
+                        ).forEach { (name, color) ->
+                            Surface(
+                                onClick = { UiPrefs.setAccent(context, name) },
+                                shape = CircleShape,
+                                color = color,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                if (themeAccent == name) {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color(0xFF101319),
+                                        modifier = Modifier.padding(7.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

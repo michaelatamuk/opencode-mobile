@@ -173,18 +173,23 @@ private val AppShapes = Shapes(
 
 @Composable
 fun OpenCodeTheme(
+    mode: String = "dynamic",
+    accent: String = "blue",
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val amoled = mode == "amoled"
+    val dark = darkTheme || amoled
+    val base = when {
+        mode == "dynamic" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 
-        darkTheme -> DarkScheme
+        dark -> DarkScheme
         else -> LightScheme
     }
+    val tinted = if (mode == "dynamic") base else base.accented(accent)
+    val colorScheme = if (amoled) tinted.amoled() else tinted
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -193,3 +198,34 @@ fun OpenCodeTheme(
         content = content
     )
 }
+
+private data class AccentColors(val primary: Color, val container: Color, val onContainer: Color)
+
+private fun accentOf(name: String): AccentColors? = when (name) {
+    "blue" -> AccentColors(Accent, AccentContainer, Color(0xFFDCE7FF))
+    "mint" -> AccentColors(Mint, MintContainer, Color(0xFFC9F5DF))
+    "violet" -> AccentColors(Color(0xFFE7C6FF), Color(0xFF2B1B3B), Color(0xFFF3E3FF))
+    "amber" -> AccentColors(Color(0xFFFFD59B), Color(0xFF3A2A12), Color(0xFFFFEBC7))
+    else -> null
+}
+
+private fun androidx.compose.material3.ColorScheme.accented(name: String): androidx.compose.material3.ColorScheme {
+    val accent = accentOf(name) ?: return this
+    return copy(
+        primary = accent.primary,
+        primaryContainer = accent.container,
+        onPrimaryContainer = accent.onContainer
+    )
+}
+
+/** True black surfaces for OLED panels, keeping the current accent. */
+private fun androidx.compose.material3.ColorScheme.amoled(): androidx.compose.material3.ColorScheme =
+    copy(
+        background = Color.Black,
+        surface = Color.Black,
+        surfaceContainerLowest = Color.Black,
+        surfaceContainerLow = Color(0xFF070707),
+        surfaceContainer = Color(0xFF0C0C0C),
+        surfaceContainerHigh = Color(0xFF141414),
+        surfaceContainerHighest = Color(0xFF1B1B1B)
+    )

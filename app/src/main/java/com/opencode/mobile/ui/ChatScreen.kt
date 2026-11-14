@@ -577,6 +577,7 @@ fun ChatScreen(
         DiffSheet(
             repo = repo,
             sessionID = sessionID,
+            messages = state.messages,
             onDismiss = { showDiff = false }
         )
     }
@@ -623,10 +624,37 @@ fun ChatScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DiffSheet(repo: OpenCodeRepository, sessionID: String, onDismiss: () -> Unit) {
+private fun DiffSheet(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    messages: List<Msg>,
+    onDismiss: () -> Unit
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var diffs by remember { mutableStateOf<List<FileDiff>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // When the project has no VCS diff (or the session lives outside the repo),
+    // fall back to the files the agent actually edited in this conversation.
+    val touched = remember(messages) {
+        val editingTools = setOf(
+            "edit", "write", "patch", "multiedit", "apply_patch",
+            "create_file", "str_replace_editor"
+        )
+        messages.flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .filter { it.name.lowercase() in editingTools }
+            .mapNotNull { part ->
+                val input = runCatching { org.json.JSONObject(part.input) }.getOrNull()
+                    ?: return@mapNotNull null
+                val path = listOf("filePath", "path", "file", "filename")
+                    .firstNotNullOfOrNull { key ->
+                        input.optString(key).takeIf { it.isNotBlank() }
+                    }
+                if (path == null) null else path to part.status
+            }
+            .distinctBy { it.first }
+    }
 
     LaunchedEffect(sessionID) {
         try {
@@ -661,12 +689,48 @@ private fun DiffSheet(repo: OpenCodeRepository, sessionID: String, onDismiss: ()
                     Modifier.padding(24.dp).size(28.dp)
                 )
 
-                diffs!!.isEmpty() -> Text(
+                diffs!!.isEmpty() && touched.isEmpty() -> Text(
                     stringResource(R.string.chat_no_changes),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
+
+                diffs!!.isEmpty() -> LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        Text(
+                            stringResource(R.string.chat_diff_from_tools),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                        )
+                    }
+                    items(touched) { (path, status) ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                                Text(
+                                    path,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    status,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
 
                 else -> LazyColumn(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
