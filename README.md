@@ -29,6 +29,10 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Diff sheet with per-file statistics; when the project has no VCS diff it
   lists the files the agent edited in the conversation, and any file can be
   opened in a monospace viewer
+- Fallback server URL, tried automatically when the main address stops
+  answering (LAN at home, tunnel outside)
+- Pairing code entry: paste `opencode pair`'s code or link and the app trades
+  it for the password itself
 - Saved presets: agent + model + opening prompt, applied in one tap
 - Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
   choice of four accent colors
@@ -86,7 +90,7 @@ Authentication is HTTP Basic, `opencode:<password>`.
 Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
-Known gaps: no QR pairing, no widget or quick-settings tile, no per-file revert
-in the diff sheet, no voice input, no biometric lock, no artifact gallery
-(disabled on most servers), and R8 is disabled until a shrunk build can be
-verified on a device.
+Known gaps: no camera QR scanner (pairing is by pasted code/link), no widget or
+quick-settings tile, no per-file revert or accept in the diff sheet, no voice
+input, no biometric lock, no artifact gallery (disabled on most servers), and
+R8 is disabled until a shrunk build can be verified on a device.

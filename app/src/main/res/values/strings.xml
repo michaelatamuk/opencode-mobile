@@ -125,6 +125,13 @@
     <string name="settings_hint">Use the LAN address on the same Wi-Fi, or the tunnel URL when you are away.</string>
     <string name="settings_server_url">Server URL</string>
     <string name="settings_password">Password</string>
+    <string name="settings_fallback_url">Fallback URL (optional)</string>
+    <string name="settings_fallback_hint">Tried automatically when the main address stops answering — for example LAN at home and the tunnel outside.</string>
+    <string name="settings_pair_title">Pair with a code</string>
+    <string name="settings_pair_body">Run `opencode pair` on the server, then paste the code or its link. The app exchanges it for the password — no long token to type.</string>
+    <string name="settings_pair_field">Pairing code or link</string>
+    <string name="settings_pairing">Pairing…</string>
+    <string name="action_pair">Pair</string>
     <string name="settings_show_password">Show password</string>
     <string name="settings_hide_password">Hide password</string>
     <string name="settings_connected">Connected</string>

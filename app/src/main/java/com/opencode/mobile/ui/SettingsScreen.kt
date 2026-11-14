@@ -69,6 +69,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencode.mobile.Api
+import com.opencode.mobile.Pairing
 import com.opencode.mobile.R
 import com.opencode.mobile.AppScope
 import com.opencode.mobile.UiPrefs
@@ -80,6 +81,7 @@ private enum class ConnState { Unknown, Testing, Ok, Failed }
 fun SettingsScreen(
     initialServer: String,
     initialPassword: String,
+    initialFallback: String,
     canCancel: Boolean,
     watching: Boolean,
     notificationsEnabled: Boolean,
@@ -90,10 +92,14 @@ fun SettingsScreen(
     onPersistentWatchChange: (Boolean) -> Unit,
     onTestNotification: () -> Unit,
     onCancel: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String, String) -> Unit
 ) {
     var server by remember { mutableStateOf(initialServer.ifBlank { "http://192.168.1.10:28894" }) }
     var password by remember { mutableStateOf(initialPassword) }
+    var fallback by remember { mutableStateOf(initialFallback) }
+    var pairInput by remember { mutableStateOf("") }
+    var pairError by remember { mutableStateOf<String?>(null) }
+    var pairing by remember { mutableStateOf(false) }
     var reveal by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf(ConnState.Unknown) }
     var detail by remember { mutableStateOf<String?>(null) }
@@ -107,7 +113,7 @@ fun SettingsScreen(
         detail = null
         scope.launch {
             try {
-                val version = Api(server.trim(), password).ping()
+                val version = Api(server.trim(), password, fallback.trim()).ping()
                 state = ConnState.Ok
                 detail = "OpenCode $version"
             } catch (e: Exception) {
@@ -136,7 +142,7 @@ fun SettingsScreen(
             }
             Spacer(Modifier.weight(1f))
             if (canCancel) {
-                TextButton(onClick = { onSave(server, password) }) { Text(stringResource(R.string.action_save)) }
+                TextButton(onClick = { onSave(server, password, fallback) }) { Text(stringResource(R.string.action_save)) }
             }
         }
 
@@ -204,6 +210,30 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = fallback,
+                    onValueChange = { fallback = it; state = ConnState.Unknown },
+                    label = { Text(stringResource(R.string.settings_fallback_url)) },
+                    placeholder = { Text("https://…opentunnel.xyz") },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Dns, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.settings_fallback_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(Modifier.height(14.dp))
@@ -217,10 +247,81 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(if (state == ConnState.Testing) R.string.action_testing else R.string.action_test)) }
                 Button(
-                    onClick = { onSave(server, password) },
+                    onClick = { onSave(server, password, fallback) },
                     enabled = server.isNotBlank(),
                     shape = RoundedCornerShape(14.dp)
                 ) { Text(stringResource(if (canCancel) R.string.action_save else R.string.action_connect)) }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.settings_pair_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_pair_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = pairInput,
+                        onValueChange = { pairInput = it; pairError = null },
+                        label = { Text(stringResource(R.string.settings_pair_field)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        colors = fieldColors(),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (pairError != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            pairError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val target = pairInput.trim()
+                            if (target.isBlank() || pairing) return@OutlinedButton
+                            pairing = true
+                            pairError = null
+                            scope.launch {
+                                try {
+                                    val token = Pairing.redeem(server, target)
+                                    if (target.contains("/auth/connect/")) {
+                                        server = target.substringBefore("/auth/connect/")
+                                    }
+                                    password = token
+                                    state = ConnState.Unknown
+                                    test()
+                                } catch (e: Exception) {
+                                    pairError = e.message
+                                } finally {
+                                    pairing = false
+                                }
+                            }
+                        },
+                        enabled = pairInput.isNotBlank() && !pairing,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            stringResource(
+                                if (pairing) R.string.settings_pairing else R.string.action_pair
+                            )
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(28.dp))

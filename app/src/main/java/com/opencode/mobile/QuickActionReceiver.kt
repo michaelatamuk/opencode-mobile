@@ -22,7 +22,8 @@ class QuickActionReceiver : BroadcastReceiver() {
                 val prefs = SecurePrefs.get(context)
                 val api = Api(
                     prefs.getString("server", "").orEmpty(),
-                    prefs.getString("password", "").orEmpty()
+                    prefs.getString("password", "").orEmpty(),
+                    prefs.getString("fallback_server", "").orEmpty()
                 )
                 when (action) {
                     ACTION_STOP -> runBlocking { api.interrupt(sessionID) }

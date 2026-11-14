@@ -19,7 +19,8 @@ class PermissionActionReceiver : BroadcastReceiver() {
                 val prefs = SecurePrefs.get(context)
                 val api = Api(
                     prefs.getString("server", "").orEmpty(),
-                    prefs.getString("password", "").orEmpty()
+                    prefs.getString("password", "").orEmpty(),
+                    prefs.getString("fallback_server", "").orEmpty()
                 )
                 runBlocking { api.reply(sessionID, requestID, decision) }
             } catch (_: Exception) {

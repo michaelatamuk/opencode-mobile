@@ -170,6 +170,46 @@ internal fun mergeMessages(existing: List<Msg>, incoming: List<Msg>): List<Msg> 
     return byId.values.sortedBy { it.created }
 }
 
+/** Redeems an OpenCode pairing code without a camera: paste the code or link. */
+object Pairing {
+
+    /**
+     * Accepts either a bare code or the full `.../auth/connect/<code>` link.
+     * Returns the token to store as the server password.
+     */
+    suspend fun redeem(server: String, codeOrLink: String): String =
+        withContext(Dispatchers.IO) {
+            val trimmed = codeOrLink.trim()
+            val linkIndex = trimmed.indexOf("/auth/connect/")
+            val (base, code) = if (linkIndex >= 0) {
+                val prefix = trimmed.substring(0, linkIndex)
+                val code = trimmed.substring(linkIndex + "/auth/connect/".length)
+                    .substringBefore('?')
+                    .substringBefore('#')
+                prefix to code
+            } else {
+                server.trim().trimEnd('/') to trimmed.substringAfterLast('/')
+            }
+
+            val client = OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .build()
+            client.newCall(
+                Request.Builder()
+                    .url("$base/auth/connect/${Uri.encode(code)}")
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+            ).execute().use { r ->
+                val body = r.body?.string().orEmpty()
+                if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
+                JSONObject(body).optString("token")
+                    .ifBlank { throw ApiException(500, "No token in pairing response") }
+            }
+        }
+}
+
 /** A user-facing message for any failure from the API. */
 fun friendlyError(error: Throwable): String = when (error) {
     is ApiException -> when (error.status) {
@@ -185,9 +225,19 @@ fun friendlyError(error: Throwable): String = when (error) {
     else -> error.message ?: "Something went wrong"
 }
 
-class Api(server: String, private val password: String) {
+class Api(server: String, private val password: String, fallbackServer: String? = null) {
 
-    private val root = server.trim().trimEnd('/')
+    private val primaryRoot = server.trim().trimEnd('/')
+    private val fallbackRoot = fallbackServer
+        ?.trim()
+        ?.trimEnd('/')
+        ?.takeIf { it.isNotBlank() && it != primaryRoot }
+
+    /** The address currently in use; switches to the fallback after a transport failure. */
+    @Volatile
+    private var activeRoot = primaryRoot
+
+    private val root: String get() = activeRoot
     private val jsonType = "application/json".toMediaType()
 
     private val client = OkHttpClient.Builder()
@@ -204,32 +254,52 @@ class Api(server: String, private val password: String) {
             .url(root + path)
             .header("Authorization", Credentials.basic("opencode", password))
 
-    private fun getJson(path: String): JSONObject {
+    private fun getJson(path: String): JSONObject = withFallback {
         client.newCall(request(path).get().build()).execute().use { r ->
             val body = r.body?.string().orEmpty()
             if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
-            return JSONObject(body)
+            JSONObject(body)
         }
     }
 
-    private fun postJson(path: String, payload: String): JSONObject {
+    /**
+     * Runs a request, and once a transport failure hits the primary address,
+     * retries it against the fallback (and stays there while it works).
+     */
+    private fun <T> withFallback(block: () -> T): T {
+        return try {
+            block()
+        } catch (e: IOException) {
+            val fallback = fallbackRoot ?: throw e
+            if (activeRoot == fallback) throw e
+            activeRoot = fallback
+            try {
+                block()
+            } catch (second: IOException) {
+                activeRoot = primaryRoot
+                throw second
+            }
+        }
+    }
+
+    private fun postJson(path: String, payload: String): JSONObject = withFallback {
         val req = request(path).post(payload.toRequestBody(jsonType)).build()
         client.newCall(req).execute().use { r ->
             val body = r.body?.string().orEmpty()
             if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
-            return JSONObject(body)
+            JSONObject(body)
         }
     }
 
     /** POST for endpoints that answer 204 and therefore have no JSON body. */
-    private fun postEmpty(path: String, payload: String) {
+    private fun postEmpty(path: String, payload: String) = withFallback {
         val req = request(path).post(payload.toRequestBody(jsonType)).build()
         client.newCall(req).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }
     }
 
-    private fun deleteEmpty(path: String) {
+    private fun deleteEmpty(path: String) = withFallback {
         client.newCall(request(path).delete().build()).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }
@@ -406,10 +476,12 @@ class Api(server: String, private val password: String) {
         } else {
             "?location[directory]=" + Uri.encode(directory)
         }
-        client.newCall(request("/api/fs/read/$encodedPath$query").get().build()).execute().use { r ->
-            val body = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
-            body
+        withFallback {
+            client.newCall(request("/api/fs/read/$encodedPath$query").get().build()).execute().use { r ->
+                val body = r.body?.string().orEmpty()
+                if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
+                body
+            }
         }
     }
 
@@ -734,6 +806,14 @@ class Api(server: String, private val password: String) {
                 }
                 close()
             } catch (t: Throwable) {
+                if (t is IOException) {
+                    // Next reconnect should try the other address so a dead
+                    // LAN/tunnel route does not wedge the watcher.
+                    val fallback = fallbackRoot
+                    if (fallback != null) {
+                        activeRoot = if (activeRoot == primaryRoot) fallback else primaryRoot
+                    }
+                }
                 close(t)
             }
         }

@@ -118,13 +118,14 @@ class SessionWatcherService : Service() {
         val prefs = SecurePrefs.get(this)
         val server = prefs.getString("server", "").orEmpty()
         val password = prefs.getString("password", "").orEmpty()
+        val fallback = prefs.getString("fallback_server", "").orEmpty()
         if (server.isBlank()) return null
 
-        val key = "$server\u0000$password"
+        val key = "$server\u0000$password\u0000$fallback"
         val existing = cachedApi
         if (existing != null && cachedApiKey == key) return existing
 
-        return Api(server, password).also {
+        return Api(server, password, fallback).also {
             cachedApi = it
             cachedApiKey = key
         }

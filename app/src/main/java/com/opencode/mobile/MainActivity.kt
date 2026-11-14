@@ -117,6 +117,7 @@ private fun Root() {
 
     var server by remember { mutableStateOf(prefs.getString("server", "").orEmpty()) }
     var password by remember { mutableStateOf(prefs.getString("password", "").orEmpty()) }
+    var fallback by remember { mutableStateOf(prefs.getString("fallback_server", "").orEmpty()) }
     var openSessionID by rememberSaveable { mutableStateOf<String?>(null) }
     var draft by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -125,8 +126,9 @@ private fun Root() {
     var persistentWatch by remember { mutableStateOf(prefs.getBoolean("watch_persistent", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
 
-    val repo = remember(server, password) {
-        if (server.isBlank()) null else OpenCodeRepository(Api(server, password))
+    val repo = remember(server, password, fallback) {
+        if (server.isBlank()) null
+        else OpenCodeRepository(Api(server, password, fallback))
     }
     val scope = AppScope
 
@@ -205,6 +207,7 @@ private fun Root() {
             repo == null -> SettingsScreen(
                 initialServer = server,
                 initialPassword = password,
+                initialFallback = fallback,
                 canCancel = false,
                 watching = false,
                 notificationsEnabled = notificationsEnabled,
@@ -215,16 +218,22 @@ private fun Root() {
                 onPersistentWatchChange = {},
                 onTestNotification = { Notify.test(context) },
                 onCancel = {},
-                onSave = { s, p ->
+                onSave = { s, p, f ->
                     server = s.trim()
                     password = p
-                    prefs.edit().putString("server", server).putString("password", password).apply()
+                    fallback = f.trim()
+                    prefs.edit()
+                        .putString("server", server)
+                        .putString("password", password)
+                        .putString("fallback_server", fallback)
+                        .apply()
                 }
             )
 
             showSettings -> SettingsScreen(
                 initialServer = server,
                 initialPassword = password,
+                initialFallback = fallback,
                 canCancel = true,
                 watching = watching,
                 notificationsEnabled = notificationsEnabled,
@@ -261,10 +270,15 @@ private fun Root() {
                 },
                 onTestNotification = { Notify.test(context) },
                 onCancel = { settingsOpen = false },
-                onSave = { s, p ->
+                onSave = { s, p, f ->
                     server = s.trim()
                     password = p
-                    prefs.edit().putString("server", server).putString("password", password).apply()
+                    fallback = f.trim()
+                    prefs.edit()
+                        .putString("server", server)
+                        .putString("password", password)
+                        .putString("fallback_server", fallback)
+                        .apply()
                     settingsOpen = false
                 }
             )

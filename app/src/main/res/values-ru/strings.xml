@@ -119,6 +119,13 @@
     <string name="settings_hint">Используйте адрес в локальной сети или URL туннеля вне дома.</string>
     <string name="settings_server_url">Адрес сервера</string>
     <string name="settings_password">Пароль</string>
+    <string name="settings_fallback_url">Резервный URL (необязательно)</string>
+    <string name="settings_fallback_hint">Используется автоматически, когда основной адрес перестаёт отвечать — например, LAN дома и туннель вне дома.</string>
+    <string name="settings_pair_title">Подключение по коду</string>
+    <string name="settings_pair_body">Запустите `opencode pair` на сервере и вставьте код или ссылку. Приложение само обменяет его на пароль — длинный токен вводить не нужно.</string>
+    <string name="settings_pair_field">Код или ссылка сопряжения</string>
+    <string name="settings_pairing">Сопряжение…</string>
+    <string name="action_pair">Сопрячь</string>
     <string name="settings_show_password">Показать пароль</string>
     <string name="settings_hide_password">Скрыть пароль</string>
     <string name="settings_connected">Подключено</string>

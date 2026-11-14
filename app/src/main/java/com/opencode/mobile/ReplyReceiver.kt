@@ -21,7 +21,8 @@ class ReplyReceiver : BroadcastReceiver() {
                 val prefs = SecurePrefs.get(context)
                 val api = Api(
                     prefs.getString("server", "").orEmpty(),
-                    prefs.getString("password", "").orEmpty()
+                    prefs.getString("password", "").orEmpty(),
+                    prefs.getString("fallback_server", "").orEmpty()
                 )
                 runBlocking { api.send(sessionID, text) }
                 context.getSystemService(NotificationManager::class.java)
