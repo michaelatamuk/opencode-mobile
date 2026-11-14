@@ -256,6 +256,7 @@ class SessionWatcherService : Service() {
 
     private suspend fun pollOnce(client: Api) {
         val sessions = client.sessions()
+        UsageStore.record(this, sessions)
         sessions.forEach { titles[it.id] = it.title }
 
         val active = sessions.filter { it.running }.map { it.id }.toSet()

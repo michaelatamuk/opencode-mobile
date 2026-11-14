@@ -35,6 +35,8 @@
     <string name="cost_total">Всего по всем сессиям</string>
     <string name="cost_by_model">По моделям</string>
     <string name="cost_top_sessions">Самые дорогие сессии</string>
+    <string name="cost_today">Сегодня</string>
+    <string name="cost_week">Последние 7 дней</string>
     <string name="cost_empty">Расходов пока нет. Они появятся после первого вызова модели.</string>
     <string name="sessions_no_match">Ничего не найдено.</string>
     <string name="sessions_today">Сегодня</string>

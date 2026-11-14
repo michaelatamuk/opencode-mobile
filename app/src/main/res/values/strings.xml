@@ -37,6 +37,8 @@
     <string name="cost_total">Total across all sessions</string>
     <string name="cost_by_model">By model</string>
     <string name="cost_top_sessions">Most expensive sessions</string>
+    <string name="cost_today">Today</string>
+    <string name="cost_week">Last 7 days</string>
     <string name="cost_empty">No cost recorded yet. Spend appears after a model call completes.</string>
     <string name="sessions_no_match">No sessions match your search.</string>
     <string name="sessions_today">Today</string>

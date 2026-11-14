@@ -23,7 +23,8 @@ data class SessionListUiState(
 
 class SessionListViewModel(
     private val repo: OpenCodeRepository,
-    private val cache: SessionCache? = null
+    private val cache: SessionCache? = null,
+    private val context: android.content.Context? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SessionListUiState())
@@ -84,6 +85,7 @@ class SessionListViewModel(
         try {
             val sessions = repo.sessions()
             cache?.write(sessions)
+            context?.let { UsageStore.record(it, sessions) }
             _state.update {
                 it.copy(sessions = sessions, loading = false, error = null, failures = 0)
             }

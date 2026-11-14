@@ -88,6 +88,7 @@ import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionCache
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
+import com.opencode.mobile.UsageStore
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -125,7 +126,7 @@ fun SessionListScreen(
 ) {
     val context = LocalContext.current
     val vm: SessionListViewModel = viewModel(key = "sessions") {
-        SessionListViewModel(repo, SessionCache(context))
+        SessionListViewModel(repo, SessionCache(context), context)
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val seenStore = remember { SeenStore(context) }
@@ -796,6 +797,10 @@ private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
         .map { (name, list) -> name to list.sumOf { it.cost } }
         .sortedByDescending { it.second }
     val top = sessions.filter { it.cost > 0 }.sortedByDescending { it.cost }.take(8)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val today = remember { UsageStore.today(context) }
+    val week = remember { UsageStore.recent(context, 7) }
+    val weekTotal = week.sumOf { it.cost }
 
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -821,6 +826,67 @@ private fun CostSheet(sessions: List<SessionItem>, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary
             )
+
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.cost_today),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                formatCost(today),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.cost_week),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                formatCost(weekTotal),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    week.forEach { day ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                day.label,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(48.dp)
+                            )
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = {
+                                    (day.cost / maxOf(0.01, week.maxOfOrNull { it.cost } ?: 0.01))
+                                        .toFloat().coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.weight(1f).height(5.dp),
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                            Text(
+                                formatCost(day.cost),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.width(66.dp),
+                                textAlign = TextAlign.End
+                            )
+                        }
+                    }
+                }
+            }
 
             if (byModel.isEmpty()) {
                 Text(
