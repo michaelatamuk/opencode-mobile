@@ -1,10 +1,23 @@
 package com.opencode.mobile.ui
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
 import android.net.Uri
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -413,6 +426,78 @@ fun ChatScreen(
         runCatching { listState.scrollBy(200_000f) }
     }
 
+    fun shareRunCard() {
+        val title = state.title.ifBlank { context.getString(R.string.session_new) }
+        val agent = state.agents.firstOrNull { it.id == state.agentID }?.name.orEmpty()
+        val model = state.models.firstOrNull {
+            it.id == state.modelID && it.providerID == state.modelProviderID
+        }?.name.orEmpty()
+        val subtitle = listOf(agent, model)
+            .filter { it.isNotBlank() }
+            .joinToString(" · ")
+        val steps = state.messages.flatMap { it.parts }
+            .count { it is Part.Tool || it is Part.Reasoning }
+        val start = state.messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
+        val end = state.messages.mapNotNull { it.completed.takeIf { c -> c > 0 } }.maxOrNull()
+        val elapsed = start?.let {
+            formatElapsed(((end ?: System.currentTimeMillis()) - it).coerceAtLeast(0L))
+        }
+        val stats = buildString {
+            if (elapsed != null) append(elapsed)
+            if (steps > 0) {
+                if (isNotEmpty()) append(" · ")
+                append(steps).append(if (steps == 1) " step" else " steps")
+            }
+            if (state.cost > 0.0) {
+                if (isNotEmpty()) append(" · ")
+                append(String.format(java.util.Locale.US, "$%.2f", state.cost))
+            }
+        }
+        val quote = state.messages.lastOrNull { it.role == "assistant" }
+            ?.plainText.orEmpty().trim()
+        val footer = "opencode mobile · " + java.time.LocalDate.now().format(
+            java.time.format.DateTimeFormatter.ofPattern(
+                "d MMM yyyy",
+                java.util.Locale.getDefault()
+            )
+        )
+        scope.launch(Dispatchers.IO) {
+            val bitmap = runCatching {
+                renderRunCard(title, subtitle, stats, quote, footer)
+            }.getOrNull() ?: return@launch
+            val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+            val file = java.io.File(dir, "run-${System.currentTimeMillis()}.png")
+            runCatching {
+                java.io.FileOutputStream(file).use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            val uri = runCatching {
+                androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+            }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) {
+                runCatching {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, title)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        Intent.createChooser(
+                            send,
+                            context.getString(R.string.chat_share_card)
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     LaunchedEffect(lastId, state.updated) {
         if (sessionID == null) return@LaunchedEffect
         val last = state.messages.lastOrNull()
@@ -628,6 +713,13 @@ fun ChatScreen(
                                             )
                                         )
                                     }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_share_card)) },
+                                onClick = {
+                                    menuOpen = false
+                                    shareRunCard()
                                 }
                             )
                             DropdownMenuItem(
@@ -3825,6 +3917,147 @@ private fun prettyTool(name: String): String =
     }
 
 /** Turns a turn span into `12s`, `2m 05s` or `1h 12m`; null below a second. */
+/** 1080×1350 share card: dark banner, run title, stats and an answer excerpt. */
+private fun renderRunCard(
+    title: String,
+    subtitle: String,
+    stats: String,
+    quote: String,
+    footer: String
+): Bitmap {
+    val width = 1080
+    val height = 1350
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    canvas.drawRect(
+        0f, 0f, width.toFloat(), height.toFloat(),
+        Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, width.toFloat(), height.toFloat(),
+                intArrayOf(0xFF0B1020.toInt(), 0xFF101A33.toInt(), 0xFF0D1630.toInt()),
+                null,
+                Shader.TileMode.CLAMP
+            )
+        }
+    )
+    canvas.drawRect(
+        0f, 0f, width.toFloat(), height.toFloat(),
+        Paint().apply {
+            shader = RadialGradient(
+                930f, 90f, 760f,
+                0x38FFB86B, 0x00FFB86B,
+                Shader.TileMode.CLAMP
+            )
+        }
+    )
+
+    canvas.drawRoundRect(
+        RectF(80f, 80f, 176f, 176f), 28f, 28f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF4A66FF.toInt() }
+    )
+    val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF0A0E18.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 10f
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    val prompt = Path().apply {
+        moveTo(110f, 108f)
+        lineTo(130f, 128f)
+        lineTo(110f, 148f)
+    }
+    canvas.drawPath(prompt, glyph)
+    canvas.drawLine(140f, 148f, 158f, 148f, glyph)
+
+    canvas.drawText(
+        "OPENCODE MOBILE",
+        206f, 132f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF8FA8FF.toInt()
+            textSize = 26f
+            letterSpacing = 0.12f
+        }
+    )
+
+    var y = 290f
+    val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFF2F5FF.toInt()
+        textSize = 66f
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    }
+    y = drawCardText(canvas, title, 80f, y, width - 160, titlePaint, 3)
+    if (subtitle.isNotBlank()) {
+        y += 16f
+        val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFC3CBE3.toInt()
+            textSize = 30f
+        }
+        y = drawCardText(canvas, subtitle, 80f, y, width - 160, subPaint, 1)
+    }
+    if (stats.isNotBlank()) {
+        y += 30f
+        val statsPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFDCE7FF.toInt()
+            textSize = 26f
+        }
+        val pad = 28f
+        val pillWidth = statsPaint.measureText(stats) + pad * 2
+        canvas.drawRoundRect(
+            RectF(80f, y, 80f + pillWidth, y + 64f), 32f, 32f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22FFFFFF }
+        )
+        canvas.drawText(stats, 80f + pad, y + 41f, statsPaint)
+        y += 64f
+    }
+    if (quote.isNotBlank()) {
+        y += 40f
+        canvas.drawRoundRect(
+            RectF(80f, y, 88f, y + 260f), 4f, 4f,
+            Paint().apply { color = 0xFF4A66FF.toInt() }
+        )
+        val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFDCE3FF.toInt()
+            textSize = 36f
+        }
+        drawCardText(canvas, quote, 116f, y, width - 200, quotePaint, 7)
+    }
+
+    canvas.drawText(
+        footer,
+        80f, height - 80f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF8B93AD.toInt()
+            textSize = 24f
+        }
+    )
+    return bitmap
+}
+
+private fun drawCardText(
+    canvas: Canvas,
+    text: String,
+    x: Float,
+    y: Float,
+    width: Int,
+    paint: TextPaint,
+    maxLines: Int
+): Float {
+    if (text.isBlank()) return y
+    val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        .setLineSpacing(0f, 1.15f)
+        .setMaxLines(maxLines)
+        .setEllipsize(TextUtils.TruncateAt.END)
+        .build()
+    canvas.save()
+    canvas.translate(x, y)
+    layout.draw(canvas)
+    canvas.restore()
+    return y + layout.height
+}
+
 private fun formatElapsed(ms: Long): String? {
     if (ms < 1000) return null
     val total = ms / 1000

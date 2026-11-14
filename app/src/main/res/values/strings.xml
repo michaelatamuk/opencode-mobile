@@ -22,6 +22,7 @@
     <string name="sessions_greeting_morning">Good morning</string>
     <string name="sessions_greeting_afternoon">Good afternoon</string>
     <string name="sessions_greeting_evening">Good evening</string>
+    <string name="sessions_mission_control">Mission Control</string>
     <string name="sessions_empty_title">No sessions yet</string>
     <string name="sessions_empty_body">Start a session from the TUI, or create one here.</string>
     <string name="sessions_unreachable_title">Can\'t reach your server</string>
@@ -223,6 +224,7 @@
     <string name="chat_copy_code">Copy code</string>
     <string name="chat_copy_message">Copy message</string>
     <string name="chat_share_transcript">Share transcript</string>
+    <string name="chat_share_card">Share run card</string>
     <string name="chat_plan">Plan</string>
     <string name="chat_attach_camera">Take photo</string>
     <string name="chat_turn_done">Done</string>

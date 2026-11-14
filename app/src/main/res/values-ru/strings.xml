@@ -20,6 +20,7 @@
     <string name="sessions_greeting_morning">Доброе утро</string>
     <string name="sessions_greeting_afternoon">Добрый день</string>
     <string name="sessions_greeting_evening">Добрый вечер</string>
+    <string name="sessions_mission_control">Центр управления</string>
     <string name="sessions_empty_title">Сессий пока нет</string>
     <string name="sessions_empty_body">Запустите сессию в TUI или создайте её здесь.</string>
     <string name="sessions_unreachable_title">Сервер недоступен</string>
@@ -218,6 +219,7 @@
     <string name="chat_copy_code">Копировать код</string>
     <string name="chat_copy_message">Копировать сообщение</string>
     <string name="chat_share_transcript">Поделиться перепиской</string>
+    <string name="chat_share_card">Поделиться карточкой запуска</string>
     <string name="chat_plan">План</string>
     <string name="chat_attach_camera">Сделать фото</string>
     <string name="chat_turn_done">Готово</string>

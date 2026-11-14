@@ -18,6 +18,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -163,6 +165,7 @@ fun SessionListScreen(
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
+    var showMission by remember { mutableStateOf(false) }
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
 
@@ -411,7 +414,8 @@ fun SessionListScreen(
                             childCounts = if (showSubagents) childCounts else emptyMap(),
                             onOpen = onOpen,
                             onRename = { renaming = it },
-                            onDelete = { deleting = it }
+                            onDelete = { deleting = it },
+                            onMissionControl = { showMission = true }
                         )
                     }
                 }
@@ -610,6 +614,19 @@ fun SessionListScreen(
         CostSheet(sessions = state.sessions, onDismiss = { showCost = false })
     }
 
+    if (showMission) {
+        MissionControlSheet(
+            running = running,
+            previews = state.previews,
+            onOpen = { session ->
+                showMission = false
+                onOpen(session)
+            },
+            onStop = { session -> vm.stop(session.id) },
+            onDismiss = { showMission = false }
+        )
+    }
+
     renaming?.let { session ->
         RenameDialog(
             initial = session.title,
@@ -733,7 +750,8 @@ private fun ActiveCards(
     childCounts: Map<String, Int>,
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
-    onDelete: (SessionItem) -> Unit
+    onDelete: (SessionItem) -> Unit,
+    onMissionControl: () -> Unit
 ) {
     var showAll by remember { mutableStateOf(false) }
     val visible = running.take(2)
@@ -744,13 +762,27 @@ private fun ActiveCards(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            stringResource(R.string.session_running).uppercase(),
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(R.string.session_running).uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                stringResource(R.string.sessions_mission_control),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onMissionControl)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
         visible.forEach { session ->
             ActiveCard(
                 session = session,
@@ -1246,6 +1278,143 @@ private fun cleanPreview(raw: String?): String? {
         .trim()
     if (value.length > 110) value = value.take(107).trimEnd() + "…"
     return value.ifBlank { null }
+}
+
+/**
+ * The live board: every running agent as a tile with its clock, current line,
+ * and a stop control.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MissionControlSheet(
+    running: List<SessionItem>,
+    previews: Map<String, String>,
+    onOpen: (SessionItem) -> Unit,
+    onStop: (SessionItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.sessions_mission_control),
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Text(
+                        "${running.size} ${stringResource(R.string.session_running)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel)
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 620.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                running.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { session ->
+                            MissionTile(
+                                session = session,
+                                preview = previews[session.id],
+                                now = now,
+                                onOpen = { onOpen(session) },
+                                onStop = { onStop(session) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MissionTile(
+    session: SessionItem,
+    preview: String?,
+    now: Long,
+    onOpen: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onOpen,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ActivityBars(color = MaterialTheme.colorScheme.secondary)
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    elapsedClock(session.busyAt, now),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onStop, modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        Icons.Rounded.Stop,
+                        contentDescription = stringResource(R.string.action_stop),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                session.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            val line = preview?.let { cleanPreview(it) }
+            if (!line.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    line,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }
 
 /** Live `10m 07s` clock for a running session. */
