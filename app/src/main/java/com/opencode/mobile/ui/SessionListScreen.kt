@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
@@ -89,12 +90,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.MutedStore
 import com.opencode.mobile.MutedProjectStore
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.PinnedStore
+import com.opencode.mobile.ProjectOption
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionCache
@@ -246,7 +249,7 @@ fun SessionListScreen(
                 }
             } else {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp),
+                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -257,19 +260,11 @@ fun SessionListScreen(
                                 else -> R.string.sessions_greeting_evening
                             }
                         }
-                        Text(
-                            stringResource(greeting),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            stringResource(R.string.sessions_title),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        val subtitle = when {
+                        val eyebrow = when {
                             state.error != null -> stringResource(R.string.sessions_reconnecting_short)
                             else -> buildString {
+                                append(stringResource(greeting))
+                                append(" · ")
                                 append(stringResource(R.string.sessions_count, filtered.size))
                                 if (running.isNotEmpty()) {
                                     append(" · ")
@@ -279,25 +274,37 @@ fun SessionListScreen(
                                 }
                             }
                         }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                eyebrow,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (state.error != null) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.cost_title),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { showCost = true }
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
                         Text(
-                            subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (state.error != null) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            stringResource(R.string.sessions_title),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                     IconButton(onClick = { searchOpen = true }) {
                         Icon(
                             Icons.Rounded.Search,
                             contentDescription = stringResource(R.string.sessions_search),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    IconButton(onClick = { showCost = true }) {
-                        Icon(
-                            Icons.Rounded.AttachMoney,
-                            contentDescription = stringResource(R.string.cost_title),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
@@ -318,56 +325,39 @@ fun SessionListScreen(
         val subagentCount = state.sessions.count { it.parentID.isNotBlank() }
         if (state.projects.size > 1 || archivedCount > 0 || subagentCount > 0) {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (state.projects.size > 1) {
                     item {
-                        FilterChip(
+                        ProjectChip(
+                            label = stringResource(R.string.sessions_all_projects),
+                            count = filtered.size,
                             selected = projectFilter == null,
-                            onClick = { projectFilter = null },
-                            label = {
-                                Text(
-                                    stringResource(R.string.sessions_all_projects),
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
+                            onClick = { projectFilter = null }
                         )
                     }
                     items(
                         state.projects.filter { it.name.isNotBlank() || it.id.isNotBlank() },
                         key = { it.id }
                     ) { project ->
-                        FilterChip(
+                        ProjectChip(
+                            label = projectLabel(project, state.sessions),
+                            count = state.sessions.count { it.projectID == project.id },
                             selected = projectFilter == project.id,
                             onClick = {
                                 projectFilter = if (projectFilter == project.id) null else project.id
-                            },
-                            label = {
-                                Text(
-                                    project.name.ifBlank {
-                                        stringResource(
-                                            R.string.sessions_project_fallback,
-                                            project.id.take(4)
-                                        )
-                                    },
-                                    style = MaterialTheme.typography.labelMedium
-                                )
                             }
                         )
                     }
                 }
                 if (archivedCount > 0) {
                     item {
-                        FilterChip(
+                        ProjectChip(
+                            label = stringResource(R.string.sessions_archived),
+                            count = archivedCount,
                             selected = showArchived,
-                            onClick = { showArchived = !showArchived },
-                            label = {
-                                Text(
-                                    stringResource(R.string.sessions_archived) +
-                                        " ($archivedCount)"
-                                )
-                            }
+                            onClick = { showArchived = !showArchived }
                         )
                     }
                 }
@@ -425,14 +415,14 @@ fun SessionListScreen(
 
                     stickyHeader(key = "header-$group") {
                         Text(
-                            stringResource(labelOf(group)),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
+                            stringResource(labelOf(group)).uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.background)
-                                .padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
+                                .padding(start = 20.dp, top = 18.dp, bottom = 6.dp)
                         )
                     }
 
@@ -455,6 +445,7 @@ fun SessionListScreen(
                                     Box(
                                         Modifier
                                             .fillMaxSize()
+                                            .padding(horizontal = 16.dp, vertical = 3.dp)
                                             .background(
                                                 MaterialTheme.colorScheme.errorContainer,
                                                 RoundedCornerShape(16.dp)
@@ -575,8 +566,8 @@ fun SessionListScreen(
         }
     }
 
-        // Primary creation action: docked extended FAB above the navigation bar,
-        // hidden while scrolling down so it never covers a row.
+        // Primary creation action: the labelled FAB is deliberate (a plain round
+        // one was clipped in an earlier iteration). It hides on scroll-down.
         if (fabVisible) {
             ExtendedFloatingActionButton(
                 onClick = onNewSession,
@@ -641,6 +632,74 @@ fun SessionListScreen(
     }
 }
 
+@Composable
+private fun ProjectChip(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier
+            .clip(shape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) Color.Transparent
+                else MaterialTheme.colorScheme.outlineVariant,
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = (if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.6f)
+        )
+    }
+}
+
+/** Project ids without a name fall back to the folder name, never "Project 76d3". */
+@Composable
+private fun projectLabel(project: ProjectOption, sessions: List<SessionItem>): String {
+    if (project.name.isNotBlank()) return project.name
+    val base = sessions.firstOrNull { it.projectID == project.id }
+        ?.directory
+        .orEmpty()
+        .trimEnd('\\', '/')
+        .substringAfterLast('\\')
+        .substringAfterLast('/')
+    return base.ifBlank {
+        stringResource(R.string.sessions_project_fallback, project.id.take(4))
+    }
+}
+
+/** Deterministic per-project dot colour, matching the model sheet's provider hues. */
+@Composable
+private fun projectAccent(key: String): Color {
+    val hue = ((key.hashCode() % 360) + 360) % 360
+    return Color.hsl(
+        hue.toFloat(),
+        saturation = 0.48f,
+        lightness = if (androidx.compose.foundation.isSystemInDarkTheme()) 0.72f else 0.46f
+    )
+}
+
 /**
  * Live work is state, not history. Vertical, capped at two cards, with an
  * explicit "show all" for the rest — no horizontal scrolling for status.
@@ -664,6 +723,13 @@ private fun ActiveCards(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        Text(
+            stringResource(R.string.session_running).uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+        )
         visible.forEach { session ->
             ActiveCard(
                 session = session,
@@ -761,7 +827,7 @@ private fun ActiveCard(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -875,16 +941,29 @@ private fun SessionRow(
         ).joinToString(" · ")
     }
 
-    Box {
+    val shape = RoundedCornerShape(16.dp)
+    Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
+                .clip(shape)
+                .background(
+                    if (androidx.compose.foundation.isSystemInDarkTheme()) {
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    }
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    shape = shape
+                )
                 .combinedClickable(
                     onClick = onOpen,
                     onLongClick = { menuOpen = true }
                 )
-                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Reserved gutter: dots never shift titles out of alignment.
@@ -951,6 +1030,14 @@ private fun SessionRow(
                 }
                 if (meta.isNotBlank() || subagents > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (session.projectID.isNotBlank()) {
+                            Box(
+                                Modifier
+                                    .size(6.dp)
+                                    .background(projectAccent(session.projectID), CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
                         Text(
                             meta,
                             style = MaterialTheme.typography.bodySmall,

@@ -654,15 +654,21 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun relativeTime(millis: Long): String {
     if (millis <= 0L) return ""
-    val delta = System.currentTimeMillis() - millis
-    if (delta < 60_000) return stringResource(R.string.time_just_now)
-    val minutes = delta / 60_000
-    if (minutes < 60) return stringResource(R.string.time_minutes_ago, minutes.toInt())
-    val hours = minutes / 60
-    if (hours < 24) return stringResource(R.string.time_hours_ago, hours.toInt())
-    val days = hours / 24
-    if (days < 7) return stringResource(R.string.time_days_ago, days.toInt())
-    return String.format(Locale.getDefault(), "%tY-%<tm-%<td", java.util.Date(millis))
+    val zone = java.time.ZoneId.systemDefault()
+    val at = java.time.Instant.ofEpochMilli(millis).atZone(zone)
+    val today = java.time.LocalDate.now(zone)
+    val day = at.toLocalDate()
+    val locale = Locale.getDefault()
+    return when {
+        day == today -> at.format(java.time.format.DateTimeFormatter.ofLocalizedTime(
+            java.time.format.FormatStyle.SHORT
+        ))
+        day == today.minusDays(1) -> stringResource(R.string.time_yesterday)
+        day.isAfter(today.minusDays(7)) -> at.format(
+            java.time.format.DateTimeFormatter.ofPattern("EEE", locale)
+        )
+        else -> at.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", locale))
+    }
 }
 
 fun formatCost(cost: Double): String =

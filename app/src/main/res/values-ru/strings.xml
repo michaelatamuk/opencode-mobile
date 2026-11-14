@@ -75,6 +75,7 @@
     <string name="session_delete_body">Сессия будет удалена с сервера.</string>
 
     <string name="time_just_now">только что</string>
+    <string name="time_yesterday">Вчера</string>
     <string name="time_minutes_ago">%1$d мин назад</string>
     <string name="time_hours_ago">%1$d ч назад</string>
     <string name="time_days_ago">%1$d дн назад</string>
