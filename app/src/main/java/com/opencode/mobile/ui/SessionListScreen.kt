@@ -163,6 +163,19 @@ fun SessionListScreen(
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
+    var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    LaunchedEffect(state.sessions) {
+        val runningNow = state.sessions.filter { it.running }.map { it.id }.toSet()
+        val finished = previousRunning - runningNow
+        previousRunning = runningNow
+        if (finished.isNotEmpty()) {
+            flashIds = flashIds + finished
+            delay(1400)
+            flashIds = flashIds - finished
+        }
+    }
 
     val listState = rememberLazyListState()
 
@@ -474,6 +487,7 @@ fun SessionListScreen(
                                         0
                                     },
                                     subagentsExpanded = session.id in expandedParents,
+                                    justFinished = session.id in flashIds,
                                     onToggleSubagents = if (
                                         showSubagents &&
                                         (childCounts[session.id] ?: 0) > 0
@@ -528,6 +542,7 @@ fun SessionListScreen(
                                                 projectMuted = child.projectID in mutedProjects,
                                                 subagents = 0,
                                                 subagent = true,
+                                                justFinished = child.id in flashIds,
                                                 onOpen = { onOpen(child) },
                                                 onRename = { renaming = child },
                                                 onDelete = { deleting = child },
@@ -928,6 +943,7 @@ private fun SessionRow(
     projectName: String = "",
     subagent: Boolean = false,
     subagentsExpanded: Boolean = false,
+    justFinished: Boolean = false,
     onToggleSubagents: (() -> Unit)? = null,
     onOpen: () -> Unit,
     onRename: () -> Unit,
@@ -958,6 +974,12 @@ private fun SessionRow(
         ),
         label = "sessionRowPress"
     )
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (justFinished) MaterialTheme.colorScheme.secondary
+        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+        animationSpec = androidx.compose.animation.core.tween(260),
+        label = "sessionRowBorder"
+    )
     Box(Modifier.padding(horizontal = 16.dp, vertical = 3.dp)) {
         Row(
             Modifier
@@ -972,8 +994,8 @@ private fun SessionRow(
                     }
                 )
                 .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    width = if (justFinished) 1.5.dp else 1.dp,
+                    color = borderColor,
                     shape = shape
                 )
                 .combinedClickable(
