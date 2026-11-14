@@ -18,8 +18,8 @@ object WordDiff {
         val a = tokens(original)
         val b = tokens(branch)
         if (a.isEmpty() || b.isEmpty()) return null
-        if (a.size > 800 || b.size > 800) return null
-        if (a.size.toLong() * b.size > 640_000) return null
+        if (a.size > 1200 || b.size > 1200) return null
+        if (a.size.toLong() * b.size > 1_400_000) return null
 
         val dp = Array(a.size + 1) { IntArray(b.size + 1) }
         for (i in a.indices.reversed()) {

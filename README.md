@@ -38,8 +38,13 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
   text files only
 - Skills detail view with the skill's full markdown content
-- Schedules per session: interval, cron or one-off time, pause, resume, delete,
-  last output shown
+- Schedules per session: interval, cron or one-off time, optional run limit,
+  pause, resume, delete, last output shown
+- Monthly and daily budget caps with one alert each
+- Voice language tag for dictation and read-aloud; tap again to stop reading
+- Session archive from the row menu with an Archived filter chip
+- Branch/provider shown in the Changes sheet from VCS info
+- Sending indicator above the composer
 - Profile switching also applies its theme, accent, notification mode and watchdog
 - Widget configuration at add time: session titles and stop action toggles
 - Connections page: MCP servers with connect/disconnect, integration search, API-key

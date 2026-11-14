@@ -114,7 +114,7 @@ import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
-private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Connections, Security, About }
+private enum class SettingsPage { Home, Connection, Profiles, Notifications, Appearance, Automation, Pending, Connections, Voice, Security, About }
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
 
@@ -156,6 +156,9 @@ fun SettingsScreen(
 
     var budget by remember {
         mutableStateOf(SecurePrefs.get(context).getString("budget_usd", "").orEmpty())
+    }
+    var monthBudget by remember {
+        mutableStateOf(SecurePrefs.get(context).getString("budget_month_usd", "").orEmpty())
     }
     var biometricLock by remember {
         mutableStateOf(SecurePrefs.get(context).getBoolean("biometric_lock", false))
@@ -381,6 +384,13 @@ fun SettingsScreen(
                     SecurePrefs.get(context).edit().putString("budget_usd", budget).apply()
                 },
                 spentToday = UsageStore.today(context),
+                monthBudget = monthBudget,
+                onMonthBudget = { value ->
+                    monthBudget = value.filter { it.isDigit() || it == '.' }.take(10)
+                    SecurePrefs.get(context).edit()
+                        .putString("budget_month_usd", monthBudget)
+                        .apply()
+                },
                 pendingCount = PendingStore.all(context).size,
                 onPending = { page = SettingsPage.Pending },
                 onBack = { page = SettingsPage.Home }
@@ -392,6 +402,11 @@ fun SettingsScreen(
             )
 
             SettingsPage.Connections -> ConnectionsPage(
+                context = context,
+                onBack = { page = SettingsPage.Home }
+            )
+
+            SettingsPage.Voice -> VoicePage(
                 context = context,
                 onBack = { page = SettingsPage.Home }
             )
@@ -510,6 +525,13 @@ private fun SettingsHome(
                     title = stringResource(R.string.settings_connections),
                     supporting = stringResource(R.string.settings_connections_summary),
                     onClick = { onOpen(SettingsPage.Connections) }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Notifications,
+                    title = stringResource(R.string.settings_voice),
+                    supporting = stringResource(R.string.settings_voice_summary),
+                    onClick = { onOpen(SettingsPage.Voice) }
                 )
                 SettingsDivider()
                 SettingsRow(
@@ -1176,6 +1198,8 @@ private fun AutomationPage(
     budget: String,
     onBudget: (String) -> Unit,
     spentToday: Double,
+    monthBudget: String,
+    onMonthBudget: (String) -> Unit,
     pendingCount: Int,
     onPending: () -> Unit,
     onBack: () -> Unit
@@ -1252,6 +1276,27 @@ private fun AutomationPage(
                     stringResource(R.string.settings_spend_today, formatCost(spentToday)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    stringResource(R.string.settings_budget_month_title),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = monthBudget,
+                    onValueChange = onMonthBudget,
+                    label = { Text(stringResource(R.string.settings_budget_month_field)) },
+                    placeholder = { Text("50.00") },
+                    prefix = { Text("$") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done
+                    ),
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -1543,6 +1588,41 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+/* ------------------------------------------------------------------ voice */
+
+@Composable
+private fun VoicePage(context: Context, onBack: () -> Unit) {
+    var language by remember {
+        mutableStateOf(SecurePrefs.get(context).getString("voice_language", "").orEmpty())
+    }
+    PageScaffold(
+        title = stringResource(R.string.settings_voice),
+        onBack = onBack
+    ) {
+        Text(
+            stringResource(R.string.settings_voice_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
+        SettingsGroup {
+            Column(Modifier.padding(16.dp)) {
+                SettingsField(
+                    value = language,
+                    onValueChange = { value ->
+                        language = value
+                        SecurePrefs.get(context).edit()
+                            .putString("voice_language", value.trim())
+                            .apply()
+                    },
+                    label = stringResource(R.string.settings_voice_language),
+                    placeholder = "en-US"
+                )
+            }
+        }
     }
 }
 

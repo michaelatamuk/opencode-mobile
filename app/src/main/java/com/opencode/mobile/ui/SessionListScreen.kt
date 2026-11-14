@@ -137,14 +137,16 @@ fun SessionListScreen(
     var projectFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
     var muted by remember { mutableStateOf(MutedStore.all(context)) }
+    var showArchived by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
 
-    val scoped = remember(state.sessions, projectFilter) {
-        if (projectFilter == null) state.sessions
-        else state.sessions.filter { it.projectID == projectFilter }
+    val scoped = remember(state.sessions, projectFilter, showArchived) {
+        val base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
+        if (projectFilter == null) base
+        else base.filter { it.projectID == projectFilter }
     }
     val filtered = remember(scoped, query, pinned) {
         val base = if (query.isBlank()) scoped
@@ -265,26 +267,43 @@ fun SessionListScreen(
             }
         }
 
-        if (state.projects.size > 1) {
+        val archivedCount = state.sessions.count { it.archived }
+        if (state.projects.size > 1 || archivedCount > 0) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
-                    FilterChip(
-                        selected = projectFilter == null,
-                        onClick = { projectFilter = null },
-                        label = { Text(stringResource(R.string.sessions_all_projects)) }
-                    )
+                if (state.projects.size > 1) {
+                    item {
+                        FilterChip(
+                            selected = projectFilter == null,
+                            onClick = { projectFilter = null },
+                            label = { Text(stringResource(R.string.sessions_all_projects)) }
+                        )
+                    }
+                    items(state.projects, key = { it.id }) { project ->
+                        FilterChip(
+                            selected = projectFilter == project.id,
+                            onClick = {
+                                projectFilter = if (projectFilter == project.id) null else project.id
+                            },
+                            label = { Text(project.name) }
+                        )
+                    }
                 }
-                items(state.projects, key = { it.id }) { project ->
-                    FilterChip(
-                        selected = projectFilter == project.id,
-                        onClick = {
-                            projectFilter = if (projectFilter == project.id) null else project.id
-                        },
-                        label = { Text(project.name) }
-                    )
+                if (archivedCount > 0) {
+                    item {
+                        FilterChip(
+                            selected = showArchived,
+                            onClick = { showArchived = !showArchived },
+                            label = {
+                                Text(
+                                    stringResource(R.string.sessions_archived) +
+                                        " ($archivedCount)"
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -387,6 +406,7 @@ fun SessionListScreen(
                                     unread = seen > 0L && session.updated > seen,
                                     pinned = session.id in pinned,
                                     muted = session.id in muted,
+                                    archived = session.archived,
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
                                     onDelete = { deleting = session },
@@ -395,7 +415,8 @@ fun SessionListScreen(
                                     },
                                     onToggleMute = {
                                         muted = MutedStore.toggle(context, session.id)
-                                    }
+                                    },
+                                    onArchive = { vm.archive(session.id, !session.archived) }
                                 )
                             }
                         }
@@ -651,11 +672,13 @@ private fun SessionRow(
     unread: Boolean,
     pinned: Boolean,
     muted: Boolean,
+    archived: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onTogglePin: () -> Unit,
-    onToggleMute: () -> Unit
+    onToggleMute: () -> Unit,
+    onArchive: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val cost = formatCost(session.cost)
@@ -782,6 +805,19 @@ private fun SessionRow(
                     onClick = {
                         menuOpen = false
                         onToggleMute()
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(
+                                if (archived) R.string.action_unarchive else R.string.action_archive
+                            )
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onArchive()
                     }
                 )
                 DropdownMenuItem(

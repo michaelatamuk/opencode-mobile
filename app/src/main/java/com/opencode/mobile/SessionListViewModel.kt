@@ -168,4 +168,17 @@ class SessionListViewModel(
             }
         }
     }
+
+    fun archive(id: String, archived: Boolean) {
+        viewModelScope.launch {
+            try {
+                repo.setArchived(id, archived)
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
 }

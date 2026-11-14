@@ -30,6 +30,7 @@ data class SessionItem(
     val projectID: String = "",
     val directory: String = "",
     val parentID: String = "",
+    val archived: Boolean = false,
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L
 )
@@ -148,6 +149,8 @@ data class IntegrationItem(
 
 data class ShellRun(val id: String, val status: String)
 
+data class VcsInfo(val provider: String, val branch: String, val defaultBranch: String)
+
 data class SkillOption(
     val id: String,
     val name: String,
@@ -182,6 +185,7 @@ private fun JSONObject.toSession(): SessionItem {
         parentID = optString("parentID").ifBlank {
             optJSONObject("fork")?.optString("sessionID").orEmpty()
         },
+        archived = (time?.optLong("archived") ?: 0L) > 0L,
         tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
         tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
     )
@@ -460,6 +464,13 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         client.newCall(request("/api/session/$id").delete().build()).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }
+    }
+
+    suspend fun setArchived(id: String, archived: Boolean): Unit = withContext(Dispatchers.IO) {
+        patchEmpty(
+            "/api/session/$id",
+            JSONObject().put("archived", archived).toString()
+        )
     }
 
     suspend fun createSession(): String = withContext(Dispatchers.IO) {
@@ -963,6 +974,17 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             .optJSONObject("data")
             ?.optString("output")
             .orEmpty()
+    }
+
+    suspend fun vcsInfo(directory: String): VcsInfo? = withContext(Dispatchers.IO) {
+        val query = if (directory.isBlank()) "" else "?location[directory]=" + Uri.encode(directory)
+        val data = getJson("/api/vcs$query").optJSONObject("data") ?: return@withContext null
+        val branch = data.optJSONObject("branch")
+        VcsInfo(
+            provider = data.optString("provider"),
+            branch = branch?.optString("current").orEmpty(),
+            defaultBranch = branch?.optString("default").orEmpty()
+        )
     }
 
     /** Emits the JSON payload of every server-sent event. */

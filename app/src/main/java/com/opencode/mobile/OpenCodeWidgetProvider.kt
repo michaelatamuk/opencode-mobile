@@ -46,6 +46,11 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
             SecurePrefs.get(context).edit()
                 .putString("watch_lines", lines)
                 .putString("watch_stop_id", stopSessionID.orEmpty())
+                .putString(
+                    "widget_updated",
+                    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date())
+                )
                 .apply()
             runCatching {
                 val manager = AppWidgetManager.getInstance(context)
@@ -68,7 +73,11 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
                 val prefs = SecurePrefs.get(context)
                 val showTitles = prefs.getBoolean("widget_show_titles", true)
                 val showStop = prefs.getBoolean("widget_show_stop", true)
-                setTextViewText(R.id.widget_status, status)
+                val updated = prefs.getString("widget_updated", "").orEmpty()
+                setTextViewText(
+                    R.id.widget_status,
+                    if (updated.isBlank()) status else "$status · $updated"
+                )
                 if (lines.isBlank() || !showTitles) {
                     setViewVisibility(R.id.widget_lines, View.GONE)
                 } else {

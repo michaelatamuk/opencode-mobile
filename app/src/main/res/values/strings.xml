@@ -54,6 +54,9 @@
     <string name="action_unpin">Unpin</string>
     <string name="action_mute">Mute notifications</string>
     <string name="action_unmute">Unmute notifications</string>
+    <string name="action_archive">Archive</string>
+    <string name="action_unarchive">Unarchive</string>
+    <string name="sessions_archived">Archived</string>
     <string name="action_cancel">Cancel</string>
     <string name="session_rename_title">Rename session</string>
     <string name="session_delete_title">Delete session?</string>
@@ -117,6 +120,10 @@
     <string name="settings_disconnect">Disconnect</string>
     <string name="settings_integration_key">API key</string>
     <string name="settings_search_integrations">Search integrations</string>
+    <string name="settings_voice">Voice</string>
+    <string name="settings_voice_summary">Language for dictation and reading</string>
+    <string name="settings_voice_language">Language tag</string>
+    <string name="settings_voice_hint">BCP-47 tag such as en-US, de-DE or ru-RU. Empty uses the system default.</string>
     <string name="settings_security_title">Security</string>
     <string name="settings_biometric_title">Biometric lock</string>
     <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>
@@ -230,6 +237,10 @@
     <string name="settings_budget_field">Budget in USD</string>
     <string name="notif_budget_title">Daily budget reached</string>
     <string name="notif_budget_body">Spent $%1$.2f of $%2$.2f today.</string>
+    <string name="settings_budget_month_title">Monthly budget</string>
+    <string name="settings_budget_month_field">Monthly budget in USD</string>
+    <string name="notif_budget_month_title">Monthly budget reached</string>
+    <string name="notif_budget_month_body">Spent $%1$.2f of $%2$.2f this month.</string>
     <string name="settings_notifications_off">Notifications are disabled for this app in Android settings, so nothing can appear. Allow them, then send a test.</string>
     <string name="settings_home_title">Settings</string>
     <string name="settings_home_subtitle">OpenCode mobile</string>

@@ -145,9 +145,11 @@ import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
 import com.opencode.mobile.ScheduleItem
+import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionPreset
 import com.opencode.mobile.SkillOption
+import com.opencode.mobile.VcsInfo
 import com.opencode.mobile.WatchState
 import com.opencode.mobile.friendlyError
 import kotlinx.coroutines.Dispatchers
@@ -234,7 +236,18 @@ fun ChatScreen(
         }
     }
     val voicePrompt = stringResource(R.string.chat_voice_prompt)
-    val tts = remember { TextToSpeech(context) { } }
+    val voiceLanguage = remember {
+        SecurePrefs.get(context).getString("voice_language", "").orEmpty()
+    }
+    val tts = remember {
+        var reference: TextToSpeech? = null
+        TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS && voiceLanguage.isNotBlank()) {
+                reference?.language = java.util.Locale.forLanguageTag(voiceLanguage)
+            }
+        }.also { reference = it }
+    }
+    var speakingText by remember { mutableStateOf<String?>(null) }
     DisposableEffect(Unit) {
         onDispose {
             tts.stop()
@@ -243,8 +256,17 @@ fun ChatScreen(
     }
     val speak: (String) -> Unit = { text ->
         if (text.isNotBlank()) {
-            tts.stop()
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message")
+            if (speakingText == text) {
+                tts.stop()
+                speakingText = null
+            } else {
+                tts.stop()
+                if (voiceLanguage.isNotBlank()) {
+                    tts.language = java.util.Locale.forLanguageTag(voiceLanguage)
+                }
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message")
+                speakingText = text
+            }
         }
     }
 
@@ -607,6 +629,16 @@ fun ChatScreen(
                     }
                 }
             }
+            if (state.sending) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp)
+                        .height(2.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
             state.error?.let {
                 Text(
                     it,
@@ -663,6 +695,9 @@ fun ChatScreen(
                             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                         )
                         .putExtra(RecognizerIntent.EXTRA_PROMPT, voicePrompt)
+                    if (voiceLanguage.isNotBlank()) {
+                        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, voiceLanguage)
+                    }
                     runCatching { voiceLauncher.launch(intent) }
                 },
                 onAttachFile = { runCatching { fileLauncher.launch(arrayOf("*/*")) } }
@@ -867,6 +902,7 @@ private fun DiffSheet(
     var pendingRevert by remember { mutableStateOf<FileDiff?>(null) }
     var revertNote by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
+    var vcs by remember { mutableStateOf<VcsInfo?>(null) }
     val scope = rememberCoroutineScope()
 
     // When the project has no VCS diff (or the session lives outside the repo),
@@ -898,6 +934,7 @@ private fun DiffSheet(
             error = friendlyError(e)
             diffs = emptyList()
         }
+        vcs = runCatching { repo.vcsInfo(directory) }.getOrNull()
     }
 
     ModalBottomSheet(
@@ -919,6 +956,25 @@ private fun DiffSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
                 )
+            }
+
+            vcs?.let { info ->
+                if (info.branch.isNotBlank()) {
+                    Text(
+                        buildString {
+                            if (info.provider.isNotBlank()) append(info.provider).append(" · ")
+                            append(info.branch)
+                            if (info.defaultBranch.isNotBlank() &&
+                                info.defaultBranch != info.branch
+                            ) {
+                                append(" (default ").append(info.defaultBranch).append(")")
+                            }
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                    )
+                }
             }
 
             when {
@@ -1767,6 +1823,7 @@ private fun SchedulesSheet(
     var mode by remember { mutableStateOf("interval") }
     var cron by remember { mutableStateOf("") }
     var at by remember { mutableStateOf("") }
+    var endsTimes by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -1856,6 +1913,13 @@ private fun SchedulesSheet(
                 "cron" -> cron.isNotBlank()
                 else -> at.isNotBlank()
             }
+            OutlinedTextField(
+                value = endsTimes,
+                onValueChange = { endsTimes = it.filter { c -> c.isDigit() }.take(3) },
+                label = { Text("Stop after N runs (optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             Button(
                 onClick = {
                     if (prompt.isNotBlank() && whenReady) {
@@ -1867,8 +1931,12 @@ private fun SchedulesSheet(
                                     else -> org.json.JSONObject()
                                         .put("every", "$minutes minutes")
                                 }
+                                endsTimes.toIntOrNull()?.takeIf { it > 0 }?.let { times ->
+                                    spec.put("ends", org.json.JSONObject().put("times", times))
+                                }
                                 repo.createSchedule(sessionID, prompt.trim(), spec)
                                 prompt = ""
+                                endsTimes = ""
                                 reload()
                             } catch (e: Exception) {
                                 error = friendlyError(e)

@@ -300,35 +300,58 @@ class SessionWatcherService : Service() {
         }
     }
 
-    /** Warns once per day when today's spend reaches the configured budget. */
+    /** Warns once per day/month when spend reaches the configured caps. */
     private fun checkBudget() {
         val prefs = SecurePrefs.get(this)
-        val budget = prefs.getString("budget_usd", "")?.toDoubleOrNull() ?: return
-        if (budget <= 0.0) return
-        val spent = UsageStore.today(this)
-        if (spent < budget) return
-
         val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
             .format(java.util.Date())
-        if (prefs.getString("budget_alerted_day", "") == day) return
-        prefs.edit().putString("budget_alerted_day", day).apply()
-
         val open = PendingIntent.getActivity(
             this,
             3,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
-            .setSmallIcon(R.drawable.ic_stat_opencode)
-            .setContentTitle(getString(R.string.notif_budget_title))
-            .setContentText(getString(R.string.notif_budget_body, spent, budget))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(open)
-            .build()
-        getSystemService(android.app.NotificationManager::class.java)
-            .notify(4_100_001, notification)
+
+        fun notify(id: Int, title: String, body: String) {
+            val notification = NotificationCompat.Builder(this, CHANNEL_SESSIONS)
+                .setSmallIcon(R.drawable.ic_stat_opencode)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build()
+            getSystemService(android.app.NotificationManager::class.java).notify(id, notification)
+        }
+
+        val daily = prefs.getString("budget_usd", "")?.toDoubleOrNull()
+        if (daily != null && daily > 0.0) {
+            val spent = UsageStore.today(this)
+            if (spent >= daily && prefs.getString("budget_alerted_day", "") != day) {
+                prefs.edit().putString("budget_alerted_day", day).apply()
+                notify(
+                    4_100_001,
+                    getString(R.string.notif_budget_title),
+                    getString(R.string.notif_budget_body, spent, daily)
+                )
+            }
+        }
+
+        val monthly = prefs.getString("budget_month_usd", "")?.toDoubleOrNull()
+        if (monthly != null && monthly > 0.0) {
+            val spentMonth = UsageStore.monthToDate(this)
+            val monthKey = day.take(7)
+            if (spentMonth >= monthly &&
+                prefs.getString("budget_month_alerted", "") != monthKey
+            ) {
+                prefs.edit().putString("budget_month_alerted", monthKey).apply()
+                notify(
+                    4_100_002,
+                    getString(R.string.notif_budget_month_title),
+                    getString(R.string.notif_budget_month_body, spentMonth, monthly)
+                )
+            }
+        }
     }
 
     private suspend fun syncPermissions(api: Api) {

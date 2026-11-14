@@ -67,6 +67,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun deleteSession(id: String) = api.deleteSession(id)
 
+    suspend fun setArchived(id: String, archived: Boolean) = api.setArchived(id, archived)
+
     suspend fun messages(sessionID: String, olderCursor: String? = null): Api.MessagePage =
         api.messages(sessionID, limit = 50, olderCursor = olderCursor)
 
@@ -120,6 +122,8 @@ class OpenCodeRepository(val api: Api) {
         api.runShell(sessionID, command)
 
     suspend fun shellOutput(shellID: String): String = api.shellOutput(shellID)
+
+    suspend fun vcsInfo(directory: String): VcsInfo? = api.vcsInfo(directory)
 
     suspend fun reply(sessionID: String, requestID: String, decision: String) =
         api.reply(sessionID, requestID, decision)
