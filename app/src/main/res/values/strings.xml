@@ -158,6 +158,8 @@
     <string name="chat_activity_thought">Thought</string>
     <string name="chat_activity_thoughts">%1$d thoughts</string>
     <string name="chat_activity_thought_for">Thought for %1$ds</string>
+    <string name="chat_activity_running">Running %1$s</string>
+    <string name="chat_activity_steps">%1$d steps</string>
     <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_queue_steer">Steer</string>
     <string name="chat_queue_edit">Edit</string>

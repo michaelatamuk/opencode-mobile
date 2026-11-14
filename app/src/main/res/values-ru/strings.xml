@@ -154,6 +154,8 @@
     <string name="chat_activity_thought">Размышление</string>
     <string name="chat_activity_thoughts">Размышлений: %1$d</string>
     <string name="chat_activity_thought_for">Размышление %1$d с</string>
+    <string name="chat_activity_running">Выполняется %1$s</string>
+    <string name="chat_activity_steps">Шагов: %1$d</string>
     <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_queue_steer">Вклинить</string>
     <string name="chat_queue_edit">Изменить</string>

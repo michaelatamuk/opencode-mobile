@@ -66,9 +66,14 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.BrokenImage
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -125,10 +130,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -316,6 +323,7 @@ fun ChatScreen(
         if (query.isBlank()) state.messages
         else state.messages.filter { it.plainText.contains(query, ignoreCase = true) }
     }
+    val blocks = remember(displayMessages) { buildChatBlocks(displayMessages) }
 
     val lastId = state.messages.lastOrNull()?.id
     val lastLength = state.messages.lastOrNull()?.plainText?.length
@@ -420,20 +428,6 @@ fun ChatScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                AnimatedVisibility(visible = state.busy) {
-                    Row(
-                        Modifier.padding(top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ActivityBars()
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            stringResource(R.string.chat_working),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                }
             }
             IconButton(onClick = { searchOpen = true }) {
                 Icon(
@@ -553,23 +547,32 @@ fun ChatScreen(
             StreamingHairline()
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 14.dp,
+                    bottom = 96.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(displayMessages, key = { it.id }) { message ->
+                items(blocks, key = { it.key }) { block ->
                     Box(Modifier.animateItem()) {
-                        when (message.role) {
-                            "user" -> UserMessage(
-                                message = message,
+                        when (block) {
+                            is ChatBlock.UserBlock -> UserMessage(
+                                message = block.message,
                                 onBranch = { before ->
                                     vm.fork(before) { child -> onSessionCreated(child) }
                                 }
                             )
-                            else -> AssistantMessage(message, onSpeak = speak)
+                            is ChatBlock.TurnBlock -> TurnMessage(
+                                messages = block.messages,
+                                directory = state.directory,
+                                onSpeak = speak
+                            )
                         }
                     }
                 }
@@ -2767,6 +2770,97 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
     }
 }
 
+private sealed interface ChatBlock {
+    val key: String
+
+    data class UserBlock(val message: Msg) : ChatBlock {
+        override val key: String = message.id
+    }
+
+    data class TurnBlock(val messages: List<Msg>) : ChatBlock {
+        override val key: String = messages.first().id
+    }
+}
+
+private fun buildChatBlocks(messages: List<Msg>): List<ChatBlock> {
+    val blocks = mutableListOf<ChatBlock>()
+    val turn = mutableListOf<Msg>()
+    fun flush() {
+        if (turn.isNotEmpty()) {
+            blocks += ChatBlock.TurnBlock(turn.toList())
+            turn.clear()
+        }
+    }
+    messages.forEach { message ->
+        if (message.role == "user") {
+            flush()
+            blocks += ChatBlock.UserBlock(message)
+        } else {
+            turn += message
+        }
+    }
+    flush()
+    return blocks
+}
+
+@Composable
+private fun TurnMessage(messages: List<Msg>, directory: String, onSpeak: (String) -> Unit) {
+    val parts = remember(messages) { messages.flatMap { it.parts } }
+    val activity = parts.filter { it is Part.Tool || it is Part.Reasoning }
+    val text = parts.filterIsInstance<Part.Text>()
+        .map { it.text }
+        .filter { it.isNotBlank() }
+        .joinToString("\n\n")
+    val pending = messages.lastOrNull()?.pending == true
+
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (activity.size == 1) {
+            ActivityPart(activity.first(), pending)
+        } else if (activity.size > 1) {
+            ActivityGroup(
+                parts = activity,
+                directory = directory,
+                pending = pending,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (text.isNotBlank()) {
+            SelectionContainer { MarkdownText(text) }
+        }
+        if (pending) TypingIndicator(compact = true)
+        if (!pending && text.isNotBlank()) {
+            val clipboard = LocalClipboardManager.current
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconButton(
+                    onClick = { onSpeak(text) },
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.VolumeUp,
+                        contentDescription = stringResource(R.string.chat_read_aloud),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { clipboard.setText(AnnotatedString(text)) },
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.ContentCopy,
+                        contentDescription = stringResource(R.string.chat_copy_message),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ActivityPart(part: Part, pending: Boolean) {
     when (part) {
@@ -2792,42 +2886,25 @@ private fun ActivityPart(part: Part, pending: Boolean) {
 }
 
 @Composable
-private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifier = Modifier) {
+private fun ActivityGroup(
+    parts: List<Part>,
+    directory: String,
+    pending: Boolean,
+    modifier: Modifier = Modifier
+) {
     var expanded by remember { mutableStateOf(false) }
+    val steps = parts.filter { it is Part.Tool || it is Part.Reasoning }
     val tools = parts.filterIsInstance<Part.Tool>()
-    val thoughts = parts.filterIsInstance<Part.Reasoning>()
-    val running = pending && tools.any { it.status == "running" || it.status == "streaming" }
-    val names = tools.map { it.name }.distinct().take(3)
-    val prettyNames = names.joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
-
-    val usedOne = stringResource(R.string.chat_activity_used_one)
-    val usedMany = stringResource(R.string.chat_activity_used, tools.size)
-    val working = stringResource(
-        R.string.chat_activity_working,
-        names.firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "…"
-    )
-    val thoughtsLabel = if (thoughts.size == 1) {
-        val total = thoughts.first().durationMs
-        if (total >= 1000) {
-            stringResource(R.string.chat_activity_thought_for, (total / 1000).toInt())
-        } else {
-            stringResource(R.string.chat_activity_thought)
-        }
-    } else {
-        stringResource(R.string.chat_activity_thoughts, thoughts.size)
+    val runningTool = tools.lastOrNull {
+        it.status == "running" || it.status == "streaming"
     }
-
-    val summary = when {
-        running -> working
-        else -> listOf(
-            thoughtsLabel.takeIf { thoughts.isNotEmpty() },
-            buildString {
-                if (tools.isNotEmpty()) {
-                    append(if (tools.size == 1) usedOne else usedMany)
-                    if (prettyNames.isNotBlank()) append(" · ").append(prettyNames)
-                }
-            }.takeIf { tools.isNotEmpty() }
-        ).filterNotNull().joinToString(" · ")
+    val running = pending && runningTool != null
+    val currentName = (runningTool?.name ?: tools.lastOrNull()?.name)
+        ?.replaceFirstChar { it.uppercase() }
+    val summary = if (running) {
+        stringResource(R.string.chat_activity_running, currentName ?: "…")
+    } else {
+        stringResource(R.string.chat_activity_steps, steps.size)
     }
 
     Surface(
@@ -2847,10 +2924,10 @@ private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifie
                     ActivityBars()
                 } else {
                     Icon(
-                        Icons.Rounded.Psychology,
+                        Icons.Rounded.CheckCircle,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(15.dp)
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 Spacer(Modifier.width(8.dp))
@@ -2871,29 +2948,19 @@ private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifie
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                 ) {
-                    parts.forEach { part ->
+                    steps.forEachIndexed { index, part ->
                         when (part) {
-                            is Part.Tool -> ToolCallCard(
-                                name = part.name,
-                                status = part.status,
-                                summary = part.summary,
-                                input = part.input,
-                                output = part.output,
-                                error = part.error,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            is Part.Reasoning -> ReasoningBlock(
-                                text = part.text,
-                                durationMs = part.durationMs,
-                                pending = pending,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
+                            is Part.Tool -> ToolStep(part, directory)
+                            is Part.Reasoning -> ThoughtStep(part, pending)
                             else -> Unit
+                        }
+                        if (index < steps.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
                         }
                     }
                 }
@@ -2902,95 +2969,194 @@ private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifie
     }
 }
 
-private sealed interface DisplayBlock {
-    data class TextBlock(val text: String) : DisplayBlock
-    data class Activity(val parts: List<Part>) : DisplayBlock
+private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
+    "bash", "shell" -> Icons.Rounded.Terminal
+    "edit", "write", "patch", "multiedit", "apply_patch", "create_file",
+    "str_replace_editor" -> Icons.Rounded.Edit
+
+    "read", "read_file" -> Icons.Rounded.InsertDriveFile
+    "grep", "glob", "search" -> Icons.Rounded.Search
+    "webfetch", "websearch" -> Icons.Rounded.Public
+    "task" -> Icons.Rounded.CallSplit
+    else -> Icons.Rounded.Build
 }
 
-private fun groupDisplayParts(parts: List<Part>): List<DisplayBlock> {
-    val out = mutableListOf<DisplayBlock>()
-    val activity = mutableListOf<Part>()
-    fun flush() {
-        if (activity.isNotEmpty()) {
-            out += DisplayBlock.Activity(activity.toList())
-            activity.clear()
-        }
-    }
-    parts.forEach { part ->
-        when (part) {
-            is Part.Text -> {
-                flush()
-                if (part.text.isNotBlank()) out += DisplayBlock.TextBlock(part.text)
-            }
+private fun prettyTool(name: String): String =
+    name.replaceFirstChar { it.uppercase() }
 
-            is Part.Tool, is Part.Reasoning -> activity += part
-            is Part.Image -> Unit
+@Composable
+private fun ToolStep(part: Part.Tool, directory: String) {
+    var open by remember { mutableStateOf(false) }
+    val raw = part.summary.ifBlank { part.name }
+    val relative = relativePath(raw, directory)
+    val looksLikePath = relative.contains('/')
+    val title = if (looksLikePath) relative.substringAfterLast('/') else raw
+    val dir = if (looksLikePath) relative.substringBeforeLast('/', "") else ""
+    val hasDetails = part.input.isNotBlank() ||
+        part.output.isNotBlank() ||
+        part.error.isNotBlank()
+
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = hasDetails) { open = !open }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                toolIcon(part.name),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    buildString {
+                        append(prettyTool(part.name))
+                        if (dir.isNotBlank()) append(" · ").append(dir)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            when (part.status) {
+                "completed" -> Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = part.status,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(14.dp)
+                )
+
+                "error", "failed" -> Icon(
+                    Icons.Rounded.ErrorOutline,
+                    contentDescription = part.status,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp)
+                )
+
+                "running", "streaming" -> PulsingDot(
+                    color = MaterialTheme.colorScheme.primary,
+                    pulsing = true,
+                    size = 6
+                )
+            }
+            if (hasDetails) {
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        AnimatedVisibility(visible = open) {
+            Column(
+                Modifier.padding(start = 26.dp, end = 4.dp).padding(bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (part.input.isNotBlank()) StepDetail(stringResource(R.string.chat_input), part.input)
+                if (part.output.isNotBlank()) StepDetail(stringResource(R.string.chat_output), part.output)
+                if (part.error.isNotBlank()) {
+                    StepDetail(
+                        stringResource(R.string.chat_error),
+                        part.error,
+                        MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
-    flush()
-    return out
 }
 
 @Composable
-private fun AssistantMessage(message: Msg, onSpeak: (String) -> Unit) {
-    Column(
-        Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (!message.hasVisibleContent) {
-            if (message.pending) TypingIndicator()
-        } else {
-            val blocks = remember(message.parts) { groupDisplayParts(message.parts) }
-            blocks.forEach { block ->
-                when (block) {
-                    is DisplayBlock.TextBlock -> SelectionContainer {
-                        MarkdownText(block.text)
-                    }
+private fun ThoughtStep(part: Part.Reasoning, pending: Boolean) {
+    var open by remember { mutableStateOf(false) }
+    val label = when {
+        part.durationMs >= 1000 -> stringResource(
+            R.string.chat_activity_thought_for,
+            (part.durationMs / 1000).toInt()
+        )
 
-                    is DisplayBlock.Activity -> {
-                        val items = block.parts.filter {
-                            it is Part.Tool || it is Part.Reasoning
-                        }
-                        if (items.size == 1) {
-                            ActivityPart(items.first(), message.pending)
-                        } else if (items.isNotEmpty()) {
-                            ActivityGroup(
-                                parts = block.parts,
-                                pending = message.pending,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-            }
-            if (message.pending) TypingIndicator(compact = true)
+        pending -> stringResource(R.string.chat_thinking)
+        else -> stringResource(R.string.chat_activity_thought)
+    }
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { open = !open }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.Psychology,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        AnimatedVisibility(visible = open) {
+            Text(
+                part.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 25.dp, end = 4.dp, bottom = 6.dp)
+            )
+        }
+    }
+}
 
-            if (!message.pending && message.plainText.isNotBlank()) {
-                val clipboard = LocalClipboardManager.current
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    IconButton(
-                        onClick = { onSpeak(message.plainText) },
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.VolumeUp,
-                            contentDescription = stringResource(R.string.chat_read_aloud),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { clipboard.setText(AnnotatedString(message.plainText)) },
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.ContentCopy,
-                            contentDescription = stringResource(R.string.chat_copy_message),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
+@Composable
+private fun StepDetail(label: String, text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                Modifier
+                    .heightIn(max = 220.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text.take(4000),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.5.sp,
+                    lineHeight = 15.sp,
+                    color = color
+                )
             }
         }
     }
