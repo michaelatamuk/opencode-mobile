@@ -69,6 +69,7 @@ data class Msg(
     val parts: List<Part>,
     val pending: Boolean,
     val created: Long = 0L,
+    val completed: Long = 0L,
     val tokensInput: Long = 0L,
     val tokensCacheRead: Long = 0L
 ) {
@@ -701,6 +702,7 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                     parts = parts,
                     pending = !done,
                     created = o.optJSONObject("time")?.optLong("created") ?: 0L,
+                    completed = o.optJSONObject("time")?.optLong("completed") ?: 0L,
                     tokensInput = usage?.optLong("input") ?: 0L,
                     tokensCacheRead = usage?.optJSONObject("cache")?.optLong("read") ?: 0L
                 )

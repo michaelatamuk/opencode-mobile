@@ -68,7 +68,7 @@ Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
 |---|---|
 | **Sessions** | Live refresh, search, project/archived filters, pinning, unread dots, previews, swipe-to-delete, pull-to-refresh, running cards with elapsed time and Stop. |
 | **Chat** | Streaming SSE with reconnect, markdown/tables/code copy, clickable links, images and files (≤8 MB), agent forms, permissions, queued/steered messages with edit/steer/cancel, in-session search, pagination, jump-to-latest, drafts that survive leaving the screen. |
-| **Agent activity** | Tool calls and reasoning collapse into one live line (`Working · Bash` / `Used 9 tools · Shell, Edit, Read`), expandable to full input/output. |
+| **Agent activity** | One block per assistant turn (`Running Shell · 12s` / `Worked 2m 05s · 9 steps`), expandable to a step timeline with tool icons, file names and per-step input/output. |
 | **Reviews** | Diff sheet with per-file stats, collapsed patches, branch/provider from VCS, file viewer, validated per-file revert (all-or-nothing), conversation fallback when the project has no git diff. |
 | **Sessions as branches** | Branch a session, branch before a message, undo the last turn, compact context, A/B replay on another model with a word-level diff (two columns on wide screens). |
 | **Models & cost** | Model picker limited to providers **enabled on your server**, with search; per-session cost/tokens, context meter with the model window, daily/monthly budgets, 180-day spend history and CSV export. |

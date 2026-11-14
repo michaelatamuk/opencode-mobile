@@ -79,7 +79,6 @@
     <!-- Chat -->
     <string name="chat_placeholder">Message OpenCode</string>
     <string name="chat_placeholder_busy">Steer OpenCode…</string>
-    <string name="chat_working">Working</string>
     <string name="chat_jump_latest">Jump to latest</string>
     <string name="chat_queued">%1$d queued</string>
     <string name="form_submit">Submit</string>
@@ -152,14 +151,18 @@
     <string name="chat_preset_name">Preset name</string>
     <string name="chat_presets">Presets</string>
     <string name="chat_queue_title">Queued messages</string>
-    <string name="chat_activity_used">%1$d tools</string>
-    <string name="chat_activity_used_one">1 tool</string>
-    <string name="chat_activity_working">Working · %1$s</string>
     <string name="chat_activity_thought">Thought</string>
-    <string name="chat_activity_thoughts">%1$d thoughts</string>
     <string name="chat_activity_thought_for">Thought for %1$ds</string>
     <string name="chat_activity_running">Running %1$s</string>
     <string name="chat_activity_steps">%1$d steps</string>
+    <string name="chat_activity_worked">Worked %1$s</string>
+    <string name="chat_activity_expand">expand</string>
+    <string name="chat_activity_collapse">collapse</string>
+    <string name="chat_activity_toggle">%1$s, %2$s</string>
+    <string name="chat_step_details">details</string>
+    <string name="chat_status_completed">completed</string>
+    <string name="chat_status_failed">failed</string>
+    <string name="chat_status_running">running</string>
     <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_queue_steer">Steer</string>
     <string name="chat_queue_edit">Edit</string>

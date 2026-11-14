@@ -75,7 +75,6 @@
 
     <string name="chat_placeholder">Сообщение OpenCode</string>
     <string name="chat_placeholder_busy">Направить OpenCode…</string>
-    <string name="chat_working">Работает</string>
     <string name="chat_jump_latest">К последнему сообщению</string>
     <string name="chat_queued">В очереди: %1$d</string>
     <string name="form_submit">Отправить</string>
@@ -148,14 +147,18 @@
     <string name="chat_preset_name">Название пресета</string>
     <string name="chat_presets">Пресеты</string>
     <string name="chat_queue_title">Очередь сообщений</string>
-    <string name="chat_activity_used">Инструментов: %1$d</string>
-    <string name="chat_activity_used_one">1 инструмент</string>
-    <string name="chat_activity_working">Работа · %1$s</string>
     <string name="chat_activity_thought">Размышление</string>
-    <string name="chat_activity_thoughts">Размышлений: %1$d</string>
     <string name="chat_activity_thought_for">Размышление %1$d с</string>
     <string name="chat_activity_running">Выполняется %1$s</string>
     <string name="chat_activity_steps">Шагов: %1$d</string>
+    <string name="chat_activity_worked">Работа %1$s</string>
+    <string name="chat_activity_expand">развернуть</string>
+    <string name="chat_activity_collapse">свернуть</string>
+    <string name="chat_activity_toggle">%1$s, %2$s</string>
+    <string name="chat_step_details">подробности</string>
+    <string name="chat_status_completed">завершено</string>
+    <string name="chat_status_failed">ошибка</string>
+    <string name="chat_status_running">выполняется</string>
     <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_queue_steer">Вклинить</string>
     <string name="chat_queue_edit">Изменить</string>

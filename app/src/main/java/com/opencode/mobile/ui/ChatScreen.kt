@@ -144,6 +144,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -421,125 +425,125 @@ fun ChatScreen(
                     )
                 }
             } else {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (sessionID == null) stringResource(R.string.session_new) else state.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            IconButton(onClick = { searchOpen = true }) {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = stringResource(R.string.chat_search),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            IconButton(onClick = { showTune = true }) {
-                Icon(
-                    Icons.Rounded.Tune,
-                    contentDescription = stringResource(R.string.chat_model_agent),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            if (sessionID != null) {
-                IconButton(onClick = { showDiff = true }) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (sessionID == null) stringResource(R.string.session_new) else state.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = { searchOpen = true }) {
                     Icon(
-                        Icons.Rounded.Difference,
-                        contentDescription = stringResource(R.string.chat_changes),
+                        Icons.Rounded.Search,
+                        contentDescription = stringResource(R.string.chat_search),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
+                IconButton(onClick = { showTune = true }) {
+                    Icon(
+                        Icons.Rounded.Tune,
+                        contentDescription = stringResource(R.string.chat_model_agent),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                if (sessionID != null) {
+                    IconButton(onClick = { showDiff = true }) {
                         Icon(
-                            Icons.Rounded.MoreVert,
-                            contentDescription = stringResource(R.string.chat_actions),
+                            Icons.Rounded.Difference,
+                            contentDescription = stringResource(R.string.chat_changes),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_branch_session)) },
-                            onClick = {
-                                menuOpen = false
-                                vm.fork(null) { child -> onSessionCreated(child) }
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_undo_turn)) },
-                            enabled = !state.busy,
-                            onClick = {
-                                menuOpen = false
-                                confirmUndo = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_compact)) },
-                            enabled = !state.busy,
-                            onClick = {
-                                menuOpen = false
-                                vm.compact()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_library)) },
-                            onClick = {
-                                menuOpen = false
-                                showLibrary = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_save_preset)) },
-                            onClick = {
-                                menuOpen = false
-                                presetName = ""
-                                savePreset = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_ab)) },
-                            enabled = !state.busy,
-                            onClick = {
-                                menuOpen = false
-                                showAb = true
-                            }
-                        )
-                        if (state.parentID.isNotBlank()) {
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                contentDescription = stringResource(R.string.chat_actions),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false }
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_compare)) },
+                                text = { Text(stringResource(R.string.chat_branch_session)) },
+                                onClick = {
+                                    menuOpen = false
+                                    vm.fork(null) { child -> onSessionCreated(child) }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_undo_turn)) },
                                 enabled = !state.busy,
                                 onClick = {
                                     menuOpen = false
-                                    showCompare = true
+                                    confirmUndo = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_compact)) },
+                                enabled = !state.busy,
+                                onClick = {
+                                    menuOpen = false
+                                    vm.compact()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_library)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showLibrary = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_save_preset)) },
+                                onClick = {
+                                    menuOpen = false
+                                    presetName = ""
+                                    savePreset = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_ab)) },
+                                enabled = !state.busy,
+                                onClick = {
+                                    menuOpen = false
+                                    showAb = true
+                                }
+                            )
+                            if (state.parentID.isNotBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_compare)) },
+                                    enabled = !state.busy,
+                                    onClick = {
+                                        menuOpen = false
+                                        showCompare = true
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_schedules)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showSchedules = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_shell)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showShell = true
                                 }
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_schedules)) },
-                            onClick = {
-                                menuOpen = false
-                                showSchedules = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_shell)) },
-                            onClick = {
-                                menuOpen = false
-                                showShell = true
-                            }
-                        )
                     }
                 }
-            }
             }
         }
 
@@ -2813,6 +2817,24 @@ private fun TurnMessage(messages: List<Msg>, directory: String, onSpeak: (String
         .joinToString("\n\n")
     val pending = messages.lastOrNull()?.pending == true
 
+    val start = remember(messages) {
+        messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
+    }
+    val finishedAt = remember(messages) {
+        messages.mapNotNull { it.completed.takeIf { c -> c > 0 } }.maxOrNull()
+    }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(pending) {
+        while (pending) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val elapsed = remember(start, finishedAt, pending, now) {
+        val end = finishedAt ?: if (pending) now else null
+        if (start != null && end != null && end > start) end - start else 0L
+    }
+
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2823,6 +2845,7 @@ private fun TurnMessage(messages: List<Msg>, directory: String, onSpeak: (String
             ActivityGroup(
                 parts = activity,
                 directory = directory,
+                elapsedMs = elapsed,
                 pending = pending,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -2889,6 +2912,7 @@ private fun ActivityPart(part: Part, pending: Boolean) {
 private fun ActivityGroup(
     parts: List<Part>,
     directory: String,
+    elapsedMs: Long,
     pending: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -2901,11 +2925,25 @@ private fun ActivityGroup(
     val running = pending && runningTool != null
     val currentName = (runningTool?.name ?: tools.lastOrNull()?.name)
         ?.replaceFirstChar { it.uppercase() }
-    val summary = if (running) {
-        stringResource(R.string.chat_activity_running, currentName ?: "…")
-    } else {
-        stringResource(R.string.chat_activity_steps, steps.size)
+    val elapsedLabel = remember(elapsedMs) { formatElapsed(elapsedMs) }
+    val stepsLabel = stringResource(R.string.chat_activity_steps, steps.size)
+    val summary = when {
+        running -> buildString {
+            append(stringResource(R.string.chat_activity_running, currentName ?: "…"))
+            if (elapsedLabel != null) append(" · ").append(elapsedLabel)
+        }
+
+        elapsedLabel != null -> buildString {
+            append(stringResource(R.string.chat_activity_worked, elapsedLabel))
+            append(" · ").append(stepsLabel)
+        }
+
+        else -> stepsLabel
     }
+    val expandLabel = stringResource(
+        if (expanded) R.string.chat_activity_collapse else R.string.chat_activity_expand
+    )
+    val toggleLabel = stringResource(R.string.chat_activity_toggle, summary, expandLabel)
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -2916,7 +2954,9 @@ private fun ActivityGroup(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded }
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .semantics { contentDescription = toggleLabel }
+                    .heightIn(min = 44.dp)
                     .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2984,6 +3024,25 @@ private fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
 private fun prettyTool(name: String): String =
     name.replaceFirstChar { it.uppercase() }
 
+/** Turns a turn span into `12s`, `2m 05s` or `1h 12m`; null below a second. */
+private fun formatElapsed(ms: Long): String? {
+    if (ms < 1000) return null
+    val total = ms / 1000
+    return when {
+        total < 60 -> "${total}s"
+        total < 3600 -> "${total / 60}m ${(total % 60).toString().padStart(2, '0')}s"
+        else -> "${total / 3600}h ${((total % 3600) / 60).toString().padStart(2, '0')}m"
+    }
+}
+
+@Composable
+private fun statusLabel(status: String): String = when (status) {
+    "completed" -> stringResource(R.string.chat_status_completed)
+    "error", "failed" -> stringResource(R.string.chat_status_failed)
+    "running", "streaming" -> stringResource(R.string.chat_status_running)
+    else -> status
+}
+
 @Composable
 private fun ToolStep(part: Part.Tool, directory: String) {
     var open by remember { mutableStateOf(false) }
@@ -2995,12 +3054,29 @@ private fun ToolStep(part: Part.Tool, directory: String) {
     val hasDetails = part.input.isNotBlank() ||
         part.output.isNotBlank() ||
         part.error.isNotBlank()
+    val status = statusLabel(part.status)
+    val rowLabel = buildString {
+        append(title)
+        append(", ").append(prettyTool(part.name))
+        if (dir.isNotBlank()) append(", ").append(dir)
+        append(", ").append(status)
+    }
+    val actionHint = if (!hasDetails) {
+        null
+    } else {
+        stringResource(if (open) R.string.chat_activity_collapse else R.string.chat_step_details)
+    }
 
     Column {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable(enabled = hasDetails) { open = !open }
+                .clickable(enabled = hasDetails, role = Role.Button) { open = !open }
+                .semantics {
+                    contentDescription = rowLabel
+                    if (actionHint != null) stateDescription = actionHint
+                }
+                .heightIn(min = 44.dp)
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3033,14 +3109,14 @@ private fun ToolStep(part: Part.Tool, directory: String) {
             when (part.status) {
                 "completed" -> Icon(
                     Icons.Rounded.Check,
-                    contentDescription = part.status,
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(14.dp)
                 )
 
                 "error", "failed" -> Icon(
                     Icons.Rounded.ErrorOutline,
-                    contentDescription = part.status,
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(14.dp)
                 )
@@ -3092,11 +3168,19 @@ private fun ThoughtStep(part: Part.Reasoning, pending: Boolean) {
         pending -> stringResource(R.string.chat_thinking)
         else -> stringResource(R.string.chat_activity_thought)
     }
+    val hint = stringResource(
+        if (open) R.string.chat_activity_collapse else R.string.chat_step_details
+    )
     Column {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable { open = !open }
+                .clickable(role = Role.Button) { open = !open }
+                .semantics {
+                    contentDescription = label
+                    stateDescription = hint
+                }
+                .heightIn(min = 44.dp)
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3270,31 +3354,6 @@ private fun PermissionSheet(
             }
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        }
-    }
-}
-
-@Composable
-private fun WorkingPill() {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = CircleShape
-    ) {
-        Row(
-            Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PulsingDot(
-                color = MaterialTheme.colorScheme.secondary,
-                pulsing = true,
-                size = 6
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                stringResource(R.string.chat_working),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
         }
     }
 }

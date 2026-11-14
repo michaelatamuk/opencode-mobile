@@ -71,9 +71,6 @@ class SessionWatcherService : Service() {
     private val runs = ConcurrentHashMap<String, LiveRun>()
     private val lastFinished = ConcurrentHashMap<String, Long>()
 
-    /** True while this service is in the foreground state with an ongoing notification. */
-    private var foreground = false
-
     @Volatile
     private var status: String? = null
 
@@ -492,11 +489,9 @@ class SessionWatcherService : Service() {
             } else {
                 startForeground(ONGOING_ID, notification)
             }
-            foreground = true
         } catch (_: Exception) {
             // The OS can refuse a foreground promotion from the background; the
             // watcher keeps running as a normal service instead.
-            foreground = false
         }
     }
 
