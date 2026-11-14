@@ -63,6 +63,14 @@
     <string name="chat_models">Модель</string>
     <string name="chat_session_stats">Потрачено %1$s · %2$d вх. / %3$d исх. токенов</string>
     <string name="chat_changes">Изменения</string>
+    <string name="chat_actions">Действия с сессией</string>
+    <string name="chat_branch_session">Ответвить сессию</string>
+    <string name="chat_branch_from_here">Ответвить отсюда</string>
+    <string name="chat_undo_turn">Отменить последний ход</string>
+    <string name="chat_undo_title">Отменить последний ход?</string>
+    <string name="chat_undo_body">Удалит последний запрос, ответ и изменения файлов. После подтверждения отменить это нельзя.</string>
+    <string name="chat_undo_confirm">Отменить</string>
+    <string name="chat_compact">Сжать контекст</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_search">Поиск в сессии</string>
     <string name="chat_attach">Прикрепить скриншот</string>

@@ -8,8 +8,8 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 
 ## Features
 
-- Session list with live refresh, cost and relative timestamps
-- Session history: search, date groups, running section, rename and delete
+- Session list with live refresh, search, date groups, project filter chips,
+  pinning, unread dots, message previews, swipe-to-delete and pull-to-refresh
 - Chat with streaming updates (SSE `/api/event` with reconnect, polling fallback)
 - Markdown rendering: headings, lists, bold, inline code, fenced code blocks
   with copy, tables, and clickable links (markdown and bare URLs)
@@ -20,13 +20,24 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Queued / steered message indicator above the composer
 - Image attachments from the photo picker, sent inline (up to 8)
 - Permission prompts: allow once / always / reject
-- Send while a turn is running (`delivery: "steer"`) and a separate stop button
-- Background notifications when a session finishes, via a foreground service
-  watching `/api/session/active`
-- High-priority permission notifications with Allow / Reject actions
+- Single morphing send/stop button, plus steer while a turn is running
+- Model and agent picker with per-session cost and token usage
+- Diff sheet with per-file statistics
+- Branch a session, branch from any user message, undo the last turn, and
+  compact the context — all from the chat menu
+- In-session search, pagination, jump-to-latest, and draft sessions that are
+  only created on the first send
+- Background watcher (foreground service) driven by server events:
+  - ongoing notification with the running session, current tool and a live
+    elapsed timer
+  - "finished" notification with an inline reply action
+  - permission and agent-form notifications with Allow / Reject actions
 - Share target: send an image or text from any app into a session
-- Paginated history (loads older messages while scrolling up)
+- Encrypted credential storage (keystore-backed preferences), session-list cache
+- App shortcuts and `opencode://session/<id>` deep links
 - Material You dynamic color on Android 12+, light and dark themes, edge-to-edge
+- English and Russian localization
+- Signed release builds in CI with a stable key
 - Architecture: repository + ViewModels with `StateFlow`, typed API errors,
   reconnecting event stream
 - Unit tests for message merging and error mapping
@@ -58,8 +69,9 @@ Authentication is HTTP Basic, `opencode:<password>`.
 
 ## Status
 
-Personal sideload build, debug-signed. Not published to Play.
+Personal sideload build, signed release APKs published on GitHub Releases.
+Not published to Play.
 
-Known gaps: message pagination (the API returns pages of ~50, newest first),
-no model/agent picker, no slash commands, no diff view, credentials stored in
-plain `SharedPreferences`.
+Known gaps: no QR pairing, no widget or quick-settings tile, no cost dashboard,
+no per-file revert in the diff sheet, no voice input, and R8 is disabled until
+a shrunk build can be verified on a device.

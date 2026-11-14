@@ -261,4 +261,53 @@ class ChatViewModel(
             refreshNow()
         }
     }
+
+    /** Copies the conversation (up to [before], or all of it) into a new session. */
+    fun fork(before: String?, onCreated: (String) -> Unit) {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                val child = repo.forkSession(id, before)
+                onCreated(child)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
+    /**
+     * Reverts the last user turn and its file changes, then commits it.
+     * Staging first means a failed commit leaves a reversible state instead of
+     * a half-applied revert.
+     */
+    fun undoLastTurn() {
+        val id = activeID ?: return
+        val lastUser = _state.value.messages.lastOrNull { it.role == "user" } ?: return
+        viewModelScope.launch {
+            try {
+                repo.stageRevert(id, lastUser.id, files = true)
+                repo.commitRevert(id)
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
+    fun compact() {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.compactSession(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
 }

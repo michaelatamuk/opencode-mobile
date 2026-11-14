@@ -60,7 +60,9 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Difference
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
@@ -72,6 +74,8 @@ import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -154,6 +158,8 @@ fun ChatScreen(
     var showDiff by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmUndo by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -332,6 +338,44 @@ fun ChatScreen(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = stringResource(R.string.chat_actions),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_branch_session)) },
+                            onClick = {
+                                menuOpen = false
+                                vm.fork(null) { child -> onSessionCreated(child) }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_undo_turn)) },
+                            enabled = !state.busy,
+                            onClick = {
+                                menuOpen = false
+                                confirmUndo = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_compact)) },
+                            enabled = !state.busy,
+                            onClick = {
+                                menuOpen = false
+                                vm.compact()
+                            }
+                        )
+                    }
+                }
             }
             }
         }
@@ -350,7 +394,12 @@ fun ChatScreen(
                 items(displayMessages, key = { it.id }) { message ->
                     Box(Modifier.animateItem()) {
                         when (message.role) {
-                            "user" -> UserMessage(message)
+                            "user" -> UserMessage(
+                                message = message,
+                                onBranch = { before ->
+                                    vm.fork(before) { child -> onSessionCreated(child) }
+                                }
+                            )
                             else -> AssistantMessage(message)
                         }
                     }
@@ -484,6 +533,25 @@ fun ChatScreen(
             repo = repo,
             sessionID = sessionID,
             onDismiss = { showDiff = false }
+        )
+    }
+
+    if (confirmUndo) {
+        AlertDialog(
+            onDismissRequest = { confirmUndo = false },
+            title = { Text(stringResource(R.string.chat_undo_title)) },
+            text = { Text(stringResource(R.string.chat_undo_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmUndo = false
+                    vm.undoLastTurn()
+                }) { Text(stringResource(R.string.chat_undo_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmUndo = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 }
@@ -851,7 +919,7 @@ private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {
 }
 
 @Composable
-private fun UserMessage(message: Msg) {
+private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(
             horizontalAlignment = Alignment.End,
@@ -891,6 +959,19 @@ private fun UserMessage(message: Msg) {
                     }
 
                     else -> Unit
+                }
+            }
+            if (message.id.isNotBlank()) {
+                IconButton(
+                    onClick = { onBranch(message.id) },
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.CallSplit,
+                        contentDescription = stringResource(R.string.chat_branch_from_here),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.size(15.dp)
+                    )
                 }
             }
         }

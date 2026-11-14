@@ -19,6 +19,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /** Which session is on screen right now, so we don't notify about it. */
 object WatchState {
@@ -52,6 +53,14 @@ class SessionWatcherService : Service() {
     private var cachedApi: Api? = null
     private var cachedApiKey: String? = null
 
+    /** A session currently working, with the tool it is running. */
+    private class LiveRun(
+        @Volatile var startedAt: Long,
+        @Volatile var tool: String? = null
+    )
+
+    private val runs = ConcurrentHashMap<String, LiveRun>()
+
     @Volatile
     private var status: String? = null
 
@@ -69,7 +78,7 @@ class SessionWatcherService : Service() {
             return START_NOT_STICKY
         }
 
-        val initial = ongoingNotification(0)
+        val initial = ongoingNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(ONGOING_ID, initial, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -101,7 +110,7 @@ class SessionWatcherService : Service() {
             val client = api()
             if (client == null) {
                 status = getString(R.string.notif_no_server)
-                updateOngoing(0)
+                updateOngoing()
                 delay(10_000)
                 continue
             }
@@ -120,7 +129,7 @@ class SessionWatcherService : Service() {
                 throw e
             } catch (_: Exception) {
                 status = getString(R.string.notif_offline)
-                updateOngoing(lastActive.size)
+                updateOngoing()
                 delay(5_000)
             }
         }
@@ -134,7 +143,53 @@ class SessionWatcherService : Service() {
         when (type) {
             "session.idle" -> {
                 val id = data?.optString("sessionID").orEmpty()
-                if (id.isNotEmpty() && id != WatchState.activeSessionID) notifyFinished(id)
+                if (id.isNotEmpty()) {
+                    runs.remove(id)
+                    updateOngoing()
+                    if (id != WatchState.activeSessionID) notifyFinished(id)
+                }
+            }
+
+            "session.status" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                if (id.isNotEmpty()) {
+                    when (data?.optJSONObject("status")?.optString("type")) {
+                        "busy", "retry" -> markRunning(id)
+                        "idle" -> {
+                            runs.remove(id)
+                            updateOngoing()
+                        }
+                    }
+                }
+            }
+
+            "session.execution.started" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                if (id.isNotEmpty()) markRunning(id)
+            }
+
+            "session.execution.failed", "session.execution.interrupted" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                if (id.isNotEmpty()) {
+                    runs.remove(id)
+                    updateOngoing()
+                }
+            }
+
+            "session.tool.input.started" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                val name = data?.optString("name").orEmpty()
+                if (id.isNotEmpty()) markRunning(id, name.ifBlank { null })
+            }
+
+            "session.tool.called" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                if (id.isNotEmpty()) markRunning(id)
+            }
+
+            "session.tool.success", "session.tool.failed" -> {
+                val id = data?.optString("sessionID").orEmpty()
+                runs[id]?.let { if (it.tool != null) { it.tool = null; updateOngoing() } }
             }
 
             "permission.asked" -> syncPermissions(client)
@@ -160,6 +215,19 @@ class SessionWatcherService : Service() {
         }
     }
 
+    /** Records a session as working and refreshes the ongoing notification. */
+    private fun markRunning(id: String, tool: String? = null) {
+        val existing = runs[id]
+        if (existing == null) {
+            runs[id] = LiveRun(System.currentTimeMillis(), tool)
+        } else {
+            if (tool == null) return
+            if (existing.tool == tool) return
+            existing.tool = tool
+        }
+        updateOngoing()
+    }
+
     private suspend fun pollOnce(client: Api) {
         val sessions = client.sessions()
         sessions.forEach { titles[it.id] = it.title }
@@ -173,8 +241,13 @@ class SessionWatcherService : Service() {
         lastActive = active
         primed = true
 
+        // Keep the live map in step with the server, so a run that started
+        // before the watcher did still shows up in the ongoing notification.
+        runs.keys.retainAll(active)
+        active.forEach { id -> if (!runs.containsKey(id)) runs[id] = LiveRun(System.currentTimeMillis()) }
+
         syncPermissions(client)
-        updateOngoing(active.size)
+        updateOngoing()
     }
 
     private suspend fun syncPermissions(api: Api) {
@@ -287,12 +360,15 @@ class SessionWatcherService : Service() {
             .notify(sessionID.hashCode(), notification)
     }
 
-    private fun updateOngoing(running: Int) {
+    private fun updateOngoing() {
         getSystemService(android.app.NotificationManager::class.java)
-            .notify(ONGOING_ID, ongoingNotification(running))
+            .notify(ONGOING_ID, ongoingNotification())
     }
 
-    private fun ongoingNotification(running: Int): Notification {
+    private fun titleFor(sessionID: String): String =
+        titles[sessionID] ?: getString(R.string.notif_session_fallback)
+
+    private fun ongoingNotification(): Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -306,13 +382,15 @@ class SessionWatcherService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val single = runs.entries.firstOrNull()
         val text = when {
             status != null -> status!!
-            running > 0 -> getString(R.string.notif_running, running)
-            else -> getString(R.string.notif_waiting)
+            runs.isEmpty() -> getString(R.string.notif_waiting)
+            runs.size == 1 -> titleFor(single!!.key)
+            else -> getString(R.string.notif_running, runs.size)
         }
 
-        return NotificationCompat.Builder(this, CHANNEL_ONGOING)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_stat_opencode)
             .setContentTitle(getString(R.string.notif_watching_title))
             .setContentText(text)
@@ -321,7 +399,27 @@ class SessionWatcherService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
             .addAction(0, getString(R.string.action_stop_watching), stop)
-            .build()
+
+        if (status == null && runs.size == 1 && single != null) {
+            // The system clock ticks the elapsed time for free; tool changes
+            // arrive as events, so no polling timer is needed here.
+            val run = single.value
+            builder.setWhen(run.startedAt).setShowWhen(true).setUsesChronometer(true)
+            val tool = run.tool
+            builder.setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    if (tool != null) "${titleFor(single.key)}\n$tool" else titleFor(single.key)
+                )
+            )
+        } else if (status == null && runs.size > 1) {
+            val lines = runs.entries.take(5).joinToString("\n") { entry ->
+                val tool = entry.value.tool
+                if (tool != null) "${titleFor(entry.key)} · $tool" else titleFor(entry.key)
+            }
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines))
+        }
+
+        return builder.build()
     }
 
     override fun onDestroy() {

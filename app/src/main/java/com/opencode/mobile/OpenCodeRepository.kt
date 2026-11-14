@@ -31,6 +31,18 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun createSession(): String = api.createSession()
 
+    suspend fun forkSession(sessionID: String, before: String?): String =
+        api.forkSession(sessionID, before)
+
+    suspend fun stageRevert(sessionID: String, messageID: String, files: Boolean = true): List<String> =
+        api.stageRevert(sessionID, messageID, files)
+
+    suspend fun commitRevert(sessionID: String) = api.commitRevert(sessionID)
+
+    suspend fun clearRevert(sessionID: String) = api.clearRevert(sessionID)
+
+    suspend fun compactSession(sessionID: String) = api.compactSession(sessionID)
+
     suspend fun renameSession(id: String, title: String) = api.renameSession(id, title)
 
     suspend fun deleteSession(id: String) = api.deleteSession(id)

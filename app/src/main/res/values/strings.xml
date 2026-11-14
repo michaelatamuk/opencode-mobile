@@ -67,6 +67,14 @@
     <string name="chat_models">Model</string>
     <string name="chat_session_stats">%1$s spent · %2$d in / %3$d out tokens</string>
     <string name="chat_changes">Changes</string>
+    <string name="chat_actions">Session actions</string>
+    <string name="chat_branch_session">Branch session</string>
+    <string name="chat_branch_from_here">Branch from here</string>
+    <string name="chat_undo_turn">Undo last turn</string>
+    <string name="chat_undo_title">Undo last turn?</string>
+    <string name="chat_undo_body">Removes the last prompt, its response and the file changes it made. This cannot be undone once committed.</string>
+    <string name="chat_undo_confirm">Undo</string>
+    <string name="chat_compact">Compact context</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_search">Search in session</string>
     <string name="chat_attach">Attach screenshot</string>

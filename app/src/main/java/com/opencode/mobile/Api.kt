@@ -206,6 +206,20 @@ class Api(server: String, private val password: String) {
         }
     }
 
+    /** POST for endpoints that answer 204 and therefore have no JSON body. */
+    private fun postEmpty(path: String, payload: String) {
+        val req = request(path).post(payload.toRequestBody(jsonType)).build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
+    private fun deleteEmpty(path: String) {
+        client.newCall(request(path).delete().build()).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
     suspend fun ping(): String = withContext(Dispatchers.IO) {
         getJson("/api/info").optString("version")
     }
@@ -331,6 +345,40 @@ class Api(server: String, private val password: String) {
 
     suspend fun createSession(): String = withContext(Dispatchers.IO) {
         postJson("/api/session", "{}").getJSONObject("data").getString("id")
+    }
+
+    /** Creates a child session copying history before [before] (or the full history). */
+    suspend fun forkSession(sessionID: String, before: String?): String = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("before", before ?: JSONObject.NULL)
+        postJson("/api/session/$sessionID/fork", body.toString())
+            .getJSONObject("data")
+            .getString("id")
+    }
+
+    /** Stages a reversible boundary and returns the files that would be restored. */
+    suspend fun stageRevert(sessionID: String, messageID: String, files: Boolean): List<String> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("messageID", messageID).put("files", files)
+            val revert = postJson("/api/session/$sessionID/revert/stage", body.toString())
+                .optJSONObject("data")
+                ?: return@withContext emptyList()
+            val list = revert.optJSONArray("files") ?: JSONArray()
+            (0 until list.length()).mapNotNull { i ->
+                list.optJSONObject(i)?.optString("file")?.takeIf { it.isNotBlank() }
+            }
+        }
+
+    suspend fun commitRevert(sessionID: String): Unit = withContext(Dispatchers.IO) {
+        postEmpty("/api/session/$sessionID/revert/commit", "{}")
+    }
+
+    suspend fun clearRevert(sessionID: String): Unit = withContext(Dispatchers.IO) {
+        deleteEmpty("/api/session/$sessionID/revert")
+    }
+
+    suspend fun compactSession(sessionID: String): Unit = withContext(Dispatchers.IO) {
+        postJson("/api/session/$sessionID/compact", "{}")
+        Unit
     }
 
     /** IDs of sessions the server reports as currently running. */
