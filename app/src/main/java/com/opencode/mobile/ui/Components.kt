@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -419,17 +421,23 @@ fun ToolCallCard(
         shape = RoundedCornerShape(12.dp),
         modifier = modifier.animateContentSize()
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .then(if (hasDetails) Modifier.clickable { expanded = !expanded } else Modifier),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PulsingDot(color = accent, pulsing = status == "running" || status == "streaming")
+                PulsingDot(color = accent, pulsing = status == "running" || status == "streaming", size = 6)
                 Spacer(Modifier.width(9.dp))
                 Text(
-                    name,
+                    buildString {
+                        append(name)
+                        if (summary.isNotBlank()) {
+                            append("  ")
+                            append(summary.replace('\n', ' '))
+                        }
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -438,11 +446,27 @@ fun ToolCallCard(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    status,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent
-                )
+                when (status) {
+                    "completed" -> Icon(
+                        Icons.Rounded.Check,
+                        contentDescription = status,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+
+                    "error", "failed" -> Icon(
+                        Icons.Rounded.ErrorOutline,
+                        contentDescription = status,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+
+                    else -> Text(
+                        status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent
+                    )
+                }
                 if (hasDetails) {
                     Spacer(Modifier.width(4.dp))
                     Icon(
@@ -453,20 +477,16 @@ fun ToolCallCard(
                     )
                 }
             }
-            if (summary.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 16.dp)
-                )
-            }
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (summary.isNotBlank()) {
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (input.isNotBlank()) ToolDetail(stringResource(R.string.chat_input), input)
                     if (output.isNotBlank()) ToolDetail(stringResource(R.string.chat_output), output)
                     if (error.isNotBlank()) {

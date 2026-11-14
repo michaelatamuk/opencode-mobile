@@ -31,12 +31,14 @@ data class ChatUiState(
     val cost: Double = 0.0,
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L,
+    val updated: Long = 0L,
     val directory: String = "",
     val parentID: String = "",
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
     val sending: Boolean = false,
     val sendProgress: Float = 0f,
+    val selecting: Boolean = false,
     val error: String? = null
 ) {
     val busy: Boolean get() = messages.lastOrNull()?.pending == true
@@ -101,6 +103,7 @@ class ChatViewModel(
                     cost = session.cost,
                     tokensInput = session.tokensInput,
                     tokensOutput = session.tokensOutput,
+                    updated = session.updated,
                     directory = session.directory,
                     parentID = session.forkedFrom
                 )
@@ -130,13 +133,17 @@ class ChatViewModel(
     fun selectAgent(agentID: String) {
         val id = activeID ?: return
         viewModelScope.launch {
+            _state.update { it.copy(selecting = true) }
             try {
                 repo.setAgent(id, agentID)
                 loadSession()
+                _state.update { it.copy(error = null) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(error = friendlyError(e)) }
+            } finally {
+                _state.update { it.copy(selecting = false) }
             }
         }
     }
@@ -144,13 +151,17 @@ class ChatViewModel(
     fun selectModel(providerID: String, modelID: String) {
         val id = activeID ?: return
         viewModelScope.launch {
+            _state.update { it.copy(selecting = true) }
             try {
                 repo.setModel(id, providerID, modelID)
                 loadSession()
+                _state.update { it.copy(error = null) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(error = friendlyError(e)) }
+            } finally {
+                _state.update { it.copy(selecting = false) }
             }
         }
     }

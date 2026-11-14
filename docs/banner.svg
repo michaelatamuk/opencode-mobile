@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="opencode mobile — unofficial Android client">
+  <defs>
+    <pattern id="pixels" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="1.5" height="1.5" fill="#FFFFFF" fill-opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="420" fill="#0B0B0B"/>
+  <rect width="1280" height="420" fill="url(#pixels)"/>
+
+  <!-- Mark: pixel-cornered terminal frame with a mobile dock bar -->
+  <g transform="translate(96,120)">
+    <path d="M8,0 H136 V8 H144 V136 H136 V144 H8 V136 H0 V8 H8 Z" fill="#EEEEEE"/>
+    <path d="M16,16 H128 V128 H16 Z" fill="#0B0B0B"/>
+    <path d="M44,58 L60,74 L44,90" fill="none" stroke="#EEEEEE" stroke-width="10" stroke-linecap="square"/>
+    <path d="M72,90 H100" fill="none" stroke="#EEEEEE" stroke-width="10" stroke-linecap="square"/>
+    <rect x="52" y="160" width="40" height="6" fill="#8A8A8A"/>
+  </g>
+
+  <g font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="320" y="196" font-size="74" font-weight="700" letter-spacing="-4">
+      <tspan fill="#AEAEAE">opencode</tspan><tspan fill="#EEEEEE"> mobile</tspan>
+    </text>
+    <text x="324" y="246" fill="#8A8A8A" font-size="25">Unofficial Android client for self-hosted OpenCode.</text>
+
+    <g font-size="19" font-weight="600" fill="#C9C9C9">
+      <rect x="324" y="282" width="104" height="40" rx="4" fill="none" stroke="#4B4B4B"/>
+      <text x="350" y="308">Kotlin</text>
+      <rect x="442" y="282" width="126" height="40" rx="4" fill="none" stroke="#4B4B4B"/>
+      <text x="468" y="308">Compose</text>
+      <rect x="582" y="282" width="162" height="40" rx="4" fill="none" stroke="#4B4B4B"/>
+      <text x="608" y="308">Self-hosted</text>
+      <rect x="758" y="282" width="140" height="40" rx="4" fill="none" stroke="#4B4B4B"/>
+      <text x="784" y="308">MIT</text>
+      <text x="924" y="308" fill="#8A8A8A">Works with OpenCode</text>
+    </g>
+  </g>
+
+  <!-- Terminal mock, monochrome -->
+  <g transform="translate(920,116)">
+    <rect width="280" height="196" rx="6" fill="#0F0F0F" stroke="#2A2A2A"/>
+    <circle cx="24" cy="24" r="4" fill="#4B4B4B"/>
+    <circle cx="40" cy="24" r="4" fill="#4B4B4B"/>
+    <circle cx="56" cy="24" r="4" fill="#4B4B4B"/>
+    <rect x="22" y="54" width="236" height="10" fill="#EEEEEE" fill-opacity="0.9"/>
+    <rect x="22" y="80" width="178" height="8" fill="#8A8A8A" fill-opacity="0.8"/>
+    <rect x="22" y="102" width="206" height="8" fill="#8A8A8A" fill-opacity="0.55"/>
+    <rect x="22" y="124" width="146" height="8" fill="#EEEEEE" fill-opacity="0.35"/>
+    <rect x="22" y="152" width="92" height="10" fill="#4B4B4B"/>
+  </g>
+</svg>

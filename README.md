@@ -1,150 +1,232 @@
-# OpenCode Mobile
+<p align="center">
+  <img src="docs/banner.svg" alt="opencode mobile — unofficial Android client" width="100%">
+</p>
 
-An Android client for an [OpenCode](https://opencode.ai) server, built with Kotlin,
-Jetpack Compose and the OpenCode V2 HTTP API.
+<p align="center">
+  <a href="https://github.com/michaelatamuk/opencode-mobile/actions/workflows/build.yml"><img alt="Build" src="https://github.com/michaelatamuk/opencode-mobile/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/michaelatamuk/opencode-mobile/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/michaelatamuk/opencode-mobile?display_name=tag"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/github/license/michaelatamuk/opencode-mobile"></a>
+  <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white">
+  <img alt="Kotlin 2.0" src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white">
+</p>
 
-It talks directly to your own OpenCode server — over your LAN or through the
-OpenCode remote tunnel — and shows the same sessions as the TUI.
+# opencode mobile
 
-## Features
+A native Android client for a **self-hosted [OpenCode](https://opencode.ai) server** —
+the same sessions as the TUI, on your phone, with no cloud service in between.
 
-- Session list with live refresh, search, date groups, project filter chips,
-  pinning, unread dots, message previews, swipe-to-delete and pull-to-refresh
-- Chat with streaming updates (SSE `/api/event` with reconnect, polling fallback)
-- Markdown rendering: headings, lists, bold, inline code, fenced code blocks
-  with copy, tables, and clickable links (markdown and bare URLs)
-- Expandable tool-call cards: full input JSON, output text, and errors
-- Collapsible reasoning ("Thought for Ns") blocks
-- Agent forms rendered as a sheet (text, number, switch, single/multi-select)
-  so the agent never stalls waiting for an answer
-- Queued / steered message indicator above the composer
-- Image attachments from the photo picker, sent inline (up to 8)
-- Permission prompts: allow once / always / reject
-- Single morphing send/stop button, plus steer while a turn is running
-- Commands & skills sheet: browse server slash commands and skills, insert a
-  command or attach skills to the next prompt
-- Model and agent picker with per-session cost and token usage
-- Context meter with the model's window size and one-tap compaction
-- Spend sheet: total, daily history for the last 7 days, breakdown by model,
-  and the most expensive sessions
-- Per-session notification mute from the row menu
-- Diff sheet with per-file statistics; when the project has no VCS diff it
-  lists the files the agent edited in the conversation, and any file can be
-  opened in a monospace viewer
-- Fallback server URL, tried automatically when the main address stops
-  answering (LAN at home, tunnel outside)
-- Pairing code entry or QR scan: paste `opencode pair`'s code/link or scan it,
-  and the app trades it for the password itself
-- Per-file revert in the diff sheet: validated reverse-patch, all-or-nothing,
-  text files only
-- Skills detail view with the skill's full markdown content
-- Schedules per session: interval, cron or one-off time, optional run limit,
-  pause, resume, delete, last output shown
-- Monthly and daily budget caps with one alert each
-- Voice language tag for dictation and read-aloud; tap again to stop reading
-- Session archive from the row menu with an Archived filter chip
-- Branch/provider shown in the Changes sheet from VCS info
-- Sending indicator above the composer
-- Profile switching also applies its theme, accent, notification mode and watchdog
-- Widget configuration at add time: session titles and stop action toggles
-- Connections page: MCP servers with connect/disconnect, integration search, API-key
-  linking and required env names
-- Queued messages can be edited (cancel + resend), steered or cancelled
-- Shell runner per session: execute a command and read its output
-- Attach any file (up to 8 MB), not just images
-- A/B comparison highlights added and removed words
-- Profile agent/model defaults applied to new sessions
-- Offline queue stores attachments on disk and delivers them with the text
-- Settings search; per-project notification mute
-- Schedule run limit and shell `if` condition
-- A/B comparison uses two columns on wide screens
-- Widget settings page (titles, stop action) and last-updated time
-- Byte-level upload progress for prompts with attachments
-- 180-day usage history with CSV export; monthly budget cap
-- Voice engine picker; tap read-aloud again to stop
-- Editable prompts for notification quick actions
-- Subagent sessions hidden by default behind a Subagents chip; parent rows show
-  the child count and subagent completions do not fire notifications
-- Composer: one attachment menu (Photo/File) and one morphing button
-  (Mic → Send → Stop)
-- Per-profile daily/monthly budgets and agent/model defaults
-- MCP resources listed under Connections
-- Export usage CSV and a diagnostics text file
-- Upload progress for prompts with attachments
-- Named server profiles: add the current server, switch, rename, delete
-- Finish-only safety net: a periodic check catches turns that ended while the
-  watcher was paused
-- Pending prompt list in Settings with per-item removal
-- Queued/steered messages can be cancelled from the chat queue sheet
-- Model A/B: branch before the last prompt and replay it on another model, with
-  an original-vs-branch comparison sheet
-- Offline queue: a prompt sent while the server is unreachable is delivered by
-  the watcher when it reconnects; pending items are listed in Settings
-- Spend sheet shows month-to-date and a projected month; daily budget alert
-- Widget lists up to three running sessions with a stop action; tile shows count
-- Grouped settings with live summaries, sub-pages, segmented controls, theme
-  preview and labelled accent swatches
-- Voice input (system dictation) and read-aloud for assistant messages
-- Biometric lock on launch and optional screenshot / recents blocking
-- Home-screen widget and quick-settings tile showing the watcher status
-- Saved presets: agent + model + opening prompt, applied in one tap
-- Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
-  choice of four accent colors
-- Running cards show elapsed time and can be stopped from the row menu
-- Branch a session, branch from any user message, undo the last turn, and
-  compact the context — all from the chat menu
-- In-session search, pagination, jump-to-latest, and draft sessions that are
-  only created on the first send
-- Background watcher (foreground service) driven by server events:
-  - two notification modes: "only on finish" (default, no permanent
-    notification) and "always" (watcher pinned in the shade)
-  - progress notification with the current tool and a live elapsed timer
-  - finished notification with inline reply and Continue / Stop / Explain /
-    Retry actions
-  - permission and agent-form notifications with Allow / Reject actions
-  - optional watchdog that stops runs exceeding a chosen time
-- Launcher shortcuts for the three most recent sessions
-- Share target: send an image or text from any app into a session
-- Encrypted credential storage (keystore-backed preferences), session-list cache
-- App shortcuts and `opencode://session/<id>` deep links
-- Material You dynamic color on Android 12+, light and dark themes, edge-to-edge
-- English and Russian localization
-- Signed release builds in CI with a stable key
-- Architecture: repository + ViewModels with `StateFlow`, typed API errors,
-  reconnecting event stream
-- Unit tests for message merging and error mapping
+`Android 8.0+` · `Kotlin 2.0` · `Jetpack Compose` · `Material 3` · `targetSdk 36` · `MIT`
 
-## Requirements
+[**Download the latest APK**](https://github.com/michaelatamuk/opencode-mobile/releases/latest)
+· [Server API notes](docs/server-api-notes.md) · [Report an issue](https://github.com/michaelatamuk/opencode-mobile/issues)
 
-- Android 8.0+ (minSdk 26), targetSdk 36
-- JDK 17 and the Android SDK (compileSdk 35)
-- An OpenCode server with a password. Username is always `opencode`.
+> **Unofficial client.** Not affiliated with, endorsed by, or supported by
+> OpenCode / Anomaly. OpenCode itself is MIT-licensed; this project is an
+> independent Android front end for its HTTP API.
 
-## Build
+---
 
-```sh
-./gradlew assembleDebug
-```
+## Who this is for
 
-The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
+- **OpenCode users** who run a server on a laptop/desktop and want to read, steer
+  and approve it from a phone — on the same Wi-Fi or through the OpenTunnel URL.
+- **Contributors** who want to improve the Android client; start with the
+  [architecture](#architecture), [invariants](#invariants-do-not-break) and
+  [build](#build--test) sections.
+- **Maintainers / AI agents** who need the API quirks and release process in one
+  place: [`docs/server-api-notes.md`](docs/server-api-notes.md).
 
-`local.properties` with `sdk.dir=...` is required locally and is git-ignored.
+The phone talks HTTPS/SSE directly to your server. There is no proxy, account or
+third-party backend.
+
+## Install
+
+1. Download `opencode-mobile-v*.apk` from [Releases](https://github.com/michaelatamuk/opencode-mobile/releases).
+2. Allow installs from the browser/file manager on the device.
+3. Open the app and connect:
+   - **Pairing code / QR** — run `opencode pair` and paste the code or scan its QR.
+   - **Manual** — server URL + password (username is always `opencode`).
+     LAN: `http://<your-ip>:28894` · remote: your tunnel URL.
+4. Enable **Settings → Notifications → Background notifications** and allow
+   notifications. Pick *Only on finish* (default) or *Always*.
+5. Optional: Settings → Security for biometric lock and screenshot blocking.
+
+Samsung devices may need Auto Blocker / Play Protect disabled for sideloading.
+
+## What it does
+
+| Area | Highlights |
+|---|---|
+| **Sessions** | Live refresh, search, project/archived filters, pinning, unread dots, previews, swipe-to-delete, pull-to-refresh, running cards with elapsed time and Stop. |
+| **Chat** | Streaming SSE with reconnect, markdown/tables/code copy, clickable links, images and files (≤8 MB), agent forms, permissions, queued/steered messages with edit/steer/cancel, in-session search, pagination, jump-to-latest, drafts that survive leaving the screen. |
+| **Agent activity** | Tool calls and reasoning collapse into one live line (`Working · Bash` / `Used 9 tools · Shell, Edit, Read`), expandable to full input/output. |
+| **Reviews** | Diff sheet with per-file stats, collapsed patches, branch/provider from VCS, file viewer, validated per-file revert (all-or-nothing), conversation fallback when the project has no git diff. |
+| **Sessions as branches** | Branch a session, branch before a message, undo the last turn, compact context, A/B replay on another model with a word-level diff (two columns on wide screens). |
+| **Models & cost** | Server-defined agent/model picker with search, per-session cost/tokens, context meter with the model window, daily/monthly budgets, 180-day spend history and CSV export. |
+| **Notifications** | Foreground watcher driven by server events; finish-only mode is silent while working; progress/elapsed mode; inline reply; Continue / Explain / Retry actions (editable); permissions/forms; watchdog; per-session and per-project mute; WorkManager catch-up. |
+| **Automation** | Schedules (interval/cron/at, optional run limit and shell `if`), shell runner with output, offline prompt queue with attachments, presets. |
+| **Connections** | Named server profiles (with theme/watchdog/budget defaults), fallback URL, pairing, MCP servers+resources, integration search with API-key linking. |
+| **Platform** | Widget (running titles, stop action, last updated), quick-settings tile, launcher shortcuts, `opencode://session/<id>` deep links, share target, EN/RU. |
+
+### Deliberate design choices
+
+- **No empty sessions** — a draft is created only on first send.
+- **One primary composer action** — Mic when empty, Send when typed, Stop when a run is active.
+- **Subagents stay under their parent** — roots only in the main list, expandable child runs, no notification noise from children.
+- **Finish-only means silent** — no ongoing notification while a turn runs.
 
 ## Configure
 
-On first launch enter the server URL and password:
+Authentication is HTTP Basic `opencode:<password>`. The app never sends the
+password anywhere except your server. It requires an OpenCode server exposing
+the V2 HTTP/SSE API (`/api/...`); older V1 servers will not work.
 
-- LAN: `http://<your-ip>:28894`
-- Remote: the OpenTunnel URL printed by `opencode pair --remote`
+- **Profiles** hold server URL, password, fallback URL, theme, notification mode,
+  watchdog, budgets and default agent/model. Switching a profile applies all of it.
+- **Fallback URL** is tried automatically when the primary stops answering
+  (e.g. LAN at home, tunnel outside).
+- **Server features** used by some screens are gated by the server config:
+  `experimental.schedules`, `experimental.artifacts` (disabled => no gallery),
+  and MCP servers for the Connections page.
 
-Authentication is HTTP Basic, `opencode:<password>`.
+## Working on this repo
 
-## Status
+If you are a new maintainer or an AI coding agent, read in this order:
 
-Personal sideload build, signed release APKs published on GitHub Releases.
-Not published to Play.
+1. **Invariants** below — these encode bugs already fixed once.
+2. [`docs/server-api-notes.md`](docs/server-api-notes.md) — real event names and endpoint quirks.
+3. `Api.kt` and `OpenCodeRepository.kt` — the only network layer.
+4. Run `./gradlew testReleaseUnitTest` before touching `DiffRevert` or parsing.
 
-Known gaps: no artifact gallery (disabled on most servers), no dependency bump,
-no true PTY terminal, and R8 is disabled until a shrunk build can be verified
-on a device.
+Do not add a second send/stop control, an ongoing notification in finish-only
+mode, or a cursor query with `order`.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  UI["Compose UI<br/>Chat / Sessions / Settings"] --> VM["ViewModels<br/>StateFlow"]
+  VM --> Repo["OpenCodeRepository"]
+  Repo --> Api["Api<br/>OkHttp + JSON"]
+  Api -->|"HTTPS + SSE /api/event"| Server["Your OpenCode server"]
+  Watcher["SessionWatcherService<br/>foreground service"] -->|"SSE events"| Api
+  Watcher --> Notify["Notifications<br/>finish/permission/form"]
+  Worker["WatchWorker<br/>15-min WorkManager"] --> Api
+  Store["SecurePrefs + stores<br/>profiles, drafts, queue, usage"] --> VM
+  Store --> Watcher
+```
+
+- **Single module** `app`, Compose-only UI.
+- `Api` is the only HTTP layer; `OpenCodeRepository` adds reconnect/backoff.
+- State is `StateFlow` in ViewModels; long-lived work uses `AppScope`.
+- The watcher reacts to `session.status`, `session.execution.*`,
+  `session.tool.*`, `session.idle`, `permission.asked`, `form.created`.
+- Local persistence: `SecurePrefs` (keystore-backed), `ProfileStore`, `DraftStore`,
+  `PendingStore`, `UsageStore`, `SeenStore`, `PinnedStore`, `SessionCache`.
+
+### Project map
+
+```
+app/src/main/java/com/opencode/mobile/
+  Api.kt                     HTTP + SSE client, models
+  OpenCodeRepository.kt      domain wrapper, retry policy
+  ChatViewModel.kt           chat state, send/fork/revert/compact
+  SessionListViewModel.kt    list, archive, previews, usage
+  SessionWatcherService.kt   foreground watcher + notifications
+  WatchWorker.kt             15-minute safety net
+  SecurePrefs.kt             encrypted preferences
+  ProfileStore / DraftStore / PendingStore / UsageStore / SeenStore
+  ui/                        ChatScreen, SessionListScreen, SettingsScreen,
+                             Composer, Components, Theme, WordDiff
+docs/server-api-notes.md     verified endpoint/event shapes and gotchas
+```
+
+## Build & test
+
+Requirements: **JDK 17**, **Android SDK 36**, `local.properties` with
+`sdk.dir=...` (git-ignored).
+
+```sh
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testReleaseUnitTest  # DiffRevert + message/error unit tests
+```
+
+Release signing uses env vars (CI supplies them from repository secrets):
+`OPENCODE_KEYSTORE`, `OPENCODE_STORE_PASSWORD`, `OPENCODE_KEY_ALIAS`,
+`OPENCODE_KEY_PASSWORD`. The signing key is stable across releases so updates
+install over each other.
+
+### Release process
+
+1. Tag `v*` (for example `v0.27.0`) and push the tag.
+2. CI (`.github/workflows/build.yml`) builds `assembleRelease`, passes the run
+   number as `appVersionCode` and the tag as `appVersionName`, signs with the
+   stable key, uploads the artifact and publishes a GitHub Release with
+   `opencode-mobile-<tag>.apk`.
+3. Verify the release page: APK size and the same signing key as previous builds.
+
+## Invariants (do not break)
+
+1. **One composer primary action**; never add a second send/stop/mic button.
+2. **No empty sessions**; drafts are created on first send.
+3. Unread = `session.updated > lastSeen`; mark seen on open and on new messages.
+4. Finish-only must never post an ongoing/progress notification.
+5. Child/subagent completions must not notify; the parent does.
+6. Cursor pagination must not send `order` (server returns `InvalidCursorError`).
+7. Row backgrounds must be opaque or swipe reveal shows through.
+8. Credentials live in `SecurePrefs`; never log or export them
+   (diagnostics export excludes the password).
+9. Server-reported cost is authoritative; providers without cost config show `$0`.
+10. `targetSdk 36` / SDK 36 is required by CI; don't bump dependencies blindly.
+
+## Security & privacy
+
+- Direct connection to your server; no third-party backend, no analytics, no telemetry.
+- Password and server profiles live in keystore-backed encrypted preferences.
+- Optional biometric lock and `FLAG_SECURE` screenshot/recents blocking.
+- Diagnostics export contains device/server/watcher/theme state — **never the password**.
+- Debug builds and release builds use the same package; the release key is stable
+  so upgrades install over each other.
+
+## Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| `$0.00` cost | The provider has no `cost` block on the server (e.g. `deepseek-site-toga2`); the app displays the server value. |
+| Session shows “running” but nothing happens | The server still reports it in `/api/session/active`; open it or Stop it from the row. |
+| No notification while a turn runs | Expected in *Only on finish*; switch to *Always* for progress. |
+| No finished notification after the app was closed a long time | Android paused the watcher; the 15-minute WorkManager check catches it on reconnect. |
+| Install fails over the old app | Different signing key or Play Protect/Auto Blocker blocking sideload. |
+| Schedules/connections empty or forbidden | Server feature flag (`experimental.schedules`) or no MCP servers configured. |
+
+## Limitations
+
+- **Server-bound:** no artifact gallery when `experimental.artifacts` is disabled;
+  true PTY (connect-token rejects non-browser clients) and OAuth provider login
+  (server callback is `localhost` on the server machine); no inbox reordering.
+- **R8/minify is off** until a shrunk build can be verified on a device.
+- **Schedules** need `experimental.schedules`; no `until`/timezone or in-place edit.
+- **Per-file revert** is text-only and refuses patches that no longer match.
+- **Dependency bump** is pending; Compose BOM is pinned to a verified set.
+- **Notifications** depend on the OS keeping the watcher alive; finish-only has
+  a ≤15-minute WorkManager safety net.
+
+## Documentation
+
+- [`docs/server-api-notes.md`](docs/server-api-notes.md) — verified event names,
+  endpoints, cursor/revert/fork semantics, revert stage→commit→clear behavior.
+
+## Contributing
+
+- **Issues**: include app version, Android version/device, server version, and
+  the exact screen + steps. Diagnostics: Settings → About → *Export diagnostics*
+  (no credentials).
+- **Pull requests**: keep the composer to one primary action, keep finish-only
+  silent, and run `./gradlew testReleaseUnitTest` before opening.
+- This is an independent client; do not copy OpenCode brand assets into new
+  places. “Works with OpenCode” is a statement of compatibility, not affiliation.
+
+## License
+
+MIT — see [LICENSE](LICENSE). OpenCode itself is a separate MIT-licensed project
+by Anomaly; this repository contains none of its source or brand assets.

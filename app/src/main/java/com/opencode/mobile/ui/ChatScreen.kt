@@ -63,14 +63,19 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Difference
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Close
@@ -135,6 +140,7 @@ import com.opencode.mobile.AttachmentLoader
 import com.opencode.mobile.ChatUiState
 import com.opencode.mobile.ChatViewModel
 import com.opencode.mobile.CommandOption
+import com.opencode.mobile.DraftStore
 import com.opencode.mobile.FileDiff
 import com.opencode.mobile.Msg
 import com.opencode.mobile.ModelOption
@@ -173,7 +179,7 @@ fun ChatScreen(
     }
     val state by vm.state.collectAsStateWithLifecycle()
 
-    var input by remember { mutableStateOf("") }
+    var input by remember(sessionID) { mutableStateOf(DraftStore.get(context, sessionID)) }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
     var showTune by remember { mutableStateOf(false) }
     var showDiff by remember { mutableStateOf(false) }
@@ -218,6 +224,7 @@ fun ChatScreen(
             ?.firstOrNull()
         if (!spoken.isNullOrBlank()) {
             input = if (input.isBlank()) spoken else input.trimEnd() + " " + spoken
+            DraftStore.save(context, sessionID, input)
         }
     }
     val fileLauncher = rememberLauncherForActivityResult(
@@ -309,10 +316,15 @@ fun ChatScreen(
     val seenStore = remember(context) { SeenStore(context) }
     var initialPositioned by remember(sessionID) { mutableStateOf(false) }
 
-    LaunchedEffect(lastId) {
+    LaunchedEffect(lastId, state.updated) {
         if (sessionID == null) return@LaunchedEffect
-        val last = state.messages.lastOrNull() ?: return@LaunchedEffect
-        seenStore.markSeen(sessionID, if (last.created > 0) last.created else System.currentTimeMillis())
+        val last = state.messages.lastOrNull()
+        val stamp = maxOf(
+            System.currentTimeMillis(),
+            state.updated,
+            last?.created ?: 0L
+        )
+        seenStore.markSeen(sessionID, stamp)
     }
 
     // Jump straight to the newest message. Animating across dozens of items is what
@@ -674,7 +686,10 @@ fun ChatScreen(
             }
             Composer(
                 value = input,
-                onValueChange = { input = it },
+                onValueChange = {
+                    input = it
+                    DraftStore.save(context, sessionID, it)
+                },
                 attachments = picked.map {
                     AttachmentPreview(it.uri, it.attachment.name, it.attachment.mime)
                 },
@@ -701,8 +716,11 @@ fun ChatScreen(
                         ) { ok ->
                             if (!ok) {
                                 input = text
+                                DraftStore.save(context, sessionID, text)
                             } else {
                                 pickedSkills = emptyList()
+                                DraftStore.clear(context, null)
+                                DraftStore.clear(context, state.sessionID.ifBlank { null })
                             }
                         }
                     }
@@ -753,7 +771,10 @@ fun ChatScreen(
                 if (preset.modelID.isNotBlank()) {
                     vm.selectModel(preset.providerID, preset.modelID)
                 }
-                if (preset.prompt.isNotBlank()) input = preset.prompt
+                if (preset.prompt.isNotBlank()) {
+                    input = preset.prompt
+                    DraftStore.save(context, sessionID, preset.prompt)
+                }
                 showTune = false
             },
             onDeletePreset = { preset ->
@@ -822,6 +843,7 @@ fun ChatScreen(
             onDismiss = { showLibrary = false },
             onCommand = { command ->
                 input = "/${command.name} "
+                DraftStore.save(context, sessionID, input)
                 showLibrary = false
             },
             onToggleSkill = { skill ->
@@ -910,6 +932,8 @@ fun ChatScreen(
     }
 }
 
+private data class TouchedFile(val path: String, val count: Int, val status: String)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DiffSheet(
@@ -948,7 +972,11 @@ private fun DiffSheet(
                     }
                 if (path == null) null else path to part.status
             }
-            .distinctBy { it.first }
+            .groupBy({ it.first }, { it.second })
+            .map { (path, statuses) ->
+                TouchedFile(path, statuses.size, statuses.lastOrNull().orEmpty())
+            }
+            .sortedBy { it.path.lowercase() }
     }
 
     LaunchedEffect(sessionID, reload) {
@@ -967,11 +995,26 @@ private fun DiffSheet(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(Modifier.fillMaxWidth().heightIn(max = 700.dp)) {
-            Text(
-                stringResource(R.string.chat_changes),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)
-            )
+            Column(
+                Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)
+            ) {
+                Text(
+                    stringResource(R.string.chat_changes),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                val count = if (diffs.isNullOrEmpty()) touched.size else diffs!!.size
+                Text(
+                    buildString {
+                        append(stringResource(R.string.chat_changes_count, count))
+                        if (diffs?.isEmpty() == true && touched.isNotEmpty()) {
+                            append(" · ")
+                            append(stringResource(R.string.chat_changes_conversation))
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             if (revertNote != null) {
                 Text(
@@ -1024,36 +1067,12 @@ private fun DiffSheet(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item {
-                        Text(
-                            stringResource(R.string.chat_diff_from_tools),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    items(touched, key = { it.path }) { file ->
+                        ChangedFileRow(
+                            file = file,
+                            directory = directory,
+                            onClick = { viewFile = file.path }
                         )
-                    }
-                    items(touched) { (path, status) ->
-                        Surface(
-                            onClick = { viewFile = path },
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                                Text(
-                                    path,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    status,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -1062,7 +1081,7 @@ private fun DiffSheet(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(diffs!!) { diff ->
-                        DiffCard(diff) { pendingRevert = diff }
+                        DiffCard(diff, directory) { pendingRevert = diff }
                     }
                 }
             }
@@ -1179,24 +1198,141 @@ private fun FileSheet(
     }
 }
 
+private fun relativePath(path: String, directory: String): String {
+    val p = path.replace('\\', '/')
+    val d = directory.replace('\\', '/').trimEnd('/')
+    return if (d.isNotBlank() && p.startsWith(d, ignoreCase = true)) {
+        p.substring(d.length).trimStart('/')
+    } else {
+        p
+    }
+}
+
 @Composable
-private fun DiffCard(diff: FileDiff, onRevert: () -> Unit) {
+private fun ChangedFileRow(file: TouchedFile, directory: String, onClick: () -> Unit) {
+    val relative = relativePath(file.path, directory)
+    val name = relative.substringAfterLast('/')
+    val dir = relative.substringBeforeLast('/', "")
     Surface(
+        onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.InsertDriveFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    diff.file,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontFamily = FontFamily.Monospace,
+                    name,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.width(8.dp))
+                if (dir.isNotBlank()) {
+                    Text(
+                        dir,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (file.count > 1) {
+                Text(
+                    stringResource(R.string.chat_file_edits, file.count),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp)
+                )
+            }
+            if (file.status.isNotBlank() && file.status != "completed") {
+                Text(
+                    file.status,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(horizontal = 6.dp)
+                )
+            }
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiffCard(diff: FileDiff, directory: String, onRevert: () -> Unit) {
+    var expanded by remember(diff.file) { mutableStateOf(false) }
+    val relative = relativePath(diff.file, directory)
+    val name = relative.substringAfterLast('/')
+    val dir = relative.substringBeforeLast('/', "")
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.InsertDriveFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (dir.isNotBlank()) {
+                        Text(
+                            dir,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
                 Text(
                     "+${diff.additions}",
                     style = MaterialTheme.typography.labelSmall,
@@ -1208,39 +1344,52 @@ private fun DiffCard(diff: FileDiff, onRevert: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error
                 )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = stringResource(
+                        if (expanded) R.string.chat_diff_hide else R.string.chat_diff_show
+                    ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
             }
-            if (diff.patch.isNotBlank()) {
-                TextButton(
-                    onClick = onRevert,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.chat_diff_revert),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(Modifier.horizontalScroll(rememberScrollState())) {
-                    Column(Modifier.padding(8.dp)) {
-                        diff.patch.lines().take(150).forEach { line ->
-                            Text(
-                                line.ifEmpty { " " },
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.5.sp,
-                                lineHeight = 15.sp,
-                                maxLines = 1,
-                                color = when {
-                                    line.startsWith("+") -> Color(0xFF4CAF50)
-                                    line.startsWith("-") -> MaterialTheme.colorScheme.error
-                                    line.startsWith("@@") -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(Modifier.horizontalScroll(rememberScrollState())) {
+                            Column(Modifier.padding(8.dp)) {
+                                diff.patch.lines().take(150).forEach { line ->
+                                    Text(
+                                        line.ifEmpty { " " },
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.5.sp,
+                                        lineHeight = 15.sp,
+                                        maxLines = 1,
+                                        color = when {
+                                            line.startsWith("+") -> Color(0xFF4CAF50)
+                                            line.startsWith("-") -> MaterialTheme.colorScheme.error
+                                            line.startsWith("@@") -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                    )
                                 }
+                            }
+                        }
+                    }
+                    if (diff.patch.isNotBlank()) {
+                        TextButton(
+                            onClick = onRevert,
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.chat_diff_revert),
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
@@ -1290,6 +1439,23 @@ private fun TuneSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            val currentAgent = state.agents.firstOrNull { it.id == state.agentID }?.name
+                ?: state.agentID.ifBlank { "—" }
+            val currentModel = state.models.firstOrNull {
+                it.id == state.modelID && it.providerID == state.modelProviderID
+            }?.name ?: state.modelID.ifBlank { "—" }
+            Text(
+                stringResource(R.string.chat_current_selection, currentAgent, currentModel),
+                style = MaterialTheme.typography.labelLarge
+            )
+            if (state.selecting) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
 
             if (state.contextUsed > 0L) {
                 val limit = state.contextLimit
@@ -1405,15 +1571,42 @@ private fun TuneSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )
+                Text(
+                    stringResource(R.string.chat_agent_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.agents.forEach { agent ->
                         FilterChip(
                             selected = agent.id == state.agentID,
                             onClick = { onAgent(agent.id) },
-                            label = { Text(agent.name) }
+                            enabled = !state.selecting,
+                            label = { Text(agent.name) },
+                            leadingIcon = if (agent.id == state.agentID) {
+                                {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else {
+                                null
+                            }
                         )
                     }
                 }
+                state.agents.firstOrNull { it.id == state.agentID }
+                    ?.description
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { description ->
+                        Text(
+                            description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
             }
 
             if (state.models.isNotEmpty()) {
@@ -1423,11 +1616,36 @@ private fun TuneSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 10.dp)
                 )
-                state.models.forEach { model ->
+                var modelQuery by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = modelQuery,
+                    onValueChange = { modelQuery = it },
+                    label = { Text(stringResource(R.string.chat_search_models)) },
+                    singleLine = true,
+                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                state.models.filter { model ->
+                    modelQuery.isBlank() ||
+                        model.name.contains(modelQuery, ignoreCase = true) ||
+                        model.id.contains(modelQuery, ignoreCase = true) ||
+                        model.providerID.contains(modelQuery, ignoreCase = true)
+                }.sortedWith(
+                    compareByDescending<ModelOption> {
+                        it.id == state.modelID && it.providerID == state.modelProviderID
+                    }.thenBy { it.name }
+                ).forEach { model ->
                     val selected = model.id == state.modelID &&
                         model.providerID == state.modelProviderID
                     Surface(
                         onClick = { onModel(model.providerID, model.id) },
+                        enabled = !state.selecting,
                         color = if (selected) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surfaceContainerHigh,
                         shape = RoundedCornerShape(14.dp),
@@ -1458,6 +1676,13 @@ private fun TuneSheet(
                         }
                     }
                 }
+            }
+            state.error?.let { message ->
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -2500,6 +2725,144 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
 }
 
 @Composable
+private fun ActivityGroup(parts: List<Part>, pending: Boolean, modifier: Modifier = Modifier) {
+    var expanded by remember { mutableStateOf(false) }
+    val tools = parts.filterIsInstance<Part.Tool>()
+    val thoughts = parts.filterIsInstance<Part.Reasoning>()
+    val running = pending && tools.any { it.status == "running" || it.status == "streaming" }
+    val names = tools.map { it.name }.distinct().take(3)
+    val prettyNames = names.joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
+
+    val usedOne = stringResource(R.string.chat_activity_used_one)
+    val usedMany = stringResource(R.string.chat_activity_used, tools.size)
+    val working = stringResource(
+        R.string.chat_activity_working,
+        names.firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "…"
+    )
+    val thoughtsLabel = if (thoughts.size == 1) {
+        val total = thoughts.first().durationMs
+        if (total >= 1000) {
+            stringResource(R.string.chat_activity_thought_for, (total / 1000).toInt())
+        } else {
+            stringResource(R.string.chat_activity_thought)
+        }
+    } else {
+        stringResource(R.string.chat_activity_thoughts, thoughts.size)
+    }
+
+    val summary = when {
+        running -> working
+        tools.isNotEmpty() -> buildString {
+            append(if (tools.size == 1) usedOne else usedMany)
+            if (prettyNames.isNotBlank()) append(" · ").append(prettyNames)
+        }
+
+        thoughts.isNotEmpty() -> thoughtsLabel
+        else -> ""
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(14.dp),
+        modifier = modifier
+    ) {
+        Column {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (running) {
+                    ActivityBars()
+                } else {
+                    Icon(
+                        Icons.Rounded.Psychology,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    parts.forEach { part ->
+                        when (part) {
+                            is Part.Tool -> ToolCallCard(
+                                name = part.name,
+                                status = part.status,
+                                summary = part.summary,
+                                input = part.input,
+                                output = part.output,
+                                error = part.error,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            is Part.Reasoning -> ReasoningBlock(
+                                text = part.text,
+                                durationMs = part.durationMs,
+                                pending = pending,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private sealed interface DisplayBlock {
+    data class TextBlock(val text: String) : DisplayBlock
+    data class Activity(val parts: List<Part>) : DisplayBlock
+}
+
+private fun groupDisplayParts(parts: List<Part>): List<DisplayBlock> {
+    val out = mutableListOf<DisplayBlock>()
+    val activity = mutableListOf<Part>()
+    fun flush() {
+        if (activity.isNotEmpty()) {
+            out += DisplayBlock.Activity(activity.toList())
+            activity.clear()
+        }
+    }
+    parts.forEach { part ->
+        when (part) {
+            is Part.Text -> {
+                flush()
+                if (part.text.isNotBlank()) out += DisplayBlock.TextBlock(part.text)
+            }
+
+            is Part.Tool, is Part.Reasoning -> activity += part
+            is Part.Image -> Unit
+        }
+    }
+    flush()
+    return out
+}
+
+@Composable
 private fun AssistantMessage(message: Msg, onSpeak: (String) -> Unit) {
     Column(
         Modifier.fillMaxWidth(),
@@ -2508,30 +2871,18 @@ private fun AssistantMessage(message: Msg, onSpeak: (String) -> Unit) {
         if (!message.hasVisibleContent) {
             if (message.pending) TypingIndicator()
         } else {
-            message.parts.forEach { part ->
-                when (part) {
-                    is Part.Text -> if (part.text.isNotBlank()) {
-                        SelectionContainer { MarkdownText(part.text) }
+            val blocks = remember(message.parts) { groupDisplayParts(message.parts) }
+            blocks.forEach { block ->
+                when (block) {
+                    is DisplayBlock.TextBlock -> SelectionContainer {
+                        MarkdownText(block.text)
                     }
 
-                    is Part.Tool -> ToolCallCard(
-                        name = part.name,
-                        status = part.status,
-                        summary = part.summary,
-                        input = part.input,
-                        output = part.output,
-                        error = part.error,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    is Part.Reasoning -> ReasoningBlock(
-                        text = part.text,
-                        durationMs = part.durationMs,
+                    is DisplayBlock.Activity -> ActivityGroup(
+                        parts = block.parts,
                         pending = message.pending,
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    is Part.Image -> Unit
                 }
             }
             if (message.pending) TypingIndicator(compact = true)

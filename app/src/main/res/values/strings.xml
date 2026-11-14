@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenCode</string>
+    <string name="app_name">OpenCode Mobile</string>
 
     <!-- Common actions -->
     <string name="action_back">Back</string>
@@ -59,6 +59,8 @@
     <string name="action_unarchive">Unarchive</string>
     <string name="sessions_archived">Archived</string>
     <string name="sessions_subagents">Subagents</string>
+    <string name="sessions_show_subagents">Show %1$d subagent runs</string>
+    <string name="sessions_hide_subagents">Hide %1$d subagent runs</string>
     <string name="session_subagent_count">%1$d subagents</string>
     <string name="chat_attach_photo">Photo</string>
     <string name="action_mute_project">Mute project</string>
@@ -84,6 +86,9 @@
     <string name="chat_model_agent">Model &amp; agent</string>
     <string name="chat_agents">Agent</string>
     <string name="chat_models">Model</string>
+    <string name="chat_current_selection">Agent: %1$s · Model: %2$s</string>
+    <string name="chat_agent_hint">Who handles this session. Changes apply to the next turn.</string>
+    <string name="chat_search_models">Search models</string>
     <string name="chat_context">Context</string>
     <string name="chat_context_used">%1$s / %2$s · %3$d%%</string>
     <string name="chat_context_used_unknown">%1$s tokens</string>
@@ -144,6 +149,12 @@
     <string name="chat_preset_name">Preset name</string>
     <string name="chat_presets">Presets</string>
     <string name="chat_queue_title">Queued messages</string>
+    <string name="chat_activity_used">Used %1$d tools</string>
+    <string name="chat_activity_used_one">Used 1 tool</string>
+    <string name="chat_activity_working">Working · %1$s</string>
+    <string name="chat_activity_thought">Thought</string>
+    <string name="chat_activity_thoughts">%1$d thoughts</string>
+    <string name="chat_activity_thought_for">Thought for %1$ds</string>
     <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_queue_steer">Steer</string>
     <string name="chat_queue_edit">Edit</string>
@@ -168,6 +179,11 @@
     <string name="chat_ab_body">Branches the conversation before your last prompt and replays it on the chosen model, then opens the new branch.</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_diff_from_tools">The server has no diff for this project. Files the agent edited in this conversation:</string>
+    <string name="chat_changes_count">%1$d files changed</string>
+    <string name="chat_changes_conversation">from this conversation</string>
+    <string name="chat_file_edits">×%1$d</string>
+    <string name="chat_diff_show">Show diff</string>
+    <string name="chat_diff_hide">Hide diff</string>
     <string name="chat_diff_revert">Revert file</string>
     <string name="chat_diff_revert_title">Revert this file?</string>
     <string name="chat_diff_revert_body">Reverse the changes to %1$s? If the patch no longer matches, nothing is written.</string>

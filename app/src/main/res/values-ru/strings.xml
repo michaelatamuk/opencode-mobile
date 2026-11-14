@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenCode</string>
+    <string name="app_name">OpenCode Mobile</string>
 
     <string name="action_back">Назад</string>
     <string name="action_settings">Настройки</string>
@@ -57,6 +57,8 @@
     <string name="action_unarchive">Из архива</string>
     <string name="sessions_archived">Архив</string>
     <string name="sessions_subagents">Субагенты</string>
+    <string name="sessions_show_subagents">Показать запуски субагентов: %1$d</string>
+    <string name="sessions_hide_subagents">Скрыть запуски субагентов: %1$d</string>
     <string name="session_subagent_count">%1$d субагентов</string>
     <string name="chat_attach_photo">Фото</string>
     <string name="action_mute_project">Отключить уведомления проекта</string>
@@ -80,6 +82,9 @@
     <string name="chat_model_agent">Модель и агент</string>
     <string name="chat_agents">Агент</string>
     <string name="chat_models">Модель</string>
+    <string name="chat_current_selection">Агент: %1$s · Модель: %2$s</string>
+    <string name="chat_agent_hint">Кто ведёт эту сессию. Изменения применятся к следующему ходу.</string>
+    <string name="chat_search_models">Поиск моделей</string>
     <string name="chat_context">Контекст</string>
     <string name="chat_context_used">%1$s / %2$s · %3$d%%</string>
     <string name="chat_context_used_unknown">%1$s токенов</string>
@@ -140,6 +145,12 @@
     <string name="chat_preset_name">Название пресета</string>
     <string name="chat_presets">Пресеты</string>
     <string name="chat_queue_title">Очередь сообщений</string>
+    <string name="chat_activity_used">Использовано инструментов: %1$d</string>
+    <string name="chat_activity_used_one">Использован 1 инструмент</string>
+    <string name="chat_activity_working">Работа · %1$s</string>
+    <string name="chat_activity_thought">Размышление</string>
+    <string name="chat_activity_thoughts">Размышлений: %1$d</string>
+    <string name="chat_activity_thought_for">Размышление %1$d с</string>
     <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_queue_steer">Вклинить</string>
     <string name="chat_queue_edit">Изменить</string>
@@ -164,6 +175,11 @@
     <string name="chat_ab_body">Ответвляет диалог перед последним запросом и повторяет его на выбранной модели, затем открывает новую ветку.</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_diff_from_tools">У сервера нет diff для этого проекта. Файлы, изменённые агентом в этом диалоге:</string>
+    <string name="chat_changes_count">Изменено файлов: %1$d</string>
+    <string name="chat_changes_conversation">из этого диалога</string>
+    <string name="chat_file_edits">×%1$d</string>
+    <string name="chat_diff_show">Показать diff</string>
+    <string name="chat_diff_hide">Скрыть diff</string>
     <string name="chat_diff_revert">Откатить файл</string>
     <string name="chat_diff_revert_title">Откатить этот файл?</string>
     <string name="chat_diff_revert_body">Обратить изменения в %1$s? Если патч больше не совпадает, ничего не будет записано.</string>

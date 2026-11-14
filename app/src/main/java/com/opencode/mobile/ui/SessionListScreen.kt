@@ -36,6 +36,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Paid
@@ -141,18 +143,16 @@ fun SessionListScreen(
     var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
     var muted by remember { mutableStateOf(MutedStore.all(context)) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
-    var showSubagents by rememberSaveable { mutableStateOf(false) }
+    var expandedParents by remember { mutableStateOf<Set<String>>(emptySet()) }
     var mutedProjects by remember { mutableStateOf(MutedProjectStore.all(context)) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
 
-    val scoped = remember(state.sessions, projectFilter, showArchived, showSubagents) {
+    val scoped = remember(state.sessions, projectFilter, showArchived) {
         var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
-        base = base.filter {
-            if (showSubagents) it.parentID.isNotBlank() else it.parentID.isBlank()
-        }
+        base = base.filter { it.parentID.isBlank() }
         if (projectFilter == null) base
         else base.filter { it.projectID == projectFilter }
     }
@@ -168,6 +168,9 @@ fun SessionListScreen(
         state.sessions.filter { it.parentID.isNotBlank() }
             .groupingBy { it.parentID }
             .eachCount()
+    }
+    val childrenByParent = remember(state.sessions) {
+        state.sessions.filter { it.parentID.isNotBlank() }.groupBy { it.parentID }
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
@@ -319,20 +322,6 @@ fun SessionListScreen(
                         )
                     }
                 }
-                if (subagentCount > 0) {
-                    item {
-                        FilterChip(
-                            selected = showSubagents,
-                            onClick = { showSubagents = !showSubagents },
-                            label = {
-                                Text(
-                                    stringResource(R.string.sessions_subagents) +
-                                        " ($subagentCount)"
-                                )
-                            }
-                        )
-                    }
-                }
             }
         }
 
@@ -393,11 +382,10 @@ fun SessionListScreen(
                         )
                     }
 
-                    items(sessions, key = { it.id }) { session ->
+                    sessions.forEach { session ->
+                        item(key = session.id) {
                         Box(Modifier.animateItem()) {
-                            val seen = remember(session.id, session.updated) {
-                                seenStore.lastSeen(session.id)
-                            }
+                            val seen = seenStore.lastSeen(session.id)
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -456,6 +444,63 @@ fun SessionListScreen(
                                         }
                                     }
                                 )
+                            }
+                        }
+                        }
+                        val children = childrenByParent[session.id].orEmpty()
+                        if (children.isNotEmpty()) {
+                            item(key = "expand-${session.id}") {
+                                SubagentExpander(
+                                    count = children.size,
+                                    expanded = session.id in expandedParents,
+                                    onToggle = {
+                                        expandedParents = if (session.id in expandedParents) {
+                                            expandedParents - session.id
+                                        } else {
+                                            expandedParents + session.id
+                                        }
+                                    }
+                                )
+                            }
+                            if (session.id in expandedParents) {
+                                children.forEach { child ->
+                                    val childSeen = seenStore.lastSeen(child.id)
+                                    item(key = child.id) {
+                                        Box(Modifier.animateItem().padding(start = 24.dp)) {
+                                            SessionRow(
+                                                session = child,
+                                                preview = state.previews[child.id],
+                                                unread = childSeen > 0L && child.updated > childSeen,
+                                                pinned = child.id in pinned,
+                                                muted = child.id in muted,
+                                                archived = child.archived,
+                                                projectMuted = child.projectID in mutedProjects,
+                                                subagents = 0,
+                                                subagent = true,
+                                                onOpen = { onOpen(child) },
+                                                onRename = { renaming = child },
+                                                onDelete = { deleting = child },
+                                                onTogglePin = {
+                                                    pinned = PinnedStore.toggle(context, child.id)
+                                                },
+                                                onToggleMute = {
+                                                    muted = MutedStore.toggle(context, child.id)
+                                                },
+                                                onArchive = {
+                                                    vm.archive(child.id, !child.archived)
+                                                },
+                                                onToggleProjectMute = {
+                                                    if (child.projectID.isNotBlank()) {
+                                                        mutedProjects = MutedProjectStore.toggle(
+                                                            context,
+                                                            child.projectID
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -704,6 +749,35 @@ private fun ActiveCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+private fun SubagentExpander(count: Int, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 34.dp, end = 16.dp, top = 2.dp, bottom = 6.dp)
+            .clickable(onClick = onToggle),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            stringResource(
+                if (expanded) R.string.sessions_hide_subagents
+                else R.string.sessions_show_subagents,
+                count
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 private fun SessionRow(
     session: SessionItem,
     preview: String?,
@@ -713,6 +787,7 @@ private fun SessionRow(
     archived: Boolean,
     projectMuted: Boolean,
     subagents: Int,
+    subagent: Boolean = false,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -756,6 +831,14 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (subagent) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "subagent",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (pinned) {
                     Spacer(Modifier.width(6.dp))
                     Icon(
