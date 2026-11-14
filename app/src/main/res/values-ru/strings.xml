@@ -79,6 +79,10 @@
     <string name="chat_undo_body">Удалит последний запрос, ответ и изменения файлов. После подтверждения отменить это нельзя.</string>
     <string name="chat_undo_confirm">Отменить</string>
     <string name="chat_compact">Сжать контекст</string>
+    <string name="chat_library">Команды и навыки</string>
+    <string name="chat_commands">Команды</string>
+    <string name="chat_skills">Навыки</string>
+    <string name="chat_library_empty">На этом сервере нет команд и навыков.</string>
     <string name="chat_no_changes">В этой сессии пока нет изменений.</string>
     <string name="chat_search">Поиск в сессии</string>
     <string name="chat_attach">Прикрепить скриншот</string>

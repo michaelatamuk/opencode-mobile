@@ -21,6 +21,8 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Image attachments from the photo picker, sent inline (up to 8)
 - Permission prompts: allow once / always / reject
 - Single morphing send/stop button, plus steer while a turn is running
+- Commands & skills sheet: browse server slash commands and skills, insert a
+  command or attach skills to the next prompt
 - Model and agent picker with per-session cost and token usage
 - Context meter with the model's window size and one-tap compaction
 - Spend sheet: total, breakdown by model, and the most expensive sessions
@@ -80,5 +82,6 @@ Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
 Known gaps: no QR pairing, no widget or quick-settings tile, no per-file revert
-in the diff sheet, no voice input, no biometric lock, and R8 is disabled until
-a shrunk build can be verified on a device.
+in the diff sheet, no voice input, no biometric lock, no artifact gallery
+(disabled on most servers), and R8 is disabled until a shrunk build can be
+verified on a device.

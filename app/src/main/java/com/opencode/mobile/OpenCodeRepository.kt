@@ -20,6 +20,13 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun models(): List<ModelOption> = api.models()
 
+    suspend fun commands(): List<CommandOption> = api.commands()
+
+    suspend fun skills(): List<SkillOption> = api.skills()
+
+    suspend fun runCommand(sessionID: String, name: String, text: String) =
+        api.runCommand(sessionID, name, text)
+
     suspend fun projects(): List<ProjectOption> = api.projects()
 
     suspend fun setModel(sessionID: String, providerID: String, modelID: String) =
@@ -54,8 +61,9 @@ class OpenCodeRepository(val api: Api) {
         sessionID: String,
         text: String,
         files: List<Attachment> = emptyList(),
-        delivery: String? = null
-    ) = api.send(sessionID, text, files, delivery)
+        delivery: String? = null,
+        skillIDs: List<String> = emptyList()
+    ) = api.send(sessionID, text, files, delivery, skillIDs)
 
     suspend fun interrupt(sessionID: String) = api.interrupt(sessionID)
 

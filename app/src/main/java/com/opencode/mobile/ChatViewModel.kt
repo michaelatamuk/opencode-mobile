@@ -23,6 +23,8 @@ data class ChatUiState(
     val queued: List<QueuedMessage> = emptyList(),
     val agents: List<AgentOption> = emptyList(),
     val models: List<ModelOption> = emptyList(),
+    val commands: List<CommandOption> = emptyList(),
+    val skills: List<SkillOption> = emptyList(),
     val agentID: String = "",
     val modelID: String = "",
     val modelProviderID: String = "",
@@ -110,6 +112,12 @@ class ChatViewModel(
         }
         runCatching { repo.models() }.getOrNull()?.let { list ->
             _state.update { it.copy(models = list) }
+        }
+        runCatching { repo.commands() }.getOrNull()?.let { list ->
+            _state.update { it.copy(commands = list) }
+        }
+        runCatching { repo.skills() }.getOrNull()?.let { list ->
+            _state.update { it.copy(skills = list) }
         }
     }
 
@@ -199,7 +207,12 @@ class ChatViewModel(
         }
     }
 
-    fun send(text: String, files: List<Attachment>, onDone: (Boolean) -> Unit) {
+    fun send(
+        text: String,
+        files: List<Attachment>,
+        skillIDs: List<String> = emptyList(),
+        onDone: (Boolean) -> Unit
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(sending = true) }
             var ok = false
@@ -211,12 +224,22 @@ class ChatViewModel(
                     _state.update { it.copy(sessionID = created) }
                     startPolling()
                 }
-                repo.send(
-                    sessionID = id,
-                    text = text,
-                    files = files,
-                    delivery = if (_state.value.busy) "steer" else null
-                )
+                // A leading /command is routed to the command endpoint so the
+                // server parses its arguments; ordinary prompts stay a prompt.
+                val slash = Regex("^/([A-Za-z0-9_-]+)\\s*([\\s\\S]*)$").find(text.trim())
+                val knownCommand = slash?.groupValues?.get(1)
+                    ?.takeIf { name -> _state.value.commands.any { it.name == name } }
+                if (knownCommand != null && files.isEmpty() && skillIDs.isEmpty()) {
+                    repo.runCommand(id, knownCommand, slash.groupValues[2].trim())
+                } else {
+                    repo.send(
+                        sessionID = id,
+                        text = text,
+                        files = files,
+                        delivery = if (_state.value.busy) "steer" else null,
+                        skillIDs = skillIDs
+                    )
+                }
                 ok = true
                 refreshNow()
             } catch (e: CancellationException) {

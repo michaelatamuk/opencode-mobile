@@ -72,6 +72,7 @@ import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -124,6 +125,7 @@ import coil.compose.AsyncImage
 import com.opencode.mobile.AttachmentLoader
 import com.opencode.mobile.ChatUiState
 import com.opencode.mobile.ChatViewModel
+import com.opencode.mobile.CommandOption
 import com.opencode.mobile.FileDiff
 import com.opencode.mobile.Msg
 import com.opencode.mobile.OpenCodeRepository
@@ -131,6 +133,7 @@ import com.opencode.mobile.Part
 import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
+import com.opencode.mobile.SkillOption
 import com.opencode.mobile.WatchState
 import com.opencode.mobile.friendlyError
 import kotlinx.coroutines.Dispatchers
@@ -138,7 +141,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     repo: OpenCodeRepository,
@@ -161,6 +164,8 @@ fun ChatScreen(
     var query by remember { mutableStateOf("") }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmUndo by remember { mutableStateOf(false) }
+    var showLibrary by remember { mutableStateOf(false) }
+    var pickedSkills by remember { mutableStateOf<List<SkillOption>>(emptyList()) }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -375,6 +380,13 @@ fun ChatScreen(
                                 vm.compact()
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_library)) },
+                            onClick = {
+                                menuOpen = false
+                                showLibrary = true
+                            }
+                        )
                     }
                 }
             }
@@ -469,6 +481,26 @@ fun ChatScreen(
                     )
                 }
             }
+            if (pickedSkills.isNotEmpty()) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    pickedSkills.forEach { skill ->
+                        AssistChip(
+                            onClick = { pickedSkills = pickedSkills - skill },
+                            label = { Text(skill.name) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+                }
+            }
             state.error?.let {
                 Text(
                     it,
@@ -498,8 +530,16 @@ fun ChatScreen(
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         input = ""
                         picked = emptyList()
-                        vm.send(text.ifBlank { screenshotOnlyText }, files) { ok ->
-                            if (!ok) input = text
+                        vm.send(
+                            text = text.ifBlank { screenshotOnlyText },
+                            files = files,
+                            skillIDs = pickedSkills.map { it.id }
+                        ) { ok ->
+                            if (!ok) {
+                                input = text
+                            } else {
+                                pickedSkills = emptyList()
+                            }
                         }
                     }
                 },
@@ -538,6 +578,26 @@ fun ChatScreen(
             repo = repo,
             sessionID = sessionID,
             onDismiss = { showDiff = false }
+        )
+    }
+
+    if (showLibrary) {
+        LibrarySheet(
+            commands = state.commands,
+            skills = state.skills,
+            selected = pickedSkills,
+            onDismiss = { showLibrary = false },
+            onCommand = { command ->
+                input = "/${command.name} "
+                showLibrary = false
+            },
+            onToggleSkill = { skill ->
+                pickedSkills = if (pickedSkills.any { it.id == skill.id }) {
+                    pickedSkills.filterNot { it.id == skill.id }
+                } else {
+                    pickedSkills + skill
+                }
+            }
         )
     }
 
@@ -986,6 +1046,124 @@ private fun FormSheet(form: FormRequest, onSubmit: (Map<String, Any>) -> Unit) {
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.form_submit)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibrarySheet(
+    commands: List<CommandOption>,
+    skills: List<SkillOption>,
+    selected: List<SkillOption>,
+    onDismiss: () -> Unit,
+    onCommand: (CommandOption) -> Unit,
+    onToggleSkill: (SkillOption) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                stringResource(R.string.chat_library),
+                style = MaterialTheme.typography.headlineSmall
+            )
+
+            if (commands.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_commands),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                commands.forEach { command ->
+                    Surface(
+                        onClick = { onCommand(command) },
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Text(
+                                "/${command.name}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (command.description.isNotBlank()) {
+                                Text(
+                                    command.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (skills.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.chat_skills),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                skills.forEach { skill ->
+                    val isSelected = selected.any { it.id == skill.id }
+                    Surface(
+                        onClick = { onToggleSkill(skill) },
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(skill.name, style = MaterialTheme.typography.titleSmall)
+                                if (skill.description.isNotBlank()) {
+                                    Text(
+                                        skill.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (commands.isEmpty() && skills.isEmpty()) {
+                Text(
+                    stringResource(R.string.chat_library_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

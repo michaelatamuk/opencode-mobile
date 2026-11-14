@@ -83,6 +83,10 @@
     <string name="chat_undo_body">Removes the last prompt, its response and the file changes it made. This cannot be undone once committed.</string>
     <string name="chat_undo_confirm">Undo</string>
     <string name="chat_compact">Compact context</string>
+    <string name="chat_library">Commands &amp; skills</string>
+    <string name="chat_commands">Commands</string>
+    <string name="chat_skills">Skills</string>
+    <string name="chat_library_empty">This server has no commands or skills to show.</string>
     <string name="chat_no_changes">No changes in this session yet.</string>
     <string name="chat_search">Search in session</string>
     <string name="chat_attach">Attach screenshot</string>

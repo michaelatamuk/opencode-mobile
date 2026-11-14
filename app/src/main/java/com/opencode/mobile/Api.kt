@@ -123,6 +123,14 @@ data class FileDiff(
     val status: String
 )
 
+data class CommandOption(val name: String, val description: String)
+
+data class SkillOption(
+    val id: String,
+    val name: String,
+    val description: String
+)
+
 /**
  * Minimal client for the OpenCode V2 HTTP API.
  *
@@ -538,7 +546,8 @@ class Api(server: String, private val password: String) {
         sessionID: String,
         text: String,
         files: List<Attachment> = emptyList(),
-        delivery: String? = null
+        delivery: String? = null,
+        skillIDs: List<String> = emptyList()
     ): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject().put("text", text)
         if (files.isNotEmpty()) {
@@ -553,9 +562,44 @@ class Api(server: String, private val password: String) {
             }
             body.put("files", arr)
         }
+        if (skillIDs.isNotEmpty()) {
+            val arr = JSONArray()
+            skillIDs.forEach { id -> arr.put(JSONObject().put("id", id)) }
+            body.put("skills", arr)
+        }
         if (delivery != null) body.put("delivery", delivery)
         postJson("/api/session/$sessionID/prompt", body.toString())
     }
+
+    suspend fun commands(): List<CommandOption> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/command").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            CommandOption(o.optString("name"), o.optString("description"))
+        }
+    }
+
+    suspend fun skills(): List<SkillOption> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/skill").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).map { i ->
+            val o = data.getJSONObject(i)
+            SkillOption(
+                id = o.optString("id"),
+                name = o.optString("name").ifBlank { o.optString("id") },
+                description = o.optString("description")
+            )
+        }
+    }
+
+    /** Runs a slash command directly, so arguments are parsed by the server. */
+    suspend fun runCommand(sessionID: String, name: String, text: String): Unit =
+        withContext(Dispatchers.IO) {
+            postJson(
+                "/api/session/$sessionID/command",
+                JSONObject().put("name", name).put("text", text).toString()
+            )
+            Unit
+        }
 
     suspend fun interrupt(sessionID: String): Unit = withContext(Dispatchers.IO) {
         postJson("/api/session/$sessionID/interrupt", "{}")
