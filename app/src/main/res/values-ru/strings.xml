@@ -49,6 +49,8 @@
     <string name="action_copy_id">Копировать ID сессии</string>
     <string name="action_pin">Закрепить</string>
     <string name="action_unpin">Открепить</string>
+    <string name="action_mute">Отключить уведомления</string>
+    <string name="action_unmute">Включить уведомления</string>
     <string name="action_cancel">Отмена</string>
     <string name="session_rename_title">Переименовать сессию</string>
     <string name="session_delete_title">Удалить сессию?</string>

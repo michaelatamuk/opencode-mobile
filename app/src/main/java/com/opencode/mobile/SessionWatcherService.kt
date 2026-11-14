@@ -172,7 +172,7 @@ class SessionWatcherService : Service() {
                 if (id.isNotEmpty()) {
                     runs.remove(id)
                     updateOngoing()
-                    if (id != WatchState.activeSessionID) notifyFinished(id)
+                    if (id != WatchState.activeSessionID && !muted(id)) notifyFinished(id)
                 }
             }
 
@@ -226,7 +226,7 @@ class SessionWatcherService : Service() {
                 val sessionID = form.optString("sessionID")
                 val title = form.optString("title")
                     .ifBlank { getString(R.string.notif_form_fallback) }
-                if (id.isNotEmpty() && notifiedForms.add(id)) {
+                if (id.isNotEmpty() && notifiedForms.add(id) && !muted(sessionID)) {
                     notifyForm(id, sessionID, title)
                 }
             }
@@ -262,7 +262,7 @@ class SessionWatcherService : Service() {
         val active = sessions.filter { it.running }.map { it.id }.toSet()
         if (primed) {
             (lastActive - active).forEach { id ->
-                if (id != WatchState.activeSessionID) notifyFinished(id)
+                if (id != WatchState.activeSessionID && !muted(id)) notifyFinished(id)
             }
         }
         lastActive = active
@@ -288,11 +288,14 @@ class SessionWatcherService : Service() {
         }
 
         pending.forEach { request ->
-            if (notifiedPermissions.add(request.id)) {
+            if (notifiedPermissions.add(request.id) && !muted(request.sessionID)) {
                 manager.notify(request.id.hashCode(), permissionNotification(request))
             }
         }
     }
+
+    private fun muted(sessionID: String): Boolean =
+        sessionID in MutedStore.all(this)
 
     private fun sessionIntent(sessionID: String): PendingIntent =
         PendingIntent.getActivity(

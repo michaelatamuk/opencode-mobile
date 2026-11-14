@@ -25,7 +25,9 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
   command or attach skills to the next prompt
 - Model and agent picker with per-session cost and token usage
 - Context meter with the model's window size and one-tap compaction
-- Spend sheet: total, breakdown by model, and the most expensive sessions
+- Spend sheet: total, daily history for the last 7 days, breakdown by model,
+  and the most expensive sessions
+- Per-session notification mute from the row menu
 - Diff sheet with per-file statistics; when the project has no VCS diff it
   lists the files the agent edited in the conversation, and any file can be
   opened in a monospace viewer

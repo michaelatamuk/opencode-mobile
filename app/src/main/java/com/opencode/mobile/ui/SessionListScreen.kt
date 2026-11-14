@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Paid
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
@@ -81,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opencode.mobile.MutedStore
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.R
@@ -134,6 +136,7 @@ fun SessionListScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var projectFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
+    var muted by remember { mutableStateOf(MutedStore.all(context)) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
@@ -383,11 +386,15 @@ fun SessionListScreen(
                                     preview = state.previews[session.id],
                                     unread = seen > 0L && session.updated > seen,
                                     pinned = session.id in pinned,
+                                    muted = session.id in muted,
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
                                     onDelete = { deleting = session },
                                     onTogglePin = {
                                         pinned = PinnedStore.toggle(context, session.id)
+                                    },
+                                    onToggleMute = {
+                                        muted = MutedStore.toggle(context, session.id)
                                     }
                                 )
                             }
@@ -643,10 +650,12 @@ private fun SessionRow(
     preview: String?,
     unread: Boolean,
     pinned: Boolean,
+    muted: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    onTogglePin: () -> Unit
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val cost = formatCost(session.cost)
@@ -688,6 +697,15 @@ private fun SessionRow(
                     Icon(
                         Icons.Rounded.PushPin,
                         contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                if (muted) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Rounded.NotificationsOff,
+                        contentDescription = stringResource(R.string.action_unmute),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(13.dp)
                     )
@@ -751,6 +769,19 @@ private fun SessionRow(
                     onClick = {
                         menuOpen = false
                         onTogglePin()
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(
+                                if (muted) R.string.action_unmute else R.string.action_mute
+                            )
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onToggleMute()
                     }
                 )
                 DropdownMenuItem(
