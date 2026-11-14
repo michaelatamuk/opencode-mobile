@@ -58,6 +58,9 @@
     <string name="action_archive">Archive</string>
     <string name="action_unarchive">Unarchive</string>
     <string name="sessions_archived">Archived</string>
+    <string name="sessions_subagents">Subagents</string>
+    <string name="session_subagent_count">%1$d subagents</string>
+    <string name="chat_attach_photo">Photo</string>
     <string name="action_mute_project">Mute project</string>
     <string name="action_unmute_project">Unmute project</string>
     <string name="action_cancel">Cancel</string>
@@ -117,6 +120,7 @@
     <string name="settings_connections_loading">Loading…</string>
     <string name="settings_connections_empty">Nothing here.</string>
     <string name="settings_mcp">MCP servers</string>
+    <string name="settings_mcp_resources">MCP resources</string>
     <string name="settings_integrations">Integrations</string>
     <string name="settings_connected_label">Connected</string>
     <string name="settings_connect">Connect</string>
@@ -285,6 +289,8 @@
     <string name="settings_version">Version</string>
     <string name="settings_server_row">Server</string>
     <string name="settings_github">GitHub repository</string>
+    <string name="settings_export_diagnostics">Export diagnostics</string>
+    <string name="settings_export_diagnostics_hint">Device, server address (no password), watcher and theme state</string>
     <string name="settings_accent_blue">Blue</string>
     <string name="settings_accent_mint">Mint</string>
     <string name="settings_accent_violet">Violet</string>

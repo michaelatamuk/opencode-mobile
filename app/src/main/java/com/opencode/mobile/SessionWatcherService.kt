@@ -51,6 +51,7 @@ class SessionWatcherService : Service() {
     private var lastActive: Set<String> = emptySet()
     private var titles: MutableMap<String, String> = mutableMapOf()
     private val sessionProjects = mutableMapOf<String, String>()
+    private val sessionParents = mutableMapOf<String, String>()
     private val notifiedPermissions = mutableSetOf<String>()
     private val notifiedForms = mutableSetOf<String>()
     private var primed = false
@@ -175,7 +176,9 @@ class SessionWatcherService : Service() {
                 if (id.isNotEmpty()) {
                     runs.remove(id)
                     updateOngoing()
-                    if (id != WatchState.activeSessionID && !muted(id)) notifyFinished(id)
+                    if (id != WatchState.activeSessionID && !muted(id) && !isChild(id)) {
+                        notifyFinished(id)
+                    }
                 }
             }
 
@@ -262,11 +265,14 @@ class SessionWatcherService : Service() {
         UsageStore.record(this, sessions)
         sessions.forEach { titles[it.id] = it.title }
         sessions.forEach { sessionProjects[it.id] = it.projectID }
+        sessions.forEach { sessionParents[it.id] = it.parentID }
 
         val active = sessions.filter { it.running }.map { it.id }.toSet()
         if (primed) {
             (lastActive - active).forEach { id ->
-                if (id != WatchState.activeSessionID && !muted(id)) notifyFinished(id)
+                if (id != WatchState.activeSessionID && !muted(id) && !isChild(id)) {
+                    notifyFinished(id)
+                }
             }
         }
         lastActive = active
@@ -392,6 +398,10 @@ class SessionWatcherService : Service() {
         val project = sessionProjects[sessionID] ?: return false
         return project in MutedProjectStore.all(this)
     }
+
+    /** Subagent runs are contained in their parent; the parent notifies instead. */
+    private fun isChild(sessionID: String): Boolean =
+        !sessionParents[sessionID].isNullOrBlank()
 
     private fun sessionIntent(sessionID: String): PendingIntent =
         PendingIntent.getActivity(

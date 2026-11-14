@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -46,6 +49,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +88,7 @@ fun Composer(
 ) {
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val primaryIsStop = busy && !hasContent
+    val primaryIsMic = !busy && !hasContent && onVoice != null
 
     val sendScale by animateFloatAsState(
         targetValue = if (hasContent) 1f else 0.9f,
@@ -174,32 +181,45 @@ fun Composer(
                     .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onAttach, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        Icons.Rounded.AddPhotoAlternate,
-                        contentDescription = stringResource(R.string.chat_attach),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                if (onAttachFile != null) {
-                    IconButton(onClick = onAttachFile, modifier = Modifier.size(40.dp)) {
+                var attachMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { attachMenu = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
                         Icon(
-                            Icons.Rounded.AttachFile,
-                            contentDescription = stringResource(R.string.chat_attach_file),
+                            Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.chat_attach),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                }
-                if (onVoice != null) {
-                    IconButton(onClick = onVoice, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            Icons.Rounded.Mic,
-                            contentDescription = stringResource(R.string.chat_voice_input),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                    DropdownMenu(
+                        expanded = attachMenu,
+                        onDismissRequest = { attachMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_attach_photo)) },
+                            onClick = {
+                                attachMenu = false
+                                onAttach()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
+                            }
                         )
+                        if (onAttachFile != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_attach_file)) },
+                                onClick = {
+                                    attachMenu = false
+                                    onAttachFile()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.AttachFile, contentDescription = null)
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -237,8 +257,14 @@ fun Composer(
                 Spacer(Modifier.width(6.dp))
 
                 FilledIconButton(
-                    onClick = { if (primaryIsStop) onStop() else onSend() },
-                    enabled = primaryIsStop || hasContent,
+                    onClick = {
+                        when {
+                            primaryIsStop -> onStop()
+                            primaryIsMic -> onVoice?.invoke()
+                            else -> onSend()
+                        }
+                    },
+                    enabled = primaryIsStop || primaryIsMic || hasContent,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -249,14 +275,20 @@ fun Composer(
                         .size(44.dp)
                         .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
                 ) {
-                    if (primaryIsStop) {
-                        Icon(
+                    when {
+                        primaryIsStop -> Icon(
                             Icons.Rounded.Stop,
                             contentDescription = stringResource(R.string.action_stop),
                             modifier = Modifier.size(16.dp)
                         )
-                    } else {
-                        Icon(
+
+                        primaryIsMic -> Icon(
+                            Icons.Rounded.Mic,
+                            contentDescription = stringResource(R.string.chat_voice_input),
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        else -> Icon(
                             Icons.Rounded.Send,
                             contentDescription = stringResource(R.string.action_send),
                             modifier = Modifier.size(18.dp)

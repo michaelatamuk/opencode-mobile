@@ -141,24 +141,33 @@ fun SessionListScreen(
     var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
     var muted by remember { mutableStateOf(MutedStore.all(context)) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
+    var showSubagents by rememberSaveable { mutableStateOf(false) }
     var mutedProjects by remember { mutableStateOf(MutedProjectStore.all(context)) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
     var showCost by remember { mutableStateOf(false) }
 
-    val scoped = remember(state.sessions, projectFilter, showArchived) {
-        val base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
+    val scoped = remember(state.sessions, projectFilter, showArchived, showSubagents) {
+        var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
+        base = base.filter {
+            if (showSubagents) it.parentID.isNotBlank() else it.parentID.isBlank()
+        }
         if (projectFilter == null) base
         else base.filter { it.projectID == projectFilter }
     }
-    val filtered = remember(scoped, query, pinned) {
+    val filtered = remember(scoped, query, pinned, state.sessions) {
         val base = if (query.isBlank()) scoped
-        else scoped.filter { it.title.contains(query, ignoreCase = true) }
+        else state.sessions.filter { it.title.contains(query, ignoreCase = true) }
         base.sortedWith(
             compareByDescending<SessionItem> { it.id in pinned }
                 .thenByDescending { it.updated }
         )
+    }
+    val childCounts = remember(state.sessions) {
+        state.sessions.filter { it.parentID.isNotBlank() }
+            .groupingBy { it.parentID }
+            .eachCount()
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
@@ -272,7 +281,8 @@ fun SessionListScreen(
         }
 
         val archivedCount = state.sessions.count { it.archived }
-        if (state.projects.size > 1 || archivedCount > 0) {
+        val subagentCount = state.sessions.count { it.parentID.isNotBlank() }
+        if (state.projects.size > 1 || archivedCount > 0 || subagentCount > 0) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -304,6 +314,20 @@ fun SessionListScreen(
                                 Text(
                                     stringResource(R.string.sessions_archived) +
                                         " ($archivedCount)"
+                                )
+                            }
+                        )
+                    }
+                }
+                if (subagentCount > 0) {
+                    item {
+                        FilterChip(
+                            selected = showSubagents,
+                            onClick = { showSubagents = !showSubagents },
+                            label = {
+                                Text(
+                                    stringResource(R.string.sessions_subagents) +
+                                        " ($subagentCount)"
                                 )
                             }
                         )
@@ -412,6 +436,7 @@ fun SessionListScreen(
                                     muted = session.id in muted,
                                     archived = session.archived,
                                     projectMuted = session.projectID in mutedProjects,
+                                    subagents = childCounts[session.id] ?: 0,
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
                                     onDelete = { deleting = session },
@@ -687,6 +712,7 @@ private fun SessionRow(
     muted: Boolean,
     archived: Boolean,
     projectMuted: Boolean,
+    subagents: Int,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -746,6 +772,14 @@ private fun SessionRow(
                         contentDescription = stringResource(R.string.action_unmute),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(13.dp)
+                    )
+                }
+                if (subagents > 0) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        stringResource(R.string.session_subagent_count, subagents),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(Modifier.width(10.dp))

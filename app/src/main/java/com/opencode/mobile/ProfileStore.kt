@@ -17,7 +17,9 @@ data class ServerProfile(
     val watchdogMinutes: Int = 0,
     val agentID: String = "",
     val modelID: String = "",
-    val providerID: String = ""
+    val providerID: String = "",
+    val budget: String = "",
+    val monthBudget: String = ""
 )
 
 /**
@@ -51,7 +53,9 @@ object ProfileStore {
                     watchdogMinutes = o.optInt("watchdogMinutes", 0),
                     agentID = o.optString("agentID"),
                     modelID = o.optString("modelID"),
-                    providerID = o.optString("providerID")
+                    providerID = o.optString("providerID"),
+                    budget = o.optString("budget"),
+                    monthBudget = o.optString("monthBudget")
                 )
             }
         }.getOrDefault(emptyList())
@@ -82,7 +86,9 @@ object ProfileStore {
             themeMode = UiPrefs.mode.value,
             accent = UiPrefs.accent.value,
             persistentWatch = prefs.getBoolean("watch_persistent", false),
-            watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
+            watchdogMinutes = prefs.getInt("watchdog_minutes", 0),
+            budget = prefs.getString("budget_usd", "").orEmpty(),
+            monthBudget = prefs.getString("budget_month_usd", "").orEmpty()
         )
         write(context, listOf(profile))
         prefs.edit().putString(ACTIVE, profile.id).apply()
@@ -108,7 +114,9 @@ object ProfileStore {
             themeMode = UiPrefs.mode.value,
             accent = UiPrefs.accent.value,
             persistentWatch = prefs.getBoolean("watch_persistent", false),
-            watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
+            watchdogMinutes = prefs.getInt("watchdog_minutes", 0),
+            budget = prefs.getString("budget_usd", "").orEmpty(),
+            monthBudget = prefs.getString("budget_month_usd", "").orEmpty()
         )
         write(context, all(context) + profile)
         prefs.edit().putString(ACTIVE, profile.id).apply()
@@ -126,6 +134,8 @@ object ProfileStore {
             .putString(ACTIVE, profile.id)
             .putBoolean("watch_persistent", profile.persistentWatch)
             .putInt("watchdog_minutes", profile.watchdogMinutes)
+            .putString("budget_usd", profile.budget)
+            .putString("budget_month_usd", profile.monthBudget)
             .apply()
         if (profile.themeMode.isNotBlank()) UiPrefs.setMode(context, profile.themeMode)
         if (profile.accent.isNotBlank()) UiPrefs.setAccent(context, profile.accent)
@@ -156,7 +166,9 @@ object ProfileStore {
                 themeMode = UiPrefs.mode.value,
                 accent = UiPrefs.accent.value,
                 persistentWatch = prefs.getBoolean("watch_persistent", false),
-                watchdogMinutes = prefs.getInt("watchdog_minutes", 0)
+                watchdogMinutes = prefs.getInt("watchdog_minutes", 0),
+                budget = prefs.getString("budget_usd", "").orEmpty(),
+                monthBudget = prefs.getString("budget_month_usd", "").orEmpty()
             )
         )
     }
@@ -178,6 +190,8 @@ object ProfileStore {
                     .put("agentID", p.agentID)
                     .put("modelID", p.modelID)
                     .put("providerID", p.providerID)
+                    .put("budget", p.budget)
+                    .put("monthBudget", p.monthBudget)
             )
         }
         SecurePrefs.get(context).edit().putString(KEY, arr.toString()).apply()

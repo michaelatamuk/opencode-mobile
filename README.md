@@ -63,6 +63,14 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - 180-day usage history with CSV export; monthly budget cap
 - Voice engine picker; tap read-aloud again to stop
 - Editable prompts for notification quick actions
+- Subagent sessions hidden by default behind a Subagents chip; parent rows show
+  the child count and subagent completions do not fire notifications
+- Composer: one attachment menu (Photo/File) and one morphing button
+  (Mic → Send → Stop)
+- Per-profile daily/monthly budgets and agent/model defaults
+- MCP resources listed under Connections
+- Export usage CSV and a diagnostics text file
+- Upload progress for prompts with attachments
 - Named server profiles: add the current server, switch, rename, delete
 - Finish-only safety net: a periodic check catches turns that ended while the
   watcher was paused
@@ -108,7 +116,7 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 
 ## Requirements
 
-- Android 8.0+ (minSdk 26), targetSdk 35
+- Android 8.0+ (minSdk 26), targetSdk 36
 - JDK 17 and the Android SDK (compileSdk 35)
 - An OpenCode server with a password. Username is always `opencode`.
 
@@ -136,6 +144,7 @@ Authentication is HTTP Basic, `opencode:<password>`.
 Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
-Known gaps: no artifact gallery (disabled on most servers), no dependency bump
-or `targetSdk 36` yet, no widget configuration options, and R8 is disabled
-until a shrunk build can be verified on a device.
+Known gaps: no artifact gallery (disabled on most servers), no dependency bump,
+no true PTY terminal, and R8 is disabled until a shrunk build can be verified
+on a device.
+

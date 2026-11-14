@@ -41,8 +41,10 @@ class WatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val muted = MutedStore.all(applicationContext)
 
         (previous - running).forEach { id ->
+            val session = sessions.firstOrNull { it.id == id }
+            if (session?.parentID?.isNotBlank() == true) return@forEach
             if (id != WatchState.activeSessionID && id !in muted) {
-                val title = sessions.firstOrNull { it.id == id }?.title
+                val title = session?.title
                     ?: applicationContext.getString(R.string.notif_session_fallback)
                 postFinished(title, id)
             }

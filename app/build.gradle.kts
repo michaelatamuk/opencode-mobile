@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.opencode.mobile"
-    compileSdk = 35
+    compileSdk = 36
 
     val keystorePath = System.getenv("OPENCODE_KEYSTORE")
     val hasReleaseKey = keystorePath != null && file(keystorePath).let { it.exists() && it.length() > 0 }
@@ -14,7 +14,7 @@ android {
     defaultConfig {
         applicationId = "com.opencode.mobile"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 3
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.3.0"
     }

@@ -31,6 +31,7 @@ data class SessionItem(
     val projectID: String = "",
     val directory: String = "",
     val parentID: String = "",
+    val forkedFrom: String = "",
     val archived: Boolean = false,
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L
@@ -140,6 +141,13 @@ data class ScheduleItem(
 
 data class McpServer(val name: String, val status: String)
 
+data class McpResource(
+    val server: String,
+    val name: String,
+    val uri: String,
+    val description: String = ""
+)
+
 data class IntegrationItem(
     val id: String,
     val name: String,
@@ -183,9 +191,8 @@ private fun JSONObject.toSession(): SessionItem {
         agentID = optString("agent"),
         projectID = optString("projectID"),
         directory = optJSONObject("location")?.optString("directory").orEmpty(),
-        parentID = optString("parentID").ifBlank {
-            optJSONObject("fork")?.optString("sessionID").orEmpty()
-        },
+        parentID = optString("parentID"),
+        forkedFrom = optJSONObject("fork")?.optString("sessionID").orEmpty(),
         archived = (time?.optLong("archived") ?: 0L) > 0L,
         tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
         tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
@@ -952,6 +959,32 @@ class Api(server: String, private val password: String, fallbackServer: String? 
 
     suspend fun mcpDisconnect(name: String): Unit = withContext(Dispatchers.IO) {
         postEmpty("/api/experimental/mcp/$name/disconnect", "{}")
+    }
+
+    suspend fun mcpResources(): List<McpResource> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/mcp/resource").optJSONObject("data") ?: return@withContext emptyList()
+        val out = mutableListOf<McpResource>()
+        val resources = data.optJSONArray("resources") ?: JSONArray()
+        for (i in 0 until resources.length()) {
+            val o = resources.optJSONObject(i) ?: continue
+            out += McpResource(
+                server = o.optString("server"),
+                name = o.optString("name"),
+                uri = o.optString("uri"),
+                description = o.optString("description")
+            )
+        }
+        val templates = data.optJSONArray("templates") ?: JSONArray()
+        for (i in 0 until templates.length()) {
+            val o = templates.optJSONObject(i) ?: continue
+            out += McpResource(
+                server = o.optString("server"),
+                name = o.optString("name") + " (template)",
+                uri = o.optString("uriTemplate"),
+                description = o.optString("description")
+            )
+        }
+        out
     }
 
     suspend fun integrations(): List<IntegrationItem> = withContext(Dispatchers.IO) {

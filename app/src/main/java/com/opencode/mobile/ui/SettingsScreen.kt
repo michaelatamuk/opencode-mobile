@@ -5,6 +5,7 @@ import android.content.Context
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -35,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,6 +98,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -110,6 +115,7 @@ import com.opencode.mobile.AppScope
 import com.opencode.mobile.Attachment
 import com.opencode.mobile.IntegrationItem
 import com.opencode.mobile.McpServer
+import com.opencode.mobile.McpResource
 import com.opencode.mobile.ModelOption
 import com.opencode.mobile.OpenCodeWidgetProvider
 import com.opencode.mobile.Pairing
@@ -354,6 +360,8 @@ fun SettingsScreen(
                     server = profile.server
                     password = profile.password
                     fallback = profile.fallback
+                    budget = profile.budget
+                    monthBudget = profile.monthBudget
                     conn = ConnState.Unknown
                     profiles = ProfileStore.all(context)
                 }
@@ -1464,6 +1472,7 @@ private fun AppearancePage(
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ACCENTS.forEach { accent ->
                 val selected = accent.id == themeAccent
+                val accentLabelText = stringResource(accent.label)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1477,7 +1486,9 @@ private fun AppearancePage(
                         } else {
                             null
                         },
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier
+                            .size(44.dp)
+                            .semantics { contentDescription = accentLabelText }
                     ) {
                         if (selected) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1746,6 +1757,7 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
         )
     }
     var mcp by remember { mutableStateOf<List<McpServer>?>(null) }
+    var resources by remember { mutableStateOf<List<McpResource>>(emptyList()) }
     var integrations by remember { mutableStateOf<List<IntegrationItem>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -1758,6 +1770,7 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
             try {
                 mcp = api.mcpServers()
                 integrations = api.integrations()
+                resources = runCatching { api.mcpResources() }.getOrDefault(emptyList())
                 error = null
             } catch (e: Exception) {
                 error = e.message
@@ -1825,6 +1838,29 @@ private fun ConnectionsPage(context: Context, onBack: () -> Unit) {
                             }
                         },
                         showDivider = index < servers.lastIndex
+                    )
+                }
+            }
+        }
+
+        if (resources.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                stringResource(R.string.settings_mcp_resources),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            SettingsGroup {
+                val visible = resources.take(20)
+                visible.forEachIndexed { index, resource ->
+                    SettingsRow(
+                        icon = Icons.Rounded.Link,
+                        title = resource.name,
+                        supporting = listOf(resource.server, resource.uri)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" · "),
+                        showDivider = index < visible.lastIndex
                     )
                 }
             }
@@ -2106,6 +2142,36 @@ private fun SecurityPage(
 private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val diagnosticsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            val prefs = SecurePrefs.get(context)
+            val text = buildString {
+                appendLine("OpenCode Mobile ${version.ifBlank { "?" }}")
+                appendLine(
+                    "Android ${android.os.Build.VERSION.RELEASE} " +
+                        "(SDK ${android.os.Build.VERSION.SDK_INT})"
+                )
+                appendLine("Device ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                appendLine("Server ${prefs.getString("server", "").orEmpty()}")
+                appendLine("Fallback ${prefs.getString("fallback_server", "").orEmpty()}")
+                appendLine("Watching ${prefs.getBoolean("watch", false)}")
+                appendLine(
+                    "Persistent notification ${prefs.getBoolean("watch_persistent", false)}"
+                )
+                appendLine("Watchdog ${prefs.getInt("watchdog_minutes", 0)} min")
+                appendLine("Pending prompts ${PendingStore.all(context).size}")
+                appendLine("Profiles ${ProfileStore.all(context).size}")
+                appendLine("Theme ${UiPrefs.mode.value} / ${UiPrefs.accent.value}")
+            }
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(text.toByteArray())
+                }
+            }
+        }
+    }
     PageScaffold(
         title = stringResource(R.string.settings_about_title),
         onBack = onBack
@@ -2146,6 +2212,15 @@ private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
                             )
                         )
                     }
+                }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = Icons.Rounded.Info,
+                title = stringResource(R.string.settings_export_diagnostics),
+                supporting = stringResource(R.string.settings_export_diagnostics_hint),
+                onClick = {
+                    diagnosticsLauncher.launch("opencode-diagnostics.txt")
                 },
                 showDivider = false
             )
@@ -2165,17 +2240,24 @@ private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
 
 @Composable
 private fun PageScaffold(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        PageHeader(title = title, onBack = onBack)
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            content()
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(Modifier.fillMaxHeight().widthIn(max = 760.dp)) {
+            PageHeader(title = title, onBack = onBack)
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                content()
+            }
         }
     }
 }

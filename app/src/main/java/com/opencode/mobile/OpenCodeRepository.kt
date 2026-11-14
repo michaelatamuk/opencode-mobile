@@ -114,6 +114,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun mcpDisconnect(name: String) = api.mcpDisconnect(name)
 
+    suspend fun mcpResources(): List<McpResource> = api.mcpResources()
+
     suspend fun integrations(): List<IntegrationItem> = api.integrations()
 
     suspend fun connectIntegrationKey(id: String, key: String) =

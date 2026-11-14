@@ -86,11 +86,8 @@ object DiffRevert {
                     newLines += text
                 }
 
-                // Unified diffs sometimes drop the leading space on blank context lines.
-                line.isEmpty() -> {
-                    oldLines += ""
-                    newLines += ""
-                }
+                // Ignore blank separators (including the final newline of the patch).
+                else -> Unit
             }
         }
         flush()

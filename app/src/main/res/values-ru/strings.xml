@@ -56,6 +56,9 @@
     <string name="action_archive">В архив</string>
     <string name="action_unarchive">Из архива</string>
     <string name="sessions_archived">Архив</string>
+    <string name="sessions_subagents">Субагенты</string>
+    <string name="session_subagent_count">%1$d субагентов</string>
+    <string name="chat_attach_photo">Фото</string>
     <string name="action_mute_project">Отключить уведомления проекта</string>
     <string name="action_unmute_project">Включить уведомления проекта</string>
     <string name="action_cancel">Отмена</string>
@@ -106,6 +109,7 @@
     <string name="settings_connections_loading">Загрузка…</string>
     <string name="settings_connections_empty">Здесь пока пусто.</string>
     <string name="settings_mcp">MCP-серверы</string>
+    <string name="settings_mcp_resources">Ресурсы MCP</string>
     <string name="settings_integrations">Интеграции</string>
     <string name="settings_connected_label">Подключено</string>
     <string name="settings_connect">Подключить</string>
@@ -280,6 +284,8 @@
     <string name="settings_version">Версия</string>
     <string name="settings_server_row">Сервер</string>
     <string name="settings_github">Репозиторий GitHub</string>
+    <string name="settings_export_diagnostics">Экспорт диагностики</string>
+    <string name="settings_export_diagnostics_hint">Устройство, адрес сервера (без пароля), состояние наблюдателя и темы</string>
     <string name="settings_accent_blue">Синий</string>
     <string name="settings_accent_mint">Мятный</string>
     <string name="settings_accent_violet">Фиолетовый</string>

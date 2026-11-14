@@ -102,7 +102,7 @@ class ChatViewModel(
                     tokensInput = session.tokensInput,
                     tokensOutput = session.tokensOutput,
                     directory = session.directory,
-                    parentID = session.parentID
+                    parentID = session.forkedFrom
                 )
             }
         } catch (e: CancellationException) {
