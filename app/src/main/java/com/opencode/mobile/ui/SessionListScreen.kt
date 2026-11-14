@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -303,14 +302,22 @@ fun SessionListScreen(
                             }
                         )
                     }
-                    items(state.projects, key = { it.id }) { project ->
+                    items(
+                        state.projects.filter { it.name.isNotBlank() || it.id.isNotBlank() },
+                        key = { it.id }
+                    ) { project ->
                         FilterChip(
                             selected = projectFilter == project.id,
                             onClick = {
                                 projectFilter = if (projectFilter == project.id) null else project.id
                             },
                             label = {
-                                Text(project.name, style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    project.name.ifBlank {
+                                        project.id.substringAfterLast('/').take(24)
+                                    },
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             }
                         )
                     }
@@ -332,10 +339,13 @@ fun SessionListScreen(
             }
         }
 
-        when {
-            state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
-                repeat(6) { SessionSkeleton() }
-            }
+        // The list and its floating create button share one box so the button
+        // is positioned inside the layout instead of relying on draw overflow.
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
+                    repeat(6) { SessionSkeleton() }
+                }
 
             state.sessions.isEmpty() -> EmptySessions(
                 error = state.error,
@@ -368,8 +378,7 @@ fun SessionListScreen(
                             childCounts = if (showSubagents) childCounts else emptyMap(),
                             onOpen = onOpen,
                             onRename = { renaming = it },
-                            onDelete = { deleting = it },
-                            onStop = { vm.stop(it.id) }
+                            onDelete = { deleting = it }
                         )
                     }
                 }
@@ -531,23 +540,22 @@ fun SessionListScreen(
     }
 
         // Primary creation action: bottom-right, in thumb reach, 56 dp.
-        Box(Modifier.fillMaxWidth().height(0.dp)) {
-            FloatingActionButton(
-                onClick = onNewSession,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-18).dp, y = (-96).dp)
-                    .size(56.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.action_new_session),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+        FloatingActionButton(
+            onClick = onNewSession,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 18.dp, bottom = 18.dp)
+                .size(56.dp)
+        ) {
+            Icon(
+                Icons.Rounded.Add,
+                contentDescription = stringResource(R.string.action_new_session),
+                modifier = Modifier.size(24.dp)
+            )
         }
+    }
     }
 
     if (showCost) {
@@ -599,8 +607,7 @@ private fun ActiveCards(
     childCounts: Map<String, Int>,
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
-    onDelete: (SessionItem) -> Unit,
-    onStop: (SessionItem) -> Unit
+    onDelete: (SessionItem) -> Unit
 ) {
     var showAll by remember { mutableStateOf(false) }
     val visible = running.take(2)
@@ -618,8 +625,7 @@ private fun ActiveCards(
                 subagents = childCounts[session.id] ?: 0,
                 onClick = { onOpen(session) },
                 onRename = { onRename(session) },
-                onDelete = { onDelete(session) },
-                onStop = { onStop(session) }
+                onDelete = { onDelete(session) }
             )
         }
 
@@ -679,10 +685,6 @@ private fun ActiveCards(
                         onDelete = {
                             showAll = false
                             onDelete(session)
-                        },
-                        onStop = {
-                            showAll = false
-                            onStop(session)
                         }
                     )
                     Spacer(Modifier.height(8.dp))
@@ -699,8 +701,7 @@ private fun ActiveCard(
     subagents: Int,
     onClick: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onStop: () -> Unit
+    onDelete: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -741,12 +742,6 @@ private fun ActiveCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
                         )
-                        Icon(
-                            Icons.Rounded.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
-                            modifier = Modifier.size(14.dp)
-                        )
                     }
                 }
                 Text(
@@ -759,14 +754,6 @@ private fun ActiveCard(
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-            }
-            IconButton(onClick = onStop, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Rounded.Stop,
-                    contentDescription = stringResource(R.string.action_stop),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(18.dp)
                 )
             }
             Box {
