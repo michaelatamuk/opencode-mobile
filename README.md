@@ -42,6 +42,9 @@ OpenCode remote tunnel — and shows the same sessions as the TUI.
 - Offline queue: a prompt sent while the server is unreachable is delivered by
   the watcher when it reconnects
 - Model A/B: branch before the last prompt and replay it on another model
+- Voice input (system dictation) and read-aloud for assistant messages
+- Biometric lock on launch and optional screenshot / recents blocking
+- Home-screen widget and quick-settings tile showing the watcher status
 - Saved presets: agent + model + opening prompt, applied in one tap
 - Appearance: wallpaper (Material You), classic, or AMOLED black themes with a
   choice of four accent colors
@@ -99,6 +102,6 @@ Authentication is HTTP Basic, `opencode:<password>`.
 Personal sideload build, signed release APKs published on GitHub Releases.
 Not published to Play.
 
-Known gaps: no widget or quick-settings tile, no voice input, no biometric
-lock, no artifact gallery (disabled on most servers), and R8 is disabled until
-a shrunk build can be verified on a device.
+Known gaps: no artifact gallery (disabled on most servers), no dependency bump
+or `targetSdk 36` yet, no widget configuration options, and R8 is disabled
+until a shrunk build can be verified on a device.

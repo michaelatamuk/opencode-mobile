@@ -94,6 +94,8 @@
     <string name="lock_subtitle">Для доступа к сессиям нужна биометрическая проверка.</string>
     <string name="lock_unlock">Разблокировать</string>
     <string name="settings_security_title">Безопасность</string>
+    <string name="widget_title">OpenCode</string>
+    <string name="widget_waiting">Ожидание сессии</string>
     <string name="settings_biometric_title">Биометрическая блокировка</string>
     <string name="settings_biometric_body">Запрашивать отпечаток или лицо при каждом запуске.</string>
     <string name="settings_screenshots_title">Блокировать скриншоты</string>

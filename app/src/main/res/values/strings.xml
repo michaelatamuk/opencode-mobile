@@ -97,6 +97,8 @@
     <string name="lock_title">Unlock OpenCode</string>
     <string name="lock_subtitle">Biometric confirmation is required to open your sessions.</string>
     <string name="lock_unlock">Unlock</string>
+    <string name="widget_title">OpenCode</string>
+    <string name="widget_waiting">Waiting for a session</string>
     <string name="settings_security_title">Security</string>
     <string name="settings_biometric_title">Biometric lock</string>
     <string name="settings_biometric_body">Ask for fingerprint or face on every launch.</string>

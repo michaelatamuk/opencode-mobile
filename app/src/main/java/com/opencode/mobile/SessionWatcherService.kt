@@ -3,10 +3,12 @@ package com.opencode.mobile
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.service.quicksettings.TileService
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -478,6 +480,19 @@ class SessionWatcherService : Service() {
     }
 
     private fun updateOngoing() {
+        val label = statusLabel()
+        SecurePrefs.get(this).edit()
+            .putString("watch_status", label)
+            .putInt("watch_running", runs.size)
+            .apply()
+        OpenCodeWidgetProvider.updateAll(this, label)
+        runCatching {
+            TileService.requestListeningState(
+                this,
+                ComponentName(this, OpenCodeTileService::class.java)
+            )
+        }
+
         if (!persistentNotification() && runs.isEmpty()) {
             if (foreground) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -486,6 +501,13 @@ class SessionWatcherService : Service() {
             return
         }
         startForegroundCompat(ongoingNotification())
+    }
+
+    private fun statusLabel(): String = when {
+        status != null -> status!!
+        runs.isEmpty() -> getString(R.string.notif_waiting)
+        runs.size == 1 -> titleFor(runs.keys.first())
+        else -> getString(R.string.notif_running, runs.size)
     }
 
     private fun titleFor(sessionID: String): String =
@@ -506,12 +528,7 @@ class SessionWatcherService : Service() {
         )
 
         val single = runs.entries.firstOrNull()
-        val text = when {
-            status != null -> status!!
-            runs.isEmpty() -> getString(R.string.notif_waiting)
-            runs.size == 1 -> titleFor(single!!.key)
-            else -> getString(R.string.notif_running, runs.size)
-        }
+        val text = statusLabel()
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_stat_opencode)
