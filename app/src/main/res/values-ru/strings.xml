@@ -166,7 +166,7 @@
     <string name="settings_background_body">Сообщать, когда сессия завершится, пока вы в другом месте. Пока наблюдение включено, висит уведомление низкого приоритета.</string>
     <string name="settings_test_notification">Отправить тестовое уведомление</string>
     <string name="settings_notif_mode_title">Уведомление наблюдателя</string>
-    <string name="settings_notif_mode_body">«По завершении» держит шторку чистой: тихое уведомление видно только во время хода, а по завершении приходит отдельное. «Всегда» закрепляет наблюдатель в шторке.</string>
+    <string name="settings_notif_mode_body">«По завершении» молчит, пока идёт ход, и уведомляет только когда он остановился. «Всегда» держит живое уведомление наблюдателя с прогрессом. Android может приостановить наблюдатель, если приложение долго закрыто.</string>
     <string name="settings_notif_mode_finish">По завершении</string>
     <string name="settings_notif_mode_always">Всегда</string>
     <string name="settings_appearance_title">Оформление</string>

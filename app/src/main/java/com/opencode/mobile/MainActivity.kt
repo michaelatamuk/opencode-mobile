@@ -75,6 +75,27 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         setContent {
             val mode by UiPrefs.mode.collectAsState()
             val accent by UiPrefs.accent.collectAsState()
+            val darkBars = androidx.compose.foundation.isSystemInDarkTheme() || mode == "amoled"
+            LaunchedEffect(darkBars) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (darkBars) {
+                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        androidx.activity.SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    },
+                    navigationBarStyle = if (darkBars) {
+                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        androidx.activity.SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    }
+                )
+            }
             OpenCodeTheme(mode = mode, accent = accent) {
                 Surface(Modifier.fillMaxSize()) {
                     val secured = SecurePrefs.get(this).getBoolean("biometric_lock", false)

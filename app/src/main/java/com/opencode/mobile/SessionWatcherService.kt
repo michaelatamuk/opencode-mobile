@@ -88,11 +88,11 @@ class SessionWatcherService : Service() {
         if (persistentNotification()) {
             startForegroundCompat(initial)
         } else {
-            // No permanent notification: the service runs in the background and
-            // only takes the foreground (a quiet progress notice) while a turn runs.
+            // "Only on finish": never hold a progress notification. The watcher
+            // runs as a normal service and only speaks when a turn stops.
             stopForeground(STOP_FOREGROUND_REMOVE)
+            getSystemService(android.app.NotificationManager::class.java).cancel(ONGOING_ID)
             foreground = false
-            if (runs.isNotEmpty()) startForegroundCompat(initial)
         }
 
         if (job == null) job = scope.launch { loop() }
@@ -493,11 +493,14 @@ class SessionWatcherService : Service() {
             )
         }
 
-        if (!persistentNotification() && runs.isEmpty()) {
+        if (!persistentNotification()) {
+            // Finish-only mode: status still feeds the widget and tile, but no
+            // notification is posted for running work.
             if (foreground) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 foreground = false
             }
+            getSystemService(android.app.NotificationManager::class.java).cancel(ONGOING_ID)
             return
         }
         startForegroundCompat(ongoingNotification())

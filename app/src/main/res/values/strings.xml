@@ -172,7 +172,7 @@
     <string name="settings_background_body">Notify me when a session finishes while I\'m elsewhere. Keeps a low-priority notification while watching.</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
-    <string name="settings_notif_mode_body">On finish keeps the shade clean: a quiet notice appears only while a turn is running, plus a finished notice. Always pins the watcher in the shade.</string>
+    <string name="settings_notif_mode_body">Only on finish stays silent while a turn runs and notifies you when it stops. Always keeps a live watcher notice with progress. Android may pause the watcher if the app stays closed for a long time.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
     <string name="settings_appearance_title">Appearance</string>

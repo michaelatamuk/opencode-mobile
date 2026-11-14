@@ -188,7 +188,7 @@ fun OpenCodeTheme(
         dark -> DarkScheme
         else -> LightScheme
     }
-    val tinted = if (mode == "dynamic") base else base.accented(accent)
+    val tinted = base.accented(accent, dark)
     val colorScheme = if (amoled) tinted.amoled() else tinted
 
     MaterialTheme(
@@ -199,20 +199,54 @@ fun OpenCodeTheme(
     )
 }
 
-private data class AccentColors(val primary: Color, val container: Color, val onContainer: Color)
+private data class AccentColors(
+    val primary: Color,
+    val onPrimary: Color,
+    val container: Color,
+    val onContainer: Color
+)
 
-private fun accentOf(name: String): AccentColors? = when (name) {
-    "blue" -> AccentColors(Accent, AccentContainer, Color(0xFFDCE7FF))
-    "mint" -> AccentColors(Mint, MintContainer, Color(0xFFC9F5DF))
-    "violet" -> AccentColors(Color(0xFFE7C6FF), Color(0xFF2B1B3B), Color(0xFFF3E3FF))
-    "amber" -> AccentColors(Color(0xFFFFD59B), Color(0xFF3A2A12), Color(0xFFFFEBC7))
-    else -> null
+private fun accentOf(name: String, dark: Boolean): AccentColors = if (dark) {
+    when (name) {
+        "mint" -> AccentColors(Mint, Color(0xFF05160F), MintContainer, Color(0xFFC9F5DF))
+        "violet" -> AccentColors(
+            Color(0xFFE7C6FF), Color(0xFF1B0A28), Color(0xFF2B1B3B), Color(0xFFF3E3FF)
+        )
+
+        "amber" -> AccentColors(
+            Color(0xFFFFD59B), Color(0xFF2A1B00), Color(0xFF3A2A12), Color(0xFFFFEBC7)
+        )
+
+        else -> AccentColors(Accent, Color(0xFF06101F), AccentContainer, Color(0xFFDCE7FF))
+    }
+} else {
+    when (name) {
+        "mint" -> AccentColors(
+            Color(0xFF1F6B4B), Color.White, Color(0xFFD3F0DF), Color(0xFF062517)
+        )
+
+        "violet" -> AccentColors(
+            Color(0xFF6A3D9A), Color.White, Color(0xFFEDDCFF), Color(0xFF2B0A45)
+        )
+
+        "amber" -> AccentColors(
+            Color(0xFF8A5A00), Color.White, Color(0xFFFFE8BF), Color(0xFF3A2A12)
+        )
+
+        else -> AccentColors(
+            Color(0xFF2B47C7), Color.White, Color(0xFFDDE3FF), Color(0xFF0B1B52)
+        )
+    }
 }
 
-private fun androidx.compose.material3.ColorScheme.accented(name: String): androidx.compose.material3.ColorScheme {
-    val accent = accentOf(name) ?: return this
+private fun androidx.compose.material3.ColorScheme.accented(
+    name: String,
+    dark: Boolean
+): androidx.compose.material3.ColorScheme {
+    val accent = accentOf(name, dark)
     return copy(
         primary = accent.primary,
+        onPrimary = accent.onPrimary,
         primaryContainer = accent.container,
         onPrimaryContainer = accent.onContainer
     )
