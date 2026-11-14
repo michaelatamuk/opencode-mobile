@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
@@ -79,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.OpenCodeRepository
+import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionCache
@@ -128,6 +130,7 @@ fun SessionListScreen(
 
     var query by rememberSaveable { mutableStateOf("") }
     var projectFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var pinned by remember { mutableStateOf(PinnedStore.all(context)) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SessionItem?>(null) }
     var deleting by remember { mutableStateOf<SessionItem?>(null) }
@@ -136,9 +139,13 @@ fun SessionListScreen(
         if (projectFilter == null) state.sessions
         else state.sessions.filter { it.projectID == projectFilter }
     }
-    val filtered = remember(scoped, query) {
-        if (query.isBlank()) scoped
+    val filtered = remember(scoped, query, pinned) {
+        val base = if (query.isBlank()) scoped
         else scoped.filter { it.title.contains(query, ignoreCase = true) }
+        base.sortedWith(
+            compareByDescending<SessionItem> { it.id in pinned }
+                .thenByDescending { it.updated }
+        )
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
@@ -362,9 +369,13 @@ fun SessionListScreen(
                                     session = session,
                                     preview = state.previews[session.id],
                                     unread = seen > 0L && session.updated > seen,
+                                    pinned = session.id in pinned,
                                     onOpen = { onOpen(session) },
                                     onRename = { renaming = session },
-                                    onDelete = { deleting = session }
+                                    onDelete = { deleting = session },
+                                    onTogglePin = {
+                                        pinned = PinnedStore.toggle(context, session.id)
+                                    }
                                 )
                             }
                         }
@@ -588,9 +599,11 @@ private fun SessionRow(
     session: SessionItem,
     preview: String?,
     unread: Boolean,
+    pinned: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onTogglePin: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val cost = formatCost(session.cost)
@@ -627,6 +640,15 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (pinned) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Rounded.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
                 Spacer(Modifier.width(10.dp))
                 Text(
                     relativeTime(session.updated),
@@ -673,6 +695,19 @@ private fun SessionRow(
                     onClick = {
                         menuOpen = false
                         onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(
+                                if (pinned) R.string.action_unpin else R.string.action_pin
+                            )
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onTogglePin()
                     }
                 )
                 DropdownMenuItem(

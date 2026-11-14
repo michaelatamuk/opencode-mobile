@@ -42,6 +42,8 @@
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
     <string name="action_copy_id">Copy session ID</string>
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
     <string name="action_cancel">Cancel</string>
     <string name="session_rename_title">Rename session</string>
     <string name="session_delete_title">Delete session?</string>
