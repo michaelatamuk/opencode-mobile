@@ -102,7 +102,7 @@ import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.UsageStore
 import kotlinx.coroutines.launch
 
-private enum class SettingsPage { Home, Connection, Notifications, Appearance, Automation, Security, Pairing, About }
+private enum class SettingsPage { Home, Connection, Notifications, Appearance, Automation, Security, About }
 
 private enum class ConnState { Unknown, Testing, Ok, Failed }
 
@@ -195,6 +195,10 @@ fun SettingsScreen(
                 password = token
                 pairInput = value
                 conn = ConnState.Unknown
+                // Pairing is only useful once persisted: store immediately and
+                // leave the connection page instead of asking for a second Save.
+                onSave(server, password, fallback)
+                if (canCancel) page = SettingsPage.Home
                 test()
             } catch (e: Exception) {
                 pairError = e.message
@@ -298,7 +302,21 @@ fun SettingsScreen(
                 detail = detail,
                 onTest = { test() },
                 onSave = { save() },
-                onBack = { page = SettingsPage.Home }
+                onBack = { page = SettingsPage.Home },
+                startInPairing = initialServer.isBlank(),
+                pairInput = pairInput,
+                onPairInput = { pairInput = it; pairError = null },
+                pairError = pairError,
+                pairing = pairing,
+                onPair = { redeemPairing(pairInput) },
+                onScan = {
+                    scanLauncher.launch(
+                        ScanOptions()
+                            .setPrompt(scanPrompt)
+                            .setBeepEnabled(false)
+                            .setOrientationLocked(false)
+                    )
+                }
             )
 
             SettingsPage.Notifications -> NotificationsPage(
@@ -355,23 +373,6 @@ fun SettingsScreen(
                     } else {
                         window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
                     }
-                },
-                onBack = { page = SettingsPage.Home }
-            )
-
-            SettingsPage.Pairing -> PairingPage(
-                pairInput = pairInput,
-                onPairInput = { pairInput = it; pairError = null },
-                pairError = pairError,
-                pairing = pairing,
-                onPair = { redeemPairing(pairInput) },
-                onScan = {
-                    scanLauncher.launch(
-                        ScanOptions()
-                            .setPrompt(scanPrompt)
-                            .setBeepEnabled(false)
-                            .setOrientationLocked(false)
-                    )
                 },
                 onBack = { page = SettingsPage.Home }
             )
@@ -443,14 +444,8 @@ private fun SettingsHome(
                     icon = Icons.Rounded.Dns,
                     title = stringResource(R.string.settings_section_connection),
                     supporting = serverSummary,
-                    onClick = { onOpen(SettingsPage.Connection) }
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Rounded.QrCode,
-                    title = stringResource(R.string.settings_pair_title),
-                    supporting = stringResource(R.string.settings_pair_summary),
-                    onClick = { onOpen(SettingsPage.Pairing) }
+                    onClick = { onOpen(SettingsPage.Connection) },
+                    showDivider = false
                 )
             }
 
@@ -516,8 +511,16 @@ private fun ConnectionPage(
     detail: String?,
     onTest: () -> Unit,
     onSave: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    startInPairing: Boolean,
+    pairInput: String,
+    onPairInput: (String) -> Unit,
+    pairError: String?,
+    pairing: Boolean,
+    onPair: () -> Unit,
+    onScan: () -> Unit
 ) {
+    var pairMode by rememberSaveable { mutableStateOf(startInPairing) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         PageHeader(
             title = stringResource(if (canCancel) R.string.settings_section_connection else R.string.settings_title),
@@ -536,7 +539,29 @@ private fun ConnectionPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(16.dp))
+            SegmentedChoice(
+                options = listOf(
+                    true to stringResource(R.string.settings_conn_pair),
+                    false to stringResource(R.string.settings_conn_manual)
+                ),
+                selected = pairMode,
+                onSelect = { pairMode = it }
+            )
+            Spacer(Modifier.height(16.dp))
 
+            if (pairMode) {
+                PairingCard(
+                    pairInput = pairInput,
+                    onPairInput = onPairInput,
+                    pairError = pairError,
+                    pairing = pairing,
+                    onPair = onPair,
+                    onScan = onScan
+                )
+                Spacer(Modifier.height(14.dp))
+                ConnectionBanner(state = conn, detail = detail, onTest = onTest)
+                Spacer(Modifier.height(32.dp))
+            } else {
             SettingsGroup {
                 Column(Modifier.padding(16.dp)) {
                     SettingsField(
@@ -627,6 +652,71 @@ private fun ConnectionPage(
                 )
             }
             Spacer(Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PairingCard(
+    pairInput: String,
+    onPairInput: (String) -> Unit,
+    pairError: String?,
+    pairing: Boolean,
+    onPair: () -> Unit,
+    onScan: () -> Unit
+) {
+    SettingsGroup {
+        Column(Modifier.padding(16.dp)) {
+            Button(
+                onClick = onScan,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.QrCode,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_scan_qr))
+            }
+            Spacer(Modifier.height(14.dp))
+            SettingsField(
+                value = pairInput,
+                onValueChange = onPairInput,
+                label = stringResource(R.string.settings_pair_field),
+                leading = Icons.Rounded.QrCode,
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Done
+            )
+            if (pairError != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    pairError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onPair,
+                enabled = pairInput.isNotBlank() && !pairing,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    stringResource(
+                        if (pairing) R.string.settings_pairing else R.string.action_pair
+                    )
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                stringResource(R.string.settings_pair_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -950,77 +1040,6 @@ private fun SecurityPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
-    }
-}
-
-/* ---------------------------------------------------------------- pairing */
-
-@Composable
-private fun PairingPage(
-    pairInput: String,
-    onPairInput: (String) -> Unit,
-    pairError: String?,
-    pairing: Boolean,
-    onPair: () -> Unit,
-    onScan: () -> Unit,
-    onBack: () -> Unit
-) {
-    PageScaffold(
-        title = stringResource(R.string.settings_pair_title),
-        onBack = onBack
-    ) {
-        Text(
-            stringResource(R.string.settings_pair_body),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
-        SettingsGroup {
-            Column(Modifier.padding(16.dp)) {
-                SettingsField(
-                    value = pairInput,
-                    onValueChange = onPairInput,
-                    label = stringResource(R.string.settings_pair_field),
-                    leading = Icons.Rounded.QrCode,
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Done
-                )
-                if (pairError != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        pairError,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = onPair,
-                        enabled = pairInput.isNotBlank() && !pairing,
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(
-                            stringResource(
-                                if (pairing) R.string.settings_pairing else R.string.action_pair
-                            )
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onScan,
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.QrCode,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.settings_scan_qr))
-                    }
-                }
-            }
-        }
     }
 }
 

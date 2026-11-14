@@ -198,6 +198,8 @@
     <string name="settings_summary_on">On</string>
     <string name="settings_summary_off">Off</string>
     <string name="settings_pair_summary">Code or QR</string>
+    <string name="settings_conn_pair">Pairing code</string>
+    <string name="settings_conn_manual">Manual</string>
     <string name="settings_group_automation">Automation</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_open_notification_settings">Open notification settings</string>

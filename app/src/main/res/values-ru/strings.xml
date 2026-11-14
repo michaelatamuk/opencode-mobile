@@ -193,6 +193,8 @@
     <string name="settings_summary_on">Вкл</string>
     <string name="settings_summary_off">Выкл</string>
     <string name="settings_pair_summary">Код или QR</string>
+    <string name="settings_conn_pair">Код сопряжения</string>
+    <string name="settings_conn_manual">Вручную</string>
     <string name="settings_group_automation">Автоматизация</string>
     <string name="settings_advanced">Дополнительно</string>
     <string name="settings_open_notification_settings">Открыть настройки уведомлений</string>
