@@ -250,6 +250,18 @@ fun SessionListScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
+                        val greeting = remember {
+                            when (java.time.LocalTime.now().hour) {
+                                in 5..11 -> R.string.sessions_greeting_morning
+                                in 12..17 -> R.string.sessions_greeting_afternoon
+                                else -> R.string.sessions_greeting_evening
+                            }
+                        }
+                        Text(
+                            stringResource(greeting),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text(
                             stringResource(R.string.sessions_title),
                             style = MaterialTheme.typography.headlineSmall,
@@ -872,7 +884,7 @@ private fun SessionRow(
                     onClick = onOpen,
                     onLongClick = { menuOpen = true }
                 )
-                .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Reserved gutter: dots never shift titles out of alignment.
@@ -990,6 +1002,18 @@ private fun SessionRow(
                 maxLines = 1,
                 modifier = Modifier.widthIn(min = 62.dp)
             )
+            // Long-press still works, but the menu needs a visible affordance.
+            IconButton(
+                onClick = { menuOpen = true },
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = stringResource(R.string.session_more),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
 
         DropdownMenu(

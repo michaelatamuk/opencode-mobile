@@ -111,6 +111,7 @@ import androidx.compose.ui.unit.dp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.mobile.Api
+import com.opencode.mobile.ApiException
 import com.opencode.mobile.AgentOption
 import com.opencode.mobile.AppScope
 import com.opencode.mobile.Attachment
@@ -217,14 +218,13 @@ fun SettingsScreen(
         if (value.isBlank() || pairing) return
         pairing = true
         pairError = null
+        // Keep the scanned/pasted value visible so a failed attempt can be retried.
+        pairInput = value
         scope.launch {
             try {
-                val token = Pairing.redeem(server, value)
-                if (value.contains("/auth/connect/")) {
-                    server = value.substringBefore("/auth/connect/")
-                }
-                password = token
-                pairInput = value
+                val result = Pairing.redeem(server, value)
+                server = result.server
+                password = result.token
                 conn = ConnState.Unknown
                 // Pairing is only useful once persisted: store immediately and
                 // leave the connection page instead of asking for a second Save.
@@ -232,7 +232,12 @@ fun SettingsScreen(
                 if (canCancel) page = SettingsPage.Home
                 test()
             } catch (e: Exception) {
-                pairError = e.message
+                pairError = when {
+                    e is ApiException && (e.status == 401 || e.status == 403) ->
+                        context.getString(R.string.settings_pair_expired)
+
+                    else -> e.message ?: context.getString(R.string.settings_pair_failed)
+                }
             } finally {
                 pairing = false
             }

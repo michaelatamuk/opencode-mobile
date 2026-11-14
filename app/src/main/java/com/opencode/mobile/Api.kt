@@ -213,22 +213,42 @@ internal fun mergeMessages(existing: List<Msg>, incoming: List<Msg>): List<Msg> 
 /** Redeems an OpenCode pairing code without a camera: paste the code or link. */
 object Pairing {
 
+    data class Result(val token: String, val server: String)
+
     /**
-     * Accepts either a bare code or the full `.../auth/connect/<code>` link.
-     * Returns the token to store as the server password.
+     * Accepts a bare code or a link. A complete `http(s)` link is opened exactly
+     * as printed by the server (re-encoding its code is how "expired" errors
+     * happen); app deep links have their code/url extracted; loopback links from
+     * the server machine are rewritten to the configured server.
      */
-    suspend fun redeem(server: String, codeOrLink: String): String =
+    suspend fun redeem(server: String, codeOrLink: String): Result =
         withContext(Dispatchers.IO) {
-            val trimmed = codeOrLink.trim()
-            val linkIndex = trimmed.indexOf("/auth/connect/")
-            val (base, code) = if (linkIndex >= 0) {
-                val prefix = trimmed.substring(0, linkIndex)
-                val code = trimmed.substring(linkIndex + "/auth/connect/".length)
-                    .substringBefore('?')
-                    .substringBefore('#')
-                prefix to code
-            } else {
-                server.trim().trimEnd('/') to trimmed.substringAfterLast('/')
+            val raw = codeOrLink.trim()
+            val uri = runCatching { Uri.parse(raw) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase().orEmpty()
+            val configured = server.trim().trimEnd('/')
+
+            val target = when {
+                scheme == "http" || scheme == "https" -> rewriteLoopback(raw, configured)
+
+                scheme.isNotEmpty() && scheme != "file" -> {
+                    val nested = uri?.getQueryParameter("url")
+                        ?: uri?.getQueryParameter("server")
+                        ?: configured
+                    val code = uri?.getQueryParameter("code")
+                        ?: uri?.getQueryParameter("token")
+                        ?: uri?.lastPathSegment
+                        ?: throw ApiException(400, "No pairing code in this link")
+                    "${nested.trim().trimEnd('/')}/auth/connect/${Uri.encode(Uri.decode(code))}"
+                }
+
+                else -> {
+                    val code = raw.substringAfterLast('/')
+                    "$configured/auth/connect/${Uri.encode(Uri.decode(code))}"
+                }
+            }
+            if (target.isBlank() || target == "/auth/connect/") {
+                throw ApiException(400, "No server configured")
             }
 
             val client = OkHttpClient.Builder()
@@ -237,17 +257,35 @@ object Pairing {
                 .build()
             client.newCall(
                 Request.Builder()
-                    .url("$base/auth/connect/${Uri.encode(code)}")
+                    .url(target)
                     .header("Accept", "application/json")
                     .get()
                     .build()
             ).execute().use { r ->
                 val body = r.body?.string().orEmpty()
                 if (!r.isSuccessful) throw ApiException(r.code, body.take(300))
-                JSONObject(body).optString("token")
+                val token = JSONObject(body).optString("token")
                     .ifBlank { throw ApiException(500, "No token in pairing response") }
+                val usedServer = target.substringBefore("/auth/connect/")
+                Result(token = token, server = usedServer.ifBlank { configured })
             }
         }
+
+    /** The server prints its own loopback links too; use the phone's server instead. */
+    private fun rewriteLoopback(url: String, configured: String): String {
+        val link = runCatching { Uri.parse(url) }.getOrNull() ?: return url
+        val host = link.host ?: return url
+        if (host != "127.0.0.1" && host != "localhost" && host != "::1" && host != "0.0.0.0") {
+            return url
+        }
+        val base = runCatching { Uri.parse(configured) }.getOrNull() ?: return url
+        if (base.host.isNullOrBlank()) return url
+        return link.buildUpon()
+            .scheme(base.scheme ?: link.scheme)
+            .authority(base.authority)
+            .build()
+            .toString()
+    }
 }
 
 /** A user-facing message for any failure from the API. */

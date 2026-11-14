@@ -2,13 +2,16 @@ package com.opencode.mobile.ui
 
 import android.net.Uri
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -91,10 +94,19 @@ fun Composer(
     val primaryIsMic = !busy && !hasContent && onVoice != null
 
     val sendScale by animateFloatAsState(
-        targetValue = if (hasContent) 1f else 0.9f,
-        animationSpec = tween(160, easing = FastOutSlowInEasing),
+        targetValue = if (hasContent || busy) 1f else 0.9f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
         label = "sendScale"
     )
+    // Stop is the only red thing in the composer, so "interrupt" reads instantly.
+    val actionColor by animateColorAsState(
+        targetValue = if (primaryIsStop) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary,
+        animationSpec = tween(180),
+        label = "actionColor"
+    )
+    val actionContent = if (primaryIsStop) MaterialTheme.colorScheme.onError
+    else MaterialTheme.colorScheme.onPrimary
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -266,8 +278,8 @@ fun Composer(
                     },
                     enabled = primaryIsStop || primaryIsMic || hasContent,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = actionColor,
+                        contentColor = actionContent,
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     ),
@@ -306,7 +318,9 @@ fun Composer(
 @Composable
 fun ActivityBars(
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.secondary
+    color: Color = MaterialTheme.colorScheme.secondary,
+    barWidth: androidx.compose.ui.unit.Dp = 3.dp,
+    maxHeight: androidx.compose.ui.unit.Dp = 11.dp
 ) {
     val transition = rememberInfiniteTransition(label = "activity")
     Row(
@@ -316,8 +330,8 @@ fun ActivityBars(
     ) {
         repeat(3) { index ->
             val height by transition.animateFloat(
-                initialValue = 3f,
-                targetValue = 11f,
+                initialValue = 0.27f,
+                targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(
                         durationMillis = 520 + index * 110,
@@ -329,8 +343,8 @@ fun ActivityBars(
             )
             Box(
                 Modifier
-                    .width(3.dp)
-                    .height(height.dp)
+                    .width(barWidth)
+                    .height(maxHeight * height)
                     .clip(CircleShape)
                     .background(color)
             )
@@ -338,7 +352,7 @@ fun ActivityBars(
     }
 }
 
-/** Hairline shimmer shown under the header while a turn streams. */
+/** Slow aurora under the header while a turn streams; never a spinner. */
 @Composable
 fun StreamingHairline(
     modifier: Modifier = Modifier,
@@ -346,14 +360,15 @@ fun StreamingHairline(
 ) {
     val transition = rememberInfiniteTransition(label = "hairline")
     val shift by transition.animateFloat(
-        initialValue = -400f,
-        targetValue = 1400f,
+        initialValue = -620f,
+        targetValue = 1720f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
+            animation = tween(6200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shift"
     )
+    val warm = MaterialTheme.colorScheme.secondary
     Box(
         modifier
             .fillMaxWidth()
@@ -362,11 +377,13 @@ fun StreamingHairline(
                 androidx.compose.ui.graphics.Brush.horizontalGradient(
                     colors = listOf(
                         Color.Transparent,
+                        color.copy(alpha = 0.10f),
                         color.copy(alpha = 0.55f),
+                        warm.copy(alpha = 0.45f),
                         Color.Transparent
                     ),
                     startX = shift,
-                    endX = shift + 320f
+                    endX = shift + 560f
                 )
             )
     )

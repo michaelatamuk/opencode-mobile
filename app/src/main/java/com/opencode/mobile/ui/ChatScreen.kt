@@ -14,9 +14,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -27,6 +30,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -43,6 +47,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -137,10 +142,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -349,7 +357,18 @@ fun ChatScreen(
     // Follow the live turn unless the reader has scrolled up. Lazy item indices
     // are not message indices: one item can hold a whole turn of messages.
     var stickToBottom by remember(sessionID) { mutableStateOf(true) }
+    var wasBusy by remember(sessionID) { mutableStateOf(false) }
+    var completionTick by remember(sessionID) { mutableStateOf(0) }
     val dragging by listState.interactionSource.collectIsDraggedAsState()
+
+    // A run ending is the emotional payoff; give it one soft beat, not a toast.
+    LaunchedEffect(state.busy) {
+        if (wasBusy && !state.busy) {
+            completionTick++
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        wasBusy = state.busy
+    }
 
     suspend fun snapToNewest() {
         val last = blocks.lastIndex
@@ -476,12 +495,19 @@ fun ChatScreen(
                 }
             } else {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        if (sessionID == null) stringResource(R.string.session_new) else state.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (sessionID == null) stringResource(R.string.session_new) else state.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (state.busy) {
+                            Spacer(Modifier.width(8.dp))
+                            ActivityBars(barWidth = 2.dp, maxHeight = 9.dp)
+                        }
+                    }
                     val agentName = state.agents.firstOrNull { it.id == state.agentID }?.name
                         .orEmpty()
                     val modelName = state.models.firstOrNull {
@@ -702,6 +728,16 @@ fun ChatScreen(
                     .background(MaterialTheme.colorScheme.background)
                     .padding(start = 20.dp, end = 60.dp, bottom = 6.dp)
             )
+            CompletionFlash(
+                tick = completionTick,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 20.dp, bottom = 8.dp)
+            )
+
+            if (blocks.isEmpty() && !state.busy) {
+                EmptyChatMark(Modifier.align(Alignment.Center))
+            }
         }
 
         Column(Modifier.navigationBarsPadding()) {
@@ -849,7 +885,10 @@ fun ChatScreen(
     }
 
     state.pendingPermission?.let { p ->
-        PermissionSheet(permission = p, onDecision = vm::reply)
+        PermissionSheet(permission = p, onDecision = { decision ->
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            vm.reply(decision)
+        })
     }
 
     state.pendingForm?.let { form ->
@@ -1803,7 +1842,8 @@ private fun ModelsTab(
                     monogram = monogram(model.providerName.ifBlank { model.providerID }),
                     selected = model.id == selectedID && model.providerID == selectedProvider,
                     enabled = enabled,
-                    onClick = { onSelect(model.providerID, model.id) }
+                    onClick = { onSelect(model.providerID, model.id) },
+                    tint = providerAccent(model.providerID.ifBlank { model.providerName })
                 )
             }
         }
@@ -1886,7 +1926,8 @@ private fun TuneRow(
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
-    metaLines: Int = 1
+    metaLines: Int = 1,
+    tint: Color = MaterialTheme.colorScheme.primary
 ) {
     val background by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -1907,18 +1948,14 @@ private fun TuneRow(
             Modifier
                 .size(38.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                    else MaterialTheme.colorScheme.surface
-                ),
+                .background(tint.copy(alpha = if (selected) 0.18f else 0.10f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 monogram,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                color = tint
             )
         }
         Spacer(Modifier.width(12.dp))
@@ -1949,8 +1986,17 @@ private fun TuneRow(
 @Composable
 private fun SelectionDot(selected: Boolean, enabled: Boolean) {
     val accent = MaterialTheme.colorScheme.primary
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.86f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "selectionDot"
+    )
     Box(
         Modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .size(22.dp)
             .clip(CircleShape)
             .background(
@@ -2205,6 +2251,17 @@ private fun CompactAction(enabled: Boolean, onCompact: () -> Unit) {
             )
         }
     }
+}
+
+/** Deterministic accent per provider so grouped models are scannable at a glance. */
+@Composable
+private fun providerAccent(key: String): Color {
+    val hue = ((key.hashCode() % 360) + 360) % 360
+    return Color.hsl(
+        hue.toFloat(),
+        saturation = 0.52f,
+        lightness = if (isSystemInDarkTheme()) 0.72f else 0.44f
+    )
 }
 
 private fun monogram(value: String): String {
@@ -3450,8 +3507,14 @@ private fun TurnMessage(
 
                 is TurnEntry.Text -> SelectionContainer {
                     // Intermediate narration stays quieter; the latest block is the answer.
+                    // A block cursor rides the streaming text like a real terminal.
+                    val body = if (pending && index == lastTextIndex) {
+                        entry.body.trimEnd() + " ▍"
+                    } else {
+                        entry.body
+                    }
                     MarkdownText(
-                        entry.body,
+                        body,
                         contentAlpha = if (index == lastTextIndex) 1f else 0.72f
                     )
                 }
@@ -3513,31 +3576,27 @@ private fun StepLine(
         Row(
             Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Min)
                 .clip(RoundedCornerShape(10.dp))
                 .clickable(role = Role.Button) { expanded = !expanded }
                 .semantics { contentDescription = toggleLabel }
-                .heightIn(min = 36.dp)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (running) {
-                ActivityBars()
-            } else {
-                Icon(
-                    Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Spacer(Modifier.width(7.dp))
+            LiveSpine(
+                active = running,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.width(18.dp).fillMaxHeight()
+            )
             Text(
                 summary,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 9.dp)
             )
             Icon(
                 if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
@@ -3564,6 +3623,132 @@ private fun StepLine(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A vertical timeline spine for step runs: a solid line with a node, plus a
+ * travelling spark while the run is active.
+ */
+@Composable
+private fun LiveSpine(
+    active: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "spine")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spinePhase"
+    )
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .width(1.5.dp)
+                .background(lineColor)
+        )
+        if (active) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind {
+                        val x = size.width / 2f
+                        drawCircle(
+                            color = color.copy(alpha = 0.9f),
+                            radius = 2.4.dp.toPx(),
+                            center = Offset(x, phase * size.height)
+                        )
+                    }
+            )
+        }
+        Box(
+            Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(if (active) color else color.copy(alpha = 0.85f))
+        )
+    }
+}
+
+/** One soft beat when a run stops: a green check that fades out on its own. */
+@Composable
+private fun CompletionFlash(tick: Int, modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(tick) {
+        if (tick == 0) return@LaunchedEffect
+        visible = true
+        delay(1100)
+        visible = false
+    }
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(tween(140)),
+        exit = fadeOut(tween(320))
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.chat_turn_done),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+/** The quiet personality of an empty chat: a terminal tile with a live caret. */
+@Composable
+private fun EmptyChatMark(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "emptyChat")
+    val caretAlpha by transition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(760, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "emptyCaret"
+    )
+    Box(
+        modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                ">",
+                style = MaterialTheme.typography.titleMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+            Box(
+                Modifier
+                    .padding(start = 3.dp)
+                    .width(2.dp)
+                    .height(14.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = caretAlpha),
+                        RoundedCornerShape(1.dp)
+                    )
+            )
         }
     }
 }

@@ -17,6 +17,9 @@
     <string name="action_stop_watching">Прекратить наблюдение</string>
 
     <string name="sessions_title">Сессии</string>
+    <string name="sessions_greeting_morning">Доброе утро</string>
+    <string name="sessions_greeting_afternoon">Добрый день</string>
+    <string name="sessions_greeting_evening">Добрый вечер</string>
     <string name="sessions_empty_title">Сессий пока нет</string>
     <string name="sessions_empty_body">Запустите сессию в TUI или создайте её здесь.</string>
     <string name="sessions_unreachable_title">Сервер недоступен</string>
@@ -218,6 +221,7 @@
     <string name="chat_hide_thoughts">Скрыть размышления</string>
     <string name="chat_copy_code">Копировать код</string>
     <string name="chat_copy_message">Копировать сообщение</string>
+    <string name="chat_turn_done">Готово</string>
     <string name="chat_code_label">код</string>
     <string name="chat_input">Ввод</string>
     <string name="chat_output">Вывод</string>
@@ -241,6 +245,8 @@
     <string name="settings_pair_title">Подключение по коду</string>
     <string name="settings_pair_body">Запустите `opencode pair` на сервере и вставьте код или ссылку. Приложение само обменяет его на пароль — длинный токен вводить не нужно.</string>
     <string name="settings_pair_field">Код или ссылка сопряжения</string>
+    <string name="settings_pair_expired">Эта ссылка для сопряжения больше не действует. Создайте новую на сервере и отсканируйте или вставьте её сразу — ссылка работает один раз и живёт пять минут.</string>
+    <string name="settings_pair_failed">Не удалось выполнить сопряжение.</string>
     <string name="settings_pairing">Сопряжение…</string>
     <string name="action_pair">Сопрячь</string>
     <string name="settings_scan_qr">Сканировать QR</string>
