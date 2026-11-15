@@ -75,8 +75,22 @@ class ChatViewModel(
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val refreshMutex = Mutex()
+    private var cachedSignature: String? = null
 
     init {
+        // Seed the last-known transcript before the first network round-trip so
+        // an offline open still shows the conversation.
+        if (sessionID != null && appContext != null) {
+            viewModelScope.launch {
+                val cached = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    TranscriptCache.load(appContext, sessionID)
+                }
+                if (cached.isNotEmpty() && _state.value.messages.isEmpty()) {
+                    _state.update { it.copy(messages = cached) }
+                    cachedSignature = signatureOf(cached)
+                }
+            }
+        }
         viewModelScope.launch { loadOptions() }
         if (sessionID != null) {
             viewModelScope.launch { loadSession() }
@@ -96,6 +110,12 @@ class ChatViewModel(
             }
         }
     }
+
+    private fun signatureOf(messages: List<Msg>): String =
+        messages.size.toString() + ":" +
+            (messages.lastOrNull()?.id ?: "") + ":" +
+            (messages.lastOrNull()?.parts?.size ?: 0) + ":" +
+            (messages.lastOrNull()?.plainText?.length ?: 0)
 
     private suspend fun loadSession() {
         val id = activeID ?: return
@@ -188,6 +208,15 @@ class ChatViewModel(
                         olderCursor = it.olderCursor ?: page.olderCursor,
                         error = null
                     )
+                }
+                val snapshot = _state.value.messages
+                val signature = signatureOf(snapshot)
+                val ctx = appContext
+                if (ctx != null && signature != cachedSignature) {
+                    cachedSignature = signature
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        TranscriptCache.save(ctx, id, snapshot)
+                    }
                 }
                 val pending = repo.permissions().filter { it.sessionID == id }
                 _state.update { it.copy(permissions = pending) }
