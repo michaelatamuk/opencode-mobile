@@ -443,6 +443,8 @@ fun ChatScreen(
         runCatching { listState.scrollBy(200_000f) }
     }
 
+    val lightCard = !androidx.compose.foundation.isSystemInDarkTheme()
+
     fun shareRunCard() {
         val title = state.title.ifBlank { context.getString(R.string.session_new) }
         val agent = state.agents.firstOrNull { it.id == state.agentID }?.name.orEmpty()
@@ -501,7 +503,7 @@ fun ChatScreen(
         )
         scope.launch(Dispatchers.IO) {
             val bitmap = runCatching {
-                renderRunCard(title, subtitle, stats, quote, footer)
+                renderRunCard(title, subtitle, stats, quote, footer, lightCard)
             }.getOrNull() ?: return@launch
             val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
             val file = java.io.File(dir, "run-${System.currentTimeMillis()}.png")
@@ -3990,19 +3992,34 @@ private fun renderRunCard(
     subtitle: String,
     stats: String,
     quote: String,
-    footer: String
+    footer: String,
+    light: Boolean
 ): Bitmap {
     val width = 1080
     val height = 1350
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
+    val background = if (light) {
+        intArrayOf(0xFFFBFCFF.toInt(), 0xFFEFF3FF.toInt(), 0xFFE7ECFF.toInt())
+    } else {
+        intArrayOf(0xFF0B1020.toInt(), 0xFF101A33.toInt(), 0xFF0D1630.toInt())
+    }
+    val glow = if (light) 0x22FFB86B else 0x38FFB86B
+    val titleColor = if (light) 0xFF10142B.toInt() else 0xFFF2F5FF.toInt()
+    val subColor = if (light) 0xFF5B6070.toInt() else 0xFFC3CBE3.toInt()
+    val statsColor = if (light) 0xFF1B2340.toInt() else 0xFFDCE7FF.toInt()
+    val pillColor = if (light) 0x14000000 else 0x22FFFFFF
+    val quoteColor = if (light) 0xFF1B2340.toInt() else 0xFFDCE3FF.toInt()
+    val footerColor = if (light) 0xFF7A8194.toInt() else 0xFF8B93AD.toInt()
+    val brandColor = if (light) 0xFF2B47C7.toInt() else 0xFF8FA8FF.toInt()
+
     canvas.drawRect(
         0f, 0f, width.toFloat(), height.toFloat(),
         Paint().apply {
             shader = LinearGradient(
                 0f, 0f, width.toFloat(), height.toFloat(),
-                intArrayOf(0xFF0B1020.toInt(), 0xFF101A33.toInt(), 0xFF0D1630.toInt()),
+                background,
                 null,
                 Shader.TileMode.CLAMP
             )
@@ -4013,7 +4030,7 @@ private fun renderRunCard(
         Paint().apply {
             shader = RadialGradient(
                 930f, 90f, 760f,
-                0x38FFB86B, 0x00FFB86B,
+                glow, 0x00FFB86B,
                 Shader.TileMode.CLAMP
             )
         }
@@ -4042,7 +4059,7 @@ private fun renderRunCard(
         "OPENCODE MOBILE",
         206f, 132f,
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF8FA8FF.toInt()
+            color = brandColor
             textSize = 26f
             letterSpacing = 0.12f
         }
@@ -4050,7 +4067,7 @@ private fun renderRunCard(
 
     var y = 290f
     val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFF2F5FF.toInt()
+        color = titleColor
         textSize = 66f
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
@@ -4058,7 +4075,7 @@ private fun renderRunCard(
     if (subtitle.isNotBlank()) {
         y += 16f
         val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFC3CBE3.toInt()
+            color = subColor
             textSize = 30f
         }
         y = drawCardText(canvas, subtitle, 80f, y, width - 160, subPaint, 1)
@@ -4066,14 +4083,14 @@ private fun renderRunCard(
     if (stats.isNotBlank()) {
         y += 30f
         val statsPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFDCE7FF.toInt()
+            color = statsColor
             textSize = 26f
         }
         val pad = 28f
         val pillWidth = statsPaint.measureText(stats) + pad * 2
         canvas.drawRoundRect(
             RectF(80f, y, 80f + pillWidth, y + 64f), 32f, 32f,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x22FFFFFF }
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = pillColor }
         )
         canvas.drawText(stats, 80f + pad, y + 41f, statsPaint)
         y += 64f
@@ -4085,7 +4102,7 @@ private fun renderRunCard(
             Paint().apply { color = 0xFF4A66FF.toInt() }
         )
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFDCE3FF.toInt()
+            color = quoteColor
             textSize = 36f
         }
         drawCardText(canvas, quote, 116f, y, width - 200, quotePaint, 7)
@@ -4095,7 +4112,7 @@ private fun renderRunCard(
         footer,
         80f, height - 80f,
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF8B93AD.toInt()
+            color = footerColor
             textSize = 24f
         }
     )

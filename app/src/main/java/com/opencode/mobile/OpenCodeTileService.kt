@@ -23,6 +23,10 @@ class OpenCodeTileService : TileService() {
         val running = prefs.getInt("watch_running", 0)
         tile.label = getString(R.string.widget_title)
         tile.state = if (running > 0) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.icon = android.graphics.drawable.Icon.createWithResource(
+            this,
+            if (running > 0) R.drawable.ic_live_bars else R.drawable.ic_stat_opencode
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = status
         }
