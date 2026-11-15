@@ -361,8 +361,20 @@ private fun Root() {
                         .putString("password", password)
                         .putString("fallback_server", fallback)
                         .apply()
-                    ProfileStore.ensure(context)
-                    ProfileStore.updateActiveFromPrefs(context)
+                    // Keep every computer as its own profile instead of
+                    // overwriting the active one when a new server is paired.
+                    val existing = ProfileStore.all(context).firstOrNull {
+                        it.server == server && it.password == password
+                    }
+                    if (existing != null) {
+                        ProfileStore.switchTo(context, existing.id)
+                    } else {
+                        val host = runCatching { android.net.Uri.parse(server).host }
+                            .getOrNull()
+                            .orEmpty()
+                            .ifBlank { server }
+                        ProfileStore.addFromCurrent(context, host)
+                    }
                 }
             )
 
