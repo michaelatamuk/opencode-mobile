@@ -188,17 +188,6 @@ fun SessionListScreen(
     }
 
     val listState = rememberLazyListState()
-    var fabVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(listState) {
-        var last = 0
-        snapshotFlow {
-            listState.firstVisibleItemIndex * 10_000 + listState.firstVisibleItemScrollOffset
-        }.collect { position ->
-            if (position > last + 8) fabVisible = false
-            else if (position < last - 8) fabVisible = true
-            last = position
-        }
-    }
     val scope = rememberCoroutineScope()
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
@@ -432,22 +421,20 @@ fun SessionListScreen(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-            if (fabVisible) {
-                FloatingActionButton(
-                    onClick = onNewSession,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(18.dp)
-                        .zIndex(1f)
-                ) {
-                    Icon(
-                        Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.action_new_session),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+            FloatingActionButton(
+                onClick = onNewSession,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(18.dp)
+                    .zIndex(1f)
+            ) {
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = stringResource(R.string.action_new_session),
+                    modifier = Modifier.size(24.dp)
+                )
             }
             when {
                 state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
