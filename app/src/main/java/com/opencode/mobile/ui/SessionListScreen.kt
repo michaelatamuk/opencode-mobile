@@ -68,6 +68,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -392,8 +393,7 @@ fun SessionListScreen(
                             selected = projectFilter == project.id,
                             onClick = {
                                 projectFilter = if (projectFilter == project.id) null else project.id
-                            },
-                            tint = projectAccent(project.id)
+                            }
                         )
                     }
                 }
@@ -618,29 +618,43 @@ fun SessionListScreen(
 
     }
 
-    // Docked creation action: in the layout below the list, never an overlay,
-    // so it cannot cover a row. Always visible, no scroll-hide jump.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 18.dp, end = 18.dp, top = 2.dp, bottom = 8.dp),
-        contentAlignment = Alignment.CenterEnd
+    // Docked creation bar: the strip below the list is a real surface, not a
+    // gap, so the reserved space reads as a toolbar with the + on the right.
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Surface(
-            onClick = onNewSession,
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowElevation = 8.dp,
-            modifier = Modifier.size(56.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.action_new_session),
-                    modifier = Modifier.size(26.dp)
+        Column(Modifier.navigationBarsPadding()) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.action_new_session),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
                 )
+                Surface(
+                    onClick = onNewSession,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -702,49 +716,39 @@ private fun ProjectChip(
     label: String,
     count: Int,
     selected: Boolean,
-    onClick: () -> Unit,
-    tint: Color? = null
+    onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(50)
-    val background = when {
-        selected && tint != null -> tint.copy(alpha = 0.16f)
-        selected -> MaterialTheme.colorScheme.primaryContainer
-        else -> Color.Transparent
-    }
-    val borderColor = when {
-        selected -> Color.Transparent
-        tint != null -> tint.copy(alpha = 0.45f)
-        else -> MaterialTheme.colorScheme.outlineVariant
-    }
-    val textColor = when {
-        selected && tint != null -> tint
-        selected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
     Row(
         Modifier
             .clip(shape)
-            .background(background)
-            .border(width = 1.dp, color = borderColor, shape = shape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) Color.Transparent
+                else MaterialTheme.colorScheme.outlineVariant,
+                shape = shape
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (tint != null) {
-            Box(Modifier.size(6.dp).background(tint, CircleShape))
-            Spacer(Modifier.width(7.dp))
-        }
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = textColor,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
         )
         Spacer(Modifier.width(6.dp))
         Text(
             count.toString(),
             style = MaterialTheme.typography.labelSmall,
-            color = textColor.copy(alpha = 0.6f)
+            color = (if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.6f)
         )
     }
 }
@@ -762,17 +766,6 @@ private fun projectLabel(project: ProjectOption, sessions: List<SessionItem>): S
     return base.ifBlank {
         stringResource(R.string.sessions_project_fallback, project.id.take(4))
     }
-}
-
-/** Deterministic per-project dot colour, matching the model sheet's provider hues. */
-@Composable
-private fun projectAccent(key: String): Color {
-    val hue = ((key.hashCode() % 360) + 360) % 360
-    return Color.hsl(
-        hue.toFloat(),
-        saturation = 0.48f,
-        lightness = if (androidx.compose.foundation.isSystemInDarkTheme()) 0.72f else 0.46f
-    )
 }
 
 /**
@@ -1140,14 +1133,6 @@ private fun SessionRow(
                 }
                 if (meta.isNotBlank() || subagents > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (session.projectID.isNotBlank()) {
-                            Box(
-                                Modifier
-                                    .size(6.dp)
-                                    .background(projectAccent(session.projectID), CircleShape)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                        }
                         Text(
                             meta,
                             style = MaterialTheme.typography.bodySmall,
@@ -1213,13 +1198,16 @@ private fun SessionRow(
             }
         }
 
-        DropdownMenu(
-            expanded = menuOpen,
-            onDismissRequest = { menuOpen = false },
-            modifier = Modifier.align(Alignment.TopEnd),
-            shape = RoundedCornerShape(14.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
+        // Anchor the menu to a zero-size box at the row's trailing edge; Material
+        // positions the popup from its parent, so align() on the menu alone puts
+        // it at the row's start.
+        Box(Modifier.align(Alignment.TopEnd)) {
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                shape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.action_rename)) },
                 onClick = {
@@ -1301,6 +1289,7 @@ private fun SessionRow(
                     onDelete()
                 }
             )
+            }
         }
     }
 }
