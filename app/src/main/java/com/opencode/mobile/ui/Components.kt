@@ -156,7 +156,9 @@ private fun AnnotatedString.Builder.appendInline(text: String, inlineBg: Color, 
                 val end = text.indexOf("**", i + 2)
                 if (end > i + 2) {
                     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                        append(text.substring(i + 2, end))
+                        // Keep parsing inside bold: URLs and inline code inside
+                        // **…** must stay tappable.
+                        appendInline(text.substring(i + 2, end), inlineBg, linkColor)
                     }
                     i = end + 2
                 } else {
