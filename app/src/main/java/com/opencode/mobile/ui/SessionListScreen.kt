@@ -363,6 +363,22 @@ fun SessionListScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                    Spacer(Modifier.width(4.dp))
+                    Surface(
+                        onClick = onNewSession,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Rounded.Add,
+                                contentDescription = stringResource(R.string.action_new_session),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -412,7 +428,12 @@ fun SessionListScreen(
 
         // The list and its floating create button share one box so the button
         // is positioned inside the layout instead of relying on draw overflow.
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        ) {
             when {
                 state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
                     repeat(6) { SessionSkeleton() }
@@ -618,46 +639,6 @@ fun SessionListScreen(
 
     }
 
-    // Docked creation bar: the strip below the list is a real surface, not a
-    // gap, so the reserved space reads as a toolbar with the + on the right.
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.navigationBarsPadding()) {
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    stringResource(R.string.action_new_session),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-                Surface(
-                    onClick = onNewSession,
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 
