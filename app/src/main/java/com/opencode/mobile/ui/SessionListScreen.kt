@@ -68,6 +68,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -83,6 +84,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -185,6 +188,17 @@ fun SessionListScreen(
     }
 
     val listState = rememberLazyListState()
+    var fabVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        var last = 0
+        snapshotFlow {
+            listState.firstVisibleItemIndex * 10_000 + listState.firstVisibleItemScrollOffset
+        }.collect { position ->
+            if (position > last + 8) fabVisible = false
+            else if (position < last - 8) fabVisible = true
+            last = position
+        }
+    }
     val scope = rememberCoroutineScope()
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
@@ -363,22 +377,6 @@ fun SessionListScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(Modifier.width(4.dp))
-                    Surface(
-                        onClick = onNewSession,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.Add,
-                                contentDescription = stringResource(R.string.action_new_session),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -434,6 +432,23 @@ fun SessionListScreen(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
+            if (fabVisible) {
+                FloatingActionButton(
+                    onClick = onNewSession,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(18.dp)
+                        .zIndex(1f)
+                ) {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.action_new_session),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
             when {
                 state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
                     repeat(6) { SessionSkeleton() }
@@ -462,7 +477,7 @@ fun SessionListScreen(
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     state = listState,
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                    contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
