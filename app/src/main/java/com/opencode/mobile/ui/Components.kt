@@ -1,5 +1,8 @@
 package com.opencode.mobile.ui
 
+import android.annotation.SuppressLint
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,6 +15,9 @@ import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -19,6 +25,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +33,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,12 +43,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -289,9 +300,136 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, contentAlpha: Floa
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
 
-                is MdBlock.Code -> CodeBlock(block.lang, block.code)
+                is MdBlock.Code -> if (block.lang.equals("mermaid", ignoreCase = true)) {
+                    MermaidBlock(block.code)
+                } else {
+                    CodeBlock(block.lang, block.code)
+                }
 
                 is MdBlock.Table -> TableBlock(block.rows)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MermaidBlock(code: String) {
+    var open by remember { mutableStateOf(false) }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "MERMAID",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { open = true }) {
+                    Text(
+                        stringResource(R.string.chat_view_diagram),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+            Text(
+                code,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.5.sp,
+                lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
+            )
+        }
+    }
+    if (open) {
+        MermaidViewer(code = code, onDismiss = { open = false })
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun MermaidViewer(code: String, onDismiss: () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                AndroidView(
+                    factory = { context ->
+                        WebView(context).apply {
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            webViewClient = WebViewClient()
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.useWideViewPort = true
+                            settings.loadWithOverviewMode = true
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
+                            settings.setSupportZoom(true)
+                            val escaped = code
+                                .replace("&", "&amp;")
+                                .replace("<", "&lt;")
+                                .replace(">", "&gt;")
+                            val background = if (dark) "#0B1020" else "#FFFFFF"
+                            val theme = if (dark) "dark" else "default"
+                            val html = """
+                                <!doctype html>
+                                <html><head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1">
+                                <script src="mermaid.min.js"></script>
+                                <style>
+                                  body { margin: 0; padding: 16px; background: $background; }
+                                  .mermaid { display: flex; justify-content: center; }
+                                </style>
+                                </head><body>
+                                <pre class="mermaid">$escaped</pre>
+                                <script>
+                                  mermaid.initialize({
+                                    startOnLoad: true,
+                                    securityLevel: 'strict',
+                                    theme: '$theme'
+                                  });
+                                </script>
+                                </body></html>
+                            """.trimIndent()
+                            loadDataWithBaseURL(
+                                "file:///android_asset/",
+                                html,
+                                "text/html",
+                                "utf-8",
+                                null
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                FilledTonalIconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

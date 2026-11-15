@@ -227,6 +227,7 @@
     <string name="chat_share_card">Поделиться карточкой запуска</string>
     <string name="chat_plan">План</string>
     <string name="chat_attach_camera">Сделать фото</string>
+    <string name="chat_view_diagram">Открыть диаграмму</string>
     <string name="chat_turn_done">Готово</string>
     <string name="chat_code_label">код</string>
     <string name="chat_input">Ввод</string>
