@@ -414,6 +414,21 @@ fun ChatScreen(
         if (wasBusy && !state.busy) {
             completionTick++
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (SecurePrefs.get(context).getBoolean("completion_sound", false)) {
+                scope.launch {
+                    val tone = runCatching {
+                        android.media.ToneGenerator(
+                            android.media.AudioManager.STREAM_NOTIFICATION,
+                            55
+                        )
+                    }.getOrNull() ?: return@launch
+                    runCatching {
+                        tone.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 140)
+                    }
+                    delay(420)
+                    runCatching { tone.release() }
+                }
+            }
         }
         wasBusy = state.busy
     }

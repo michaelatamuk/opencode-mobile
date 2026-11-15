@@ -84,6 +84,11 @@ class OpenCodeWidgetProvider : AppWidgetProvider() {
                     setViewVisibility(R.id.widget_lines, View.VISIBLE)
                     setTextViewText(R.id.widget_lines, lines)
                 }
+                // Static "live" motif: RemoteViews cannot animate the bars.
+                setViewVisibility(
+                    R.id.widget_bars,
+                    if (stopSessionID.isNullOrBlank()) View.GONE else View.VISIBLE
+                )
                 setOnClickPendingIntent(
                     R.id.widget_root,
                     PendingIntent.getActivity(

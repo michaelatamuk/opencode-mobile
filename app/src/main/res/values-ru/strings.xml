@@ -250,6 +250,8 @@
     <string name="settings_pair_expired">Эта ссылка для сопряжения больше не действует. Создайте новую на сервере и отсканируйте или вставьте её сразу — ссылка работает один раз и живёт пять минут.</string>
     <string name="settings_pair_no_server">В этом коде сопряжения нет адреса сервера. Откройте вкладку «Вручную», укажите URL сервера и отсканируйте код снова.</string>
     <string name="settings_pair_failed">Не удалось выполнить сопряжение.</string>
+    <string name="settings_completion_sound">Звук завершения</string>
+    <string name="settings_completion_sound_body">Мягкий сигнал, когда ход завершается, пока приложение открыто. По умолчанию выключен.</string>
     <string name="settings_pairing">Сопряжение…</string>
     <string name="action_pair">Сопрячь</string>
     <string name="settings_scan_qr">Сканировать QR</string>

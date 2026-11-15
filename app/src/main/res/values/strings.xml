@@ -257,6 +257,8 @@
     <string name="settings_pair_expired">That pairing link is no longer valid. Generate a fresh one on the server and scan or paste it right away — links work once and expire after five minutes.</string>
     <string name="settings_pair_no_server">This pairing code has no server address. Open the Manual tab, enter your server URL, then scan or paste the code again.</string>
     <string name="settings_pair_failed">Pairing failed.</string>
+    <string name="settings_completion_sound">Completion sound</string>
+    <string name="settings_completion_sound_body">A soft chime when a run finishes while you are in the app. Off by default.</string>
     <string name="settings_pairing">Pairing…</string>
     <string name="action_pair">Pair</string>
     <string name="settings_scan_qr">Scan QR</string>

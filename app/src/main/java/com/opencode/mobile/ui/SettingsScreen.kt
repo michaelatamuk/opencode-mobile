@@ -61,6 +61,7 @@ import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.QrCode
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Visibility
@@ -1270,6 +1271,9 @@ private fun NotificationsPage(
     onOpenSystemSettings: () -> Unit,
     onBack: () -> Unit
 ) {
+    var completionSound by remember {
+        mutableStateOf(SecurePrefs.get(context).getBoolean("completion_sound", false))
+    }
     PageScaffold(
         title = stringResource(R.string.settings_background_title),
         onBack = onBack
@@ -1331,8 +1335,20 @@ private fun NotificationsPage(
             SettingsRow(
                 icon = Icons.Rounded.Send,
                 title = stringResource(R.string.settings_test_notification),
-                onClick = onTestNotification,
-                showDivider = false
+                onClick = onTestNotification
+            )
+            SettingsDivider()
+            SwitchRow(
+                icon = Icons.Rounded.VolumeUp,
+                title = stringResource(R.string.settings_completion_sound),
+                supporting = stringResource(R.string.settings_completion_sound_body),
+                checked = completionSound,
+                onChange = { enabled ->
+                    completionSound = enabled
+                    SecurePrefs.get(context).edit()
+                        .putBoolean("completion_sound", enabled)
+                        .apply()
+                }
             )
         }
 
