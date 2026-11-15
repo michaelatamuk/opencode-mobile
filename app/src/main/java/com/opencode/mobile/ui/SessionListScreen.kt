@@ -206,6 +206,17 @@ fun SessionListScreen(
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
+    // The saved scroll offset reopens the list mid-history. If anything is
+    // running, its cards are at the top and would be invisible.
+    var initialScrollSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(running.isNotEmpty(), state.loading) {
+        if (initialScrollSettled) return@LaunchedEffect
+        if (state.loading && state.sessions.isEmpty()) return@LaunchedEffect
+        initialScrollSettled = true
+        if (running.isNotEmpty()) {
+            runCatching { listState.scrollToItem(0) }
+        }
+    }
     val grouped = remember(history) { history.groupBy { groupOf(it.updated) } }
     val projectNames = remember(state.projects) {
         state.projects.associate { it.id to it.name }

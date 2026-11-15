@@ -25,6 +25,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -437,6 +438,23 @@ fun ChatScreen(
             .joinToString(" · ")
         val steps = state.messages.flatMap { it.parts }
             .count { it is Part.Tool || it is Part.Reasoning }
+        val editingTools = setOf(
+            "edit", "write", "patch", "multiedit", "apply_patch",
+            "create_file", "str_replace_editor"
+        )
+        val editedFiles = state.messages.flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .filter { it.name.lowercase() in editingTools }
+            .mapNotNull { part ->
+                val obj = runCatching { org.json.JSONObject(part.input) }.getOrNull()
+                    ?: return@mapNotNull null
+                listOf("filePath", "path", "file", "filename")
+                    .firstNotNullOfOrNull { key ->
+                        obj.optString(key).takeIf { it.isNotBlank() }
+                    }
+            }
+            .toSet()
+            .size
         val start = state.messages.mapNotNull { it.created.takeIf { c -> c > 0 } }.minOrNull()
         val end = state.messages.mapNotNull { it.completed.takeIf { c -> c > 0 } }.maxOrNull()
         val elapsed = start?.let {
@@ -447,6 +465,10 @@ fun ChatScreen(
             if (steps > 0) {
                 if (isNotEmpty()) append(" · ")
                 append(steps).append(if (steps == 1) " step" else " steps")
+            }
+            if (editedFiles > 0) {
+                if (isNotEmpty()) append(" · ")
+                append(editedFiles).append(if (editedFiles == 1) " file" else " files")
             }
             if (state.cost > 0.0) {
                 if (isNotEmpty()) append(" · ")
@@ -822,7 +844,13 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom)
             ) {
                 items(blocks, key = { it.key }) { block ->
-                    Box(Modifier.animateItem()) {
+                    Box(
+                        Modifier.animateItem(
+                            fadeInSpec = tween(200),
+                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            fadeOutSpec = tween(140)
+                        )
+                    ) {
                         when (block) {
                             is ChatBlock.DaySeparator -> DayPill(block.at)
                             is ChatBlock.UserBlock -> UserMessage(
@@ -971,14 +999,8 @@ fun ChatScreen(
                     )
                 }
             }
-            state.error?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                )
+            state.error?.let { message ->
+                PulsingError(message)
             }
             Composer(
                 value = input,
@@ -4417,6 +4439,23 @@ private fun LiveStatusStrip(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+@Composable
+private fun PulsingError(message: String) {
+    val alpha = remember { Animatable(1f) }
+    LaunchedEffect(message) {
+        alpha.snapTo(1f)
+        alpha.animateTo(0.45f, tween(160))
+        alpha.animateTo(1f, tween(240))
+    }
+    Text(
+        message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error.copy(alpha = alpha.value),
+        maxLines = 2,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+    )
 }
 
 @Composable

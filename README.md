@@ -79,6 +79,9 @@ Samsung devices may need Auto Blocker or Play Protect disabled to sideload.
   stay where they happened as light `Used 2 Write, Shell` lines — tap one to see
   each tool's input and output — and a single live line above the composer carries
   the timer and the stop control.
+- **Mission Control.** Every running session as a live tile — clock, current
+  line, stop — instead of a list you have to scroll through. A finished run can
+  be shared as a card.
 - **Steer without switching.** Type while a turn runs to steer it, queue
   messages, or reply straight from the notification.
 - **Approve from the lock screen.** Permission requests and agent forms show up
