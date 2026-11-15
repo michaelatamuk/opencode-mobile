@@ -282,7 +282,7 @@
     <string name="settings_quick_prompts_title">Quick action prompts</string>
     <string name="settings_test_notification">Send a test notification</string>
     <string name="settings_notif_mode_title">Watcher notification</string>
-    <string name="settings_notif_mode_body">Only on finish keeps the watcher quiet: Android still requires a silent entry while it runs in the background (some devices show its icon), and you get a normal alert when a turn stops. Always shows live progress.</string>
+    <string name="settings_notif_mode_body">Only on finish sends a notification when a run stops and keeps no watcher entry. Background checks run about every 15 minutes, so an alert can be delayed while the app is closed; it is immediate while the app is open. Always keeps a live progress entry.</string>
     <string name="settings_notif_mode_finish">Only on finish</string>
     <string name="settings_notif_mode_always">Always</string>
     <string name="settings_appearance_title">Appearance</string>

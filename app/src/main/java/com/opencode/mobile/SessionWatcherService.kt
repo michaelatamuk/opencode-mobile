@@ -74,6 +74,9 @@ class SessionWatcherService : Service() {
     @Volatile
     private var status: String? = null
 
+    @Volatile
+    private var silentPosted = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -94,6 +97,7 @@ class SessionWatcherService : Service() {
         // why "only on finish" used to miss every completion. Finish-only uses a
         // silent, status-bar-less notification instead of the live progress one.
         startForegroundCompat(initial)
+        silentPosted = silentMode()
 
         if (job == null) job = scope.launch { loop() }
         if (watchdogJob == null) watchdogJob = scope.launch { watchdogLoop() }
@@ -515,9 +519,17 @@ class SessionWatcherService : Service() {
         }
 
         // Both modes keep a foreground service so the event stream survives in
-        // the background; finish-only simply uses the silent channel.
+        // the background. In finish-only the placeholder is posted once; later
+        // updates are skipped so a swipe-away stays gone (the service keeps
+        // watching, and the finish alert is a separate notification).
+        if (silentMode() && silentPosted) {
+            return
+        }
         startForegroundCompat(ongoingNotification())
+        if (silentMode()) silentPosted = true
     }
+
+    private fun silentMode(): Boolean = !persistentNotification()
 
     private fun statusLabel(): String = when {
         status != null -> status!!
@@ -558,7 +570,7 @@ class SessionWatcherService : Service() {
             .setContentText(text)
             .setPriority(if (silent) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_LOW)
             .setSilent(silent)
-            .setOngoing(true)
+            .setOngoing(!silent)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

@@ -259,12 +259,19 @@ private fun Root() {
     val scope = AppScope
 
     fun startWatcher() {
-        val intent = Intent(context, SessionWatcherService::class.java)
-        // The watcher is always a foreground service now (with a silent
-        // notification in finish-only mode), so it survives in the background.
-        ContextCompat.startForegroundService(context, intent)
         WatchWorker.schedule(context)
         WatchWorker.runNow(context)
+        if (persistentWatch) {
+            // "Always": the foreground service keeps the SSE stream live.
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, SessionWatcherService::class.java)
+            )
+        } else {
+            // "Only on finish": no watcher and no persistent entry. The periodic
+            // worker diffs the running set and posts the finish alert.
+            context.stopService(Intent(context, SessionWatcherService::class.java))
+        }
     }
 
     fun startWatching() {

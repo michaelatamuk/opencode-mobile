@@ -275,7 +275,7 @@
     <string name="settings_quick_prompts_title">Тексты быстрых действий</string>
     <string name="settings_test_notification">Отправить тестовое уведомление</string>
     <string name="settings_notif_mode_title">Уведомление наблюдателя</string>
-    <string name="settings_notif_mode_body">«По завершении» держит наблюдатель тихим: Android всё равно требует тихую запись, пока он работает в фоне (на некоторых устройствах видна её иконка), а по остановке хода приходит обычное уведомление. «Всегда» показывает живой прогресс.</string>
+    <string name="settings_notif_mode_body">«По завершении» присылает уведомление, когда ход останавливается, и не держит наблюдатель. Фоновые проверки идут примерно раз в 15 минут, поэтому при закрытом приложении сигнал может задержаться; при открытом — сразу. «Всегда» держит живой прогресс.</string>
     <string name="settings_notif_mode_finish">По завершении</string>
     <string name="settings_notif_mode_always">Всегда</string>
     <string name="settings_appearance_title">Оформление</string>
