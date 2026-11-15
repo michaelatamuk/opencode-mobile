@@ -560,8 +560,14 @@ class SessionWatcherService : Service() {
             .setSilent(silent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(open)
             .addAction(0, getString(R.string.action_stop_watching), stop)
+
+        if (!silent && runs.size > 1) {
+            builder.setSubText(getString(R.string.notif_running, runs.size))
+        }
 
         if (!silent && status == null && runs.size == 1 && single != null) {
             // The system clock ticks the elapsed time for free; tool changes

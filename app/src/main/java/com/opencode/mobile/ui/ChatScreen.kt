@@ -241,6 +241,7 @@ fun ChatScreen(
     var query by remember { mutableStateOf("") }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmUndo by remember { mutableStateOf(false) }
+    var confirmRegenerate by remember { mutableStateOf(false) }
     var showLibrary by remember { mutableStateOf(false) }
     var pickedSkills by remember { mutableStateOf<List<SkillOption>>(emptyList()) }
     var presets by remember { mutableStateOf(PresetStore.all(context)) }
@@ -767,6 +768,14 @@ fun ChatScreen(
                                 }
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_regenerate)) },
+                                enabled = !state.busy && state.messages.any { it.role == "user" },
+                                onClick = {
+                                    menuOpen = false
+                                    confirmRegenerate = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_undo_turn)) },
                                 enabled = !state.busy,
                                 onClick = {
@@ -1262,6 +1271,27 @@ fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmUndo = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (confirmRegenerate) {
+        AlertDialog(
+            onDismissRequest = { confirmRegenerate = false },
+            title = { Text(stringResource(R.string.chat_regenerate_title)) },
+            text = { Text(stringResource(R.string.chat_regenerate_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRegenerate = false
+                    vm.regenerateLast { prompt ->
+                        vm.send(prompt, emptyList()) { }
+                    }
+                }) { Text(stringResource(R.string.chat_regenerate_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRegenerate = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

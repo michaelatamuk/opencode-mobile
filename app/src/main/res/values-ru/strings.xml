@@ -101,6 +101,10 @@
     <string name="chat_actions">Действия с сессией</string>
     <string name="chat_branch_session">Ответвить сессию</string>
     <string name="chat_branch_from_here">Ответвить отсюда</string>
+    <string name="chat_regenerate">Повторить</string>
+    <string name="chat_regenerate_title">Повторить последний ход?</string>
+    <string name="chat_regenerate_body">Последний ход и его изменения файлов будут отменены, затем тот же запрос отправится снова.</string>
+    <string name="chat_regenerate_confirm">Повторить</string>
     <string name="chat_undo_turn">Отменить последний ход</string>
     <string name="chat_undo_title">Отменить последний ход?</string>
     <string name="chat_undo_body">Удалит последний запрос, ответ и изменения файлов. После подтверждения отменить это нельзя.</string>

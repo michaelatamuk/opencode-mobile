@@ -400,6 +400,29 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Reverts the last turn (files included) and hands the prompt back so the
+     * caller can send it again — the one-tap "try that again" path.
+     */
+    fun regenerateLast(onPrompt: (String) -> Unit) {
+        val id = activeID ?: return
+        val lastUser = _state.value.messages.lastOrNull { it.role == "user" } ?: return
+        val prompt = lastUser.plainText
+        if (prompt.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repo.stageRevert(id, lastUser.id, files = true)
+                repo.commitRevert(id)
+                refreshNow()
+                onPrompt(prompt)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+    }
+
     fun compact() {
         val id = activeID ?: return
         viewModelScope.launch {

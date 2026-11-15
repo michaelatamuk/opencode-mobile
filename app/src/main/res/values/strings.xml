@@ -106,6 +106,10 @@
     <string name="chat_actions">Session actions</string>
     <string name="chat_branch_session">Branch session</string>
     <string name="chat_branch_from_here">Branch from here</string>
+    <string name="chat_regenerate">Regenerate</string>
+    <string name="chat_regenerate_title">Regenerate the last turn?</string>
+    <string name="chat_regenerate_body">This reverts the last turn and its file changes, then sends the same prompt again.</string>
+    <string name="chat_regenerate_confirm">Regenerate</string>
     <string name="chat_undo_turn">Undo last turn</string>
     <string name="chat_undo_title">Undo last turn?</string>
     <string name="chat_undo_body">Removes the last prompt, its response and the file changes it made. This cannot be undone once committed.</string>
