@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -79,6 +80,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,6 +117,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class SessionGroup { Today, Yesterday, Week, Earlier }
 
@@ -181,6 +184,7 @@ fun SessionListScreen(
     }
 
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
         var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
@@ -285,12 +289,6 @@ fun SessionListScreen(
                                 append(stringResource(greeting))
                                 append(" · ")
                                 append(stringResource(R.string.sessions_count, filtered.size))
-                                if (running.isNotEmpty()) {
-                                    append(" · ")
-                                    append(running.size)
-                                    append(' ')
-                                    append(stringResource(R.string.session_running))
-                                }
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -303,6 +301,34 @@ fun SessionListScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
+                            if (running.isNotEmpty()) {
+                                Spacer(Modifier.width(8.dp))
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .clickable {
+                                            scope.launch {
+                                                runCatching { listState.animateScrollToItem(0) }
+                                            }
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${running.size} ${stringResource(R.string.session_running)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.Rounded.ArrowUpward,
+                                        contentDescription = stringResource(R.string.sessions_jump_live),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 stringResource(R.string.cost_title),
