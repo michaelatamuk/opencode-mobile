@@ -26,4 +26,22 @@ class FriendlyErrorTest {
     fun `not found is explained`() {
         assertEquals("Not found on this server", friendlyError(ApiException(404, "")))
     }
+
+    @Test
+    fun `a disabled schedule feature is not reported as a password problem`() {
+        assertEquals(SchedulesDisabledException::class.java, scheduleFailure(ApiException(403, "")).javaClass)
+        assertEquals(
+            "Schedules are turned off on this server. Add the flag below to its config, then check again.",
+            friendlyError(SchedulesDisabledException())
+        )
+    }
+
+    @Test
+    fun `a server without schedule routes says so`() {
+        assertEquals(SchedulesUnsupportedException::class.java, scheduleFailure(ApiException(404, "")).javaClass)
+        assertEquals(
+            "This server version has no schedules. Update OpenCode on the computer.",
+            friendlyError(SchedulesUnsupportedException())
+        )
+    }
 }

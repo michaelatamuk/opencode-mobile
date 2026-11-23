@@ -186,6 +186,9 @@
     <string name="chat_schedule_prompt">Запрос для отправки</string>
     <string name="chat_schedule_add">Добавить расписание</string>
     <string name="chat_schedule_empty">Расписаний пока нет.</string>
+    <string name="chat_schedules_disabled_snippet">"experimental": { "schedules": true }</string>
+    <string name="chat_schedules_copy">Копировать флаг</string>
+    <string name="chat_schedules_recheck">Проверить снова</string>
     <string name="chat_shell">Оболочка</string>
     <string name="chat_shell_hint">Выполняет команду в каталоге сессии и показывает вывод.</string>
     <string name="chat_shell_command">Команда</string>

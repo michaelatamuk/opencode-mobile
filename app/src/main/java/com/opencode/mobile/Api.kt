@@ -178,6 +178,27 @@ data class SkillOption(
 class ApiException(val status: Int, body: String) :
     Exception(if (body.isBlank()) "HTTP $status" else "HTTP $status: $body")
 
+/**
+ * Schedules exist on this server but are turned off. The server answers 403
+ * for a disabled `experimental.schedules`, which is easy to mistake for a
+ * wrong password, so it gets its own error.
+ */
+class SchedulesDisabledException : Exception(
+    "Schedules are turned off on this server. Add the flag below to its config, then check again."
+)
+
+/** The server predates the schedule endpoints. */
+class SchedulesUnsupportedException : Exception(
+    "This server version has no schedules. Update OpenCode on the computer."
+)
+
+/** 403/404 on schedule routes mean a missing feature, not bad credentials. */
+internal fun scheduleFailure(error: ApiException): Exception = when (error.status) {
+    403 -> SchedulesDisabledException()
+    404 -> SchedulesUnsupportedException()
+    else -> error
+}
+
 private fun JSONObject.toSession(): SessionItem {
     val time = optJSONObject("time")
     val model = optJSONObject("model")
@@ -334,6 +355,9 @@ object Pairing {
 
 /** A user-facing message for any failure from the API. */
 fun friendlyError(error: Throwable): String = when (error) {
+    is SchedulesDisabledException, is SchedulesUnsupportedException ->
+        error.message ?: "Schedules are unavailable on this server"
+
     is ApiException -> when (error.status) {
         401, 403 -> "Wrong or missing server password"
         404 -> "Not found on this server"
@@ -1002,8 +1026,12 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         }
 
     suspend fun schedules(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
-        val data = getJson("/api/experimental/schedule?sessionID=${Uri.encode(sessionID)}")
-            .optJSONArray("data") ?: JSONArray()
+        val payload = try {
+            getJson("/api/experimental/schedule?sessionID=${Uri.encode(sessionID)}")
+        } catch (e: ApiException) {
+            throw scheduleFailure(e)
+        }
+        val data = payload.optJSONArray("data") ?: JSONArray()
         (0 until data.length()).map { i ->
             val o = data.getJSONObject(i)
             val raw = o.opt("status")
@@ -1032,7 +1060,11 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             .put("sessionID", sessionID)
             .put("prompt", prompt)
             .put("when", whenSpec)
-        postJson("/api/experimental/schedule", body.toString())
+        try {
+            postJson("/api/experimental/schedule", body.toString())
+        } catch (e: ApiException) {
+            throw scheduleFailure(e)
+        }
         Unit
     }
 

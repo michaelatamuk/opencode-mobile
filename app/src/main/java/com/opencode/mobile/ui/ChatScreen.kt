@@ -201,6 +201,7 @@ import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
 import com.opencode.mobile.ScheduleItem
+import com.opencode.mobile.SchedulesDisabledException
 import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.SessionPreset
@@ -2879,8 +2880,11 @@ private fun SchedulesSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val clipboard = LocalClipboardManager.current
+    val configLine = stringResource(R.string.chat_schedules_disabled_snippet)
     var items by remember { mutableStateOf<List<ScheduleItem>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var disabled by remember { mutableStateOf(false) }
     var prompt by remember { mutableStateOf("") }
     var minutes by remember { mutableStateOf(60) }
     var mode by remember { mutableStateOf("interval") }
@@ -2895,8 +2899,10 @@ private fun SchedulesSheet(
             try {
                 items = repo.schedules(sessionID)
                 error = null
+                disabled = false
             } catch (e: Exception) {
                 error = friendlyError(e)
+                disabled = e is SchedulesDisabledException
                 items = emptyList()
             }
         }
@@ -2967,7 +2973,7 @@ private fun SchedulesSheet(
                     value = at,
                     onValueChange = { at = it },
                     label = { Text("At") },
-                    placeholder = { Text("2026-11-20T09:00") },
+                    placeholder = { Text("2026-12-01T09:00") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -3019,11 +3025,12 @@ private fun SchedulesSheet(
                                 reload()
                             } catch (e: Exception) {
                                 error = friendlyError(e)
+                                if (e is SchedulesDisabledException) disabled = true
                             }
                         }
                     }
                 },
-                enabled = prompt.isNotBlank() && whenReady,
+                enabled = prompt.isNotBlank() && whenReady && !disabled,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -3036,9 +3043,47 @@ private fun SchedulesSheet(
                     color = MaterialTheme.colorScheme.error
                 )
             }
+            if (disabled) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            configLine,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { clipboard.setText(AnnotatedString(configLine)) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.ContentCopy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.size(6.dp))
+                                Text(stringResource(R.string.chat_schedules_copy))
+                            }
+                            TextButton(
+                                onClick = { reload() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.chat_schedules_recheck))
+                            }
+                        }
+                    }
+                }
+            }
             when {
                 items == null -> CircularProgressIndicator(Modifier.size(24.dp))
-                items!!.isEmpty() -> Text(
+                items!!.isEmpty() && error == null -> Text(
                     stringResource(R.string.chat_schedule_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

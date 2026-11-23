@@ -191,6 +191,9 @@
     <string name="chat_schedule_prompt">Prompt to send</string>
     <string name="chat_schedule_add">Add schedule</string>
     <string name="chat_schedule_empty">No schedules yet.</string>
+    <string name="chat_schedules_disabled_snippet">"experimental": { "schedules": true }</string>
+    <string name="chat_schedules_copy">Copy flag</string>
+    <string name="chat_schedules_recheck">Check again</string>
     <string name="chat_shell">Shell</string>
     <string name="chat_shell_hint">Runs a command in the session\'s directory and shows the output.</string>
     <string name="chat_shell_command">Command</string>
