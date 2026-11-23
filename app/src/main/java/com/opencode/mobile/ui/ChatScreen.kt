@@ -37,6 +37,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -54,6 +55,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,6 +74,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.opencode.mobile.FormField
 import com.opencode.mobile.FormRequest
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -135,6 +138,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -169,7 +173,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
@@ -2872,7 +2878,7 @@ private fun LibrarySheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun SchedulesSheet(
     repo: OpenCodeRepository,
@@ -2881,6 +2887,9 @@ private fun SchedulesSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val clipboard = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.isImeVisible
     val configLine = stringResource(R.string.chat_schedules_disabled_snippet)
     var items by remember { mutableStateOf<List<ScheduleItem>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -2910,9 +2919,23 @@ private fun SchedulesSheet(
 
     LaunchedEffect(sessionID) { reload() }
 
+    // Back closes the keyboard first, then the sheet. Without taking the back
+    // press here the sheet's dialog would dismiss on the first tap while typing.
+    BackHandler {
+        if (imeVisible) {
+            keyboard?.hide()
+            focusManager.clearFocus()
+        } else {
+            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                if (!sheetState.isVisible) onDismiss()
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -3022,6 +3045,8 @@ private fun SchedulesSheet(
                                 prompt = ""
                                 endsTimes = ""
                                 ifRun = ""
+                                keyboard?.hide()
+                                focusManager.clearFocus()
                                 reload()
                             } catch (e: Exception) {
                                 error = friendlyError(e)
@@ -3090,6 +3115,26 @@ private fun SchedulesSheet(
                 )
                 else -> items!!.forEach { schedule ->
                     val paused = schedule.status.contains("pause", ignoreCase = true)
+                    val whenText = when (schedule.whenType) {
+                        "every" -> stringResource(
+                            R.string.chat_schedule_when_every,
+                            compactInterval(schedule.whenValue)
+                        )
+                        "cron" -> stringResource(R.string.chat_schedule_when_cron, schedule.whenValue)
+                        "at" -> stringResource(R.string.chat_schedule_when_at, schedule.whenValue)
+                        "in" -> stringResource(R.string.chat_schedule_when_in, schedule.whenValue)
+                        else -> ""
+                    }
+                    val millisLeft = schedule.nextDueAt - System.currentTimeMillis()
+                    val meta = mutableListOf<String>()
+                    if (whenText.isNotBlank()) meta.add(whenText)
+                    if (schedule.status.isNotBlank()) {
+                        meta.add(schedule.status.replaceFirstChar { it.uppercase() })
+                    }
+                    if (millisLeft > 0) meta.add("+${millisLeft / 60_000}m")
+                    if (schedule.remainingRuns > 0) {
+                        meta.add(stringResource(R.string.chat_schedule_runs_left, schedule.remainingRuns))
+                    }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         shape = RoundedCornerShape(14.dp),
@@ -3107,13 +3152,24 @@ private fun SchedulesSheet(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    schedule.status +
-                                        if (schedule.nextDueAt > System.currentTimeMillis()) {
-                                            " · +" + ((schedule.nextDueAt - System.currentTimeMillis()) / 60_000) + "m"
-                                        } else "",
+                                    meta.joinToString(" · "),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                if (schedule.condition.isNotBlank()) {
+                                    Text(
+                                        stringResource(
+                                            R.string.chat_schedule_condition,
+                                            schedule.condition
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                                 if (schedule.lastOutput.isNotBlank()) {
                                     Text(
                                         schedule.lastOutput.replace('\n', ' '),
@@ -3160,6 +3216,25 @@ private fun SchedulesSheet(
                 }
             }
         }
+    }
+}
+
+/** "60 minutes" -> "1h", "1440 minutes" -> "1d"; free text is kept as-is. */
+private fun compactInterval(value: String): String {
+    val match = Regex("^(\\d+)\\s*(second|minute|hour|day)s?$", RegexOption.IGNORE_CASE)
+        .find(value.trim()) ?: return value
+    val amount = match.groupValues[1].toLongOrNull()?.takeIf { it > 0 } ?: return value
+    val seconds = when (match.groupValues[2].lowercase()) {
+        "second" -> amount
+        "minute" -> amount * 60
+        "hour" -> amount * 3_600
+        else -> amount * 86_400
+    }
+    return when {
+        seconds % 86_400 == 0L -> "${seconds / 86_400}d"
+        seconds % 3_600 == 0L -> "${seconds / 3_600}h"
+        seconds % 60 == 0L -> "${seconds / 60}m"
+        else -> "${seconds}s"
     }
 }
 

@@ -189,6 +189,12 @@
     <string name="chat_schedules_disabled_snippet">"experimental": { "schedules": true }</string>
     <string name="chat_schedules_copy">Копировать флаг</string>
     <string name="chat_schedules_recheck">Проверить снова</string>
+    <string name="chat_schedule_when_every">Каждые %1$s</string>
+    <string name="chat_schedule_when_cron">Cron %1$s</string>
+    <string name="chat_schedule_when_at">Один раз в %1$s</string>
+    <string name="chat_schedule_when_in">Один раз через %1$s</string>
+    <string name="chat_schedule_runs_left">Осталось запусков: %1$d</string>
+    <string name="chat_schedule_condition">только если %1$s</string>
     <string name="chat_shell">Оболочка</string>
     <string name="chat_shell_hint">Выполняет команду в каталоге сессии и показывает вывод.</string>
     <string name="chat_shell_command">Команда</string>

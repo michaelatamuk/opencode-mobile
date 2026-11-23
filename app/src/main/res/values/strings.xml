@@ -194,6 +194,12 @@
     <string name="chat_schedules_disabled_snippet">"experimental": { "schedules": true }</string>
     <string name="chat_schedules_copy">Copy flag</string>
     <string name="chat_schedules_recheck">Check again</string>
+    <string name="chat_schedule_when_every">Every %1$s</string>
+    <string name="chat_schedule_when_cron">Cron %1$s</string>
+    <string name="chat_schedule_when_at">Once at %1$s</string>
+    <string name="chat_schedule_when_in">Once in %1$s</string>
+    <string name="chat_schedule_runs_left">%1$d runs left</string>
+    <string name="chat_schedule_condition">only if %1$s</string>
     <string name="chat_shell">Shell</string>
     <string name="chat_shell_hint">Runs a command in the session\'s directory and shows the output.</string>
     <string name="chat_shell_command">Command</string>

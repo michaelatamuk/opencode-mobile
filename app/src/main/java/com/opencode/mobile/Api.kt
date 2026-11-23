@@ -138,7 +138,15 @@ data class ScheduleItem(
     val status: String,
     val nextDueAt: Long,
     val runCount: Int,
-    val lastOutput: String = ""
+    val lastOutput: String = "",
+    /** "in", "at", "every", or "cron"; blank when the server omits it. */
+    val whenType: String = "",
+    /** The raw value of [whenType], e.g. "1 hour" or "0 9 * * 1-5". */
+    val whenValue: String = "",
+    /** Runs left for a schedule with a stop limit; 0 when unlimited. */
+    val remainingRuns: Int = 0,
+    /** Shell command that must succeed before the wake, when set. */
+    val condition: String = ""
 )
 
 data class McpServer(val name: String, val status: String)
@@ -1040,13 +1048,25 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                 is JSONObject -> raw.optString("type").ifBlank { raw.optString("status") }
                 else -> ""
             }
+            val whenObj = o.optJSONObject("when")
+            val whenType = whenObj?.optString("type").orEmpty()
             ScheduleItem(
                 id = o.optString("id"),
                 prompt = o.optJSONObject("action")?.optString("prompt").orEmpty(),
                 status = status,
                 nextDueAt = o.optLong("nextDueAt"),
                 runCount = o.optInt("runCount"),
-                lastOutput = o.optString("lastOutput")
+                lastOutput = o.optString("lastOutput"),
+                whenType = whenType,
+                whenValue = when (whenType) {
+                    "in" -> whenObj?.optString("in").orEmpty()
+                    "at" -> whenObj?.optString("at").orEmpty()
+                    "every" -> whenObj?.optString("every").orEmpty()
+                    "cron" -> whenObj?.optString("cron").orEmpty()
+                    else -> ""
+                },
+                remainingRuns = o.optInt("remainingRuns"),
+                condition = o.optJSONObject("if")?.optString("run").orEmpty()
             )
         }
     }
