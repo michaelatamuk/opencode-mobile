@@ -168,6 +168,15 @@ data class IntegrationItem(
 
 data class ShellRun(val id: String, val status: String)
 
+/** One command currently running in a workspace directory. */
+data class RunningShell(
+    val id: String,
+    val command: String,
+    val status: String,
+    val startedAt: Long,
+    val sessionID: String = ""
+)
+
 data class VcsInfo(val provider: String, val branch: String, val defaultBranch: String)
 
 data class SkillOption(
@@ -1174,21 +1183,50 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             )
         }
 
-    suspend fun runShell(sessionID: String, command: String): ShellRun =
+    /** Shell commands are location-scoped in V2; the session id rides in metadata. */
+    private fun locationQuery(directory: String): String =
+        if (directory.isBlank()) "" else "?location[directory]=" + Uri.encode(directory)
+
+    suspend fun runningShells(directory: String): List<RunningShell> =
         withContext(Dispatchers.IO) {
-            val data = postJson(
-                "/api/session/$sessionID/shell",
-                JSONObject().put("command", command).toString()
-            ).getJSONObject("data")
+            val data = getJson("/api/shell${locationQuery(directory)}").optJSONArray("data")
+                ?: JSONArray()
+            (0 until data.length()).mapNotNull { i ->
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optString("id")
+                if (id.isBlank()) return@mapNotNull null
+                RunningShell(
+                    id = id,
+                    command = o.optString("command"),
+                    status = o.optString("status"),
+                    startedAt = o.optJSONObject("time")?.optLong("started") ?: 0L,
+                    sessionID = o.optJSONObject("metadata")?.optString("sessionID").orEmpty()
+                )
+            }
+        }
+
+    suspend fun runShell(sessionID: String, directory: String, command: String): ShellRun =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("command", command)
+            if (directory.isNotBlank()) body.put("cwd", directory)
+            body.put("metadata", JSONObject().put("sessionID", sessionID))
+            val data = postJson("/api/shell${locationQuery(directory)}", body.toString())
+                .getJSONObject("data")
             ShellRun(data.optString("id"), data.optString("status"))
         }
 
-    suspend fun shellOutput(shellID: String): String = withContext(Dispatchers.IO) {
-        getJson("/api/shell/$shellID/output")
-            .optJSONObject("data")
-            ?.optString("output")
-            .orEmpty()
-    }
+    suspend fun shellOutput(shellID: String, directory: String): String =
+        withContext(Dispatchers.IO) {
+            getJson("/api/shell/$shellID/output${locationQuery(directory)}")
+                .optJSONObject("data")
+                ?.optString("output")
+                .orEmpty()
+        }
+
+    suspend fun stopShell(shellID: String, directory: String): Unit =
+        withContext(Dispatchers.IO) {
+            deleteEmpty("/api/shell/$shellID${locationQuery(directory)}")
+        }
 
     suspend fun vcsInfo(directory: String): VcsInfo? = withContext(Dispatchers.IO) {
         val query = if (directory.isBlank()) "" else "?location[directory]=" + Uri.encode(directory)

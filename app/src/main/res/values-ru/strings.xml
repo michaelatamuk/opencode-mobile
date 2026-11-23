@@ -202,6 +202,17 @@
     <string name="chat_shell_refresh">Обновить</string>
     <string name="chat_shell_output">Вывод появится здесь.</string>
     <string name="chat_shell_running">Выполняется…</string>
+    <string name="chat_shells_title">Оболочки</string>
+    <string name="chat_shells_hint">Команды, выполняющиеся в этом рабочем каталоге. Нажмите, чтобы смотреть вывод.</string>
+    <string name="chat_shells_running">Сейчас выполняется</string>
+    <string name="chat_shells_empty">Ничего не выполняется.</string>
+    <string name="chat_shell_run_hint">Выполнить команду в каталоге сессии.</string>
+    <plurals name="chat_shells_count">
+        <item quantity="one">%1$d оболочка</item>
+        <item quantity="few">%1$d оболочки</item>
+        <item quantity="many">%1$d оболочек</item>
+        <item quantity="other">%1$d оболочки</item>
+    </plurals>
     <string name="chat_ab">Сравнение моделей</string>
     <string name="chat_compare">Сравнить с исходной</string>
     <string name="chat_compare_original">Исходная ветка</string>

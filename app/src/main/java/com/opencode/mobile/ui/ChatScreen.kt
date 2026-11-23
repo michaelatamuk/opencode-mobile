@@ -179,6 +179,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -206,6 +207,7 @@ import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
+import com.opencode.mobile.RunningShell
 import com.opencode.mobile.ScheduleItem
 import com.opencode.mobile.SchedulesDisabledException
 import com.opencode.mobile.SecurePrefs
@@ -260,6 +262,8 @@ fun ChatScreen(
     var showCompare by remember { mutableStateOf(false) }
     var showSchedules by remember { mutableStateOf(false) }
     var showShell by remember { mutableStateOf(false) }
+    var runningShells by remember { mutableStateOf<List<RunningShell>>(emptyList()) }
+    var shellRefreshKey by remember { mutableStateOf(0) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -593,6 +597,17 @@ fun ChatScreen(
         if (index >= 0) {
             runCatching { listState.scrollToItem(index) }
             restoreKey = null
+        }
+    }
+
+    // Running shells live outside the message stream: a command can outlive the
+    // turn that started it. Poll the workspace list and surface it by the composer.
+    LaunchedEffect(state.directory, shellRefreshKey) {
+        if (state.directory.isBlank()) return@LaunchedEffect
+        while (true) {
+            runningShells = runCatching { repo.runningShells(state.directory) }
+                .getOrDefault(emptyList())
+            delay(3_000)
         }
     }
 
@@ -1035,6 +1050,13 @@ fun ChatScreen(
             state.error?.let { message ->
                 PulsingError(message)
             }
+            if (runningShells.isNotEmpty()) {
+                ShellsPill(
+                    count = runningShells.size,
+                    onClick = { showShell = true },
+                    modifier = Modifier.padding(start = 18.dp, bottom = 2.dp)
+                )
+            }
             Composer(
                 value = input,
                 onValueChange = {
@@ -1263,7 +1285,9 @@ fun ChatScreen(
         ShellSheet(
             repo = repo,
             sessionID = sessionID,
-            onDismiss = { showShell = false }
+            directory = state.directory,
+            onDismiss = { showShell = false },
+            onShellsChanged = { shellRefreshKey++ }
         )
     }
 
@@ -3238,20 +3262,75 @@ private fun compactInterval(value: String): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShellsPill(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(pluralStringResource(R.plurals.chat_shells_count, count, count)) },
+        leadingIcon = {
+            PulsingDot(color = MaterialTheme.colorScheme.primary, pulsing = true, size = 6)
+        },
+        modifier = modifier
+    )
+}
+
+/** "5:54" under an hour, "1:02:03" above it. */
+private fun elapsedLabel(startedAt: Long): String {
+    if (startedAt <= 0L) return ""
+    val total = ((System.currentTimeMillis() - startedAt).coerceAtLeast(0L)) / 1_000
+    return if (total >= 3_600) {
+        "%d:%02d:%02d".format(total / 3_600, (total % 3_600) / 60, total % 60)
+    } else {
+        "%d:%02d".format(total / 60, total % 60)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ShellSheet(
     repo: OpenCodeRepository,
     sessionID: String,
-    onDismiss: () -> Unit
+    directory: String,
+    onDismiss: () -> Unit,
+    onShellsChanged: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.isImeVisible
     var command by remember { mutableStateOf("") }
+    var shells by remember { mutableStateOf<List<RunningShell>>(emptyList()) }
+    var selectedID by remember { mutableStateOf<String?>(null) }
     var output by remember { mutableStateOf<String?>(null) }
-    var shellID by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun refreshShells() {
+        scope.launch {
+            runCatching { repo.runningShells(directory) }
+                .onSuccess { shells = it }
+        }
+    }
+
+    LaunchedEffect(directory) {
+        while (true) {
+            runCatching { repo.runningShells(directory) }
+                .onSuccess { shells = it }
+            delay(2_000)
+        }
+    }
+
+    val selected = shells.firstOrNull { it.id == selectedID }
+    LaunchedEffect(selectedID, selected == null) {
+        val id = selectedID ?: return@LaunchedEffect
+        while (true) {
+            output = runCatching { repo.shellOutput(id, directory) }
+                .getOrDefault(output ?: "")
+            if (selected == null) break
+            delay(1_500)
+        }
+    }
 
     fun run() {
         if (command.isBlank() || running) return
@@ -3259,10 +3338,15 @@ private fun ShellSheet(
         error = null
         scope.launch {
             try {
-                val shell = repo.runShell(sessionID, command.trim())
-                shellID = shell.id
-                delay(800)
-                output = repo.shellOutput(shell.id)
+                val shell = repo.runShell(sessionID, directory, command.trim())
+                command = ""
+                keyboard?.hide()
+                focusManager.clearFocus()
+                selectedID = shell.id
+                output = runCatching { repo.shellOutput(shell.id, directory) }
+                    .getOrDefault("")
+                onShellsChanged()
+                refreshShells()
             } catch (e: Exception) {
                 error = friendlyError(e)
             } finally {
@@ -3271,9 +3355,33 @@ private fun ShellSheet(
         }
     }
 
+    fun stop(id: String) {
+        scope.launch {
+            runCatching { repo.stopShell(id, directory) }
+            if (selectedID == id) {
+                selectedID = null
+                output = null
+            }
+            onShellsChanged()
+            refreshShells()
+        }
+    }
+
+    BackHandler {
+        if (imeVisible) {
+            keyboard?.hide()
+            focusManager.clearFocus()
+        } else {
+            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                if (!sheetState.isVisible) onDismiss()
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -3286,11 +3394,80 @@ private fun ShellSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                stringResource(R.string.chat_shell),
+                stringResource(R.string.chat_shells_title),
                 style = MaterialTheme.typography.headlineSmall
             )
             Text(
-                stringResource(R.string.chat_shell_hint),
+                stringResource(R.string.chat_shells_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (shells.isEmpty()) {
+                Text(
+                    stringResource(R.string.chat_shells_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    stringResource(R.string.chat_shells_running),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                shells.forEach { shell ->
+                    Surface(
+                        color = if (shell.id == selectedID) {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedID = shell.id }
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PulsingDot(
+                                color = MaterialTheme.colorScheme.primary,
+                                pulsing = true,
+                                size = 6
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                shell.command.replace('\n', ' '),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                elapsedLabel(shell.startedAt),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            IconButton(
+                                onClick = { stop(shell.id) },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Stop,
+                                    contentDescription = stringResource(R.string.action_stop),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            Text(
+                stringResource(R.string.chat_shell_run_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -3301,26 +3478,12 @@ private fun ShellSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { run() },
-                    enabled = command.isNotBlank() && !running,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(stringResource(R.string.chat_shell_run))
-                }
-                OutlinedButton(
-                    onClick = {
-                        val id = shellID ?: return@OutlinedButton
-                        scope.launch {
-                            output = runCatching { repo.shellOutput(id) }.getOrDefault(output ?: "")
-                        }
-                    },
-                    enabled = shellID != null,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text(stringResource(R.string.chat_shell_refresh))
-                }
+            Button(
+                onClick = { run() },
+                enabled = command.isNotBlank() && !running,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(stringResource(R.string.chat_shell_run))
             }
             if (error != null) {
                 Text(
@@ -3335,9 +3498,22 @@ private fun ShellSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(12.dp)) {
+                    if (selected != null) {
+                        Text(
+                            selected.command.replace('\n', ' '),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(6.dp))
+                    }
                     Text(
-                        output ?: if (running) stringResource(R.string.chat_shell_running)
-                        else stringResource(R.string.chat_shell_output),
+                        output ?: if (running || selected != null) {
+                            stringResource(R.string.chat_shell_running)
+                        } else {
+                            stringResource(R.string.chat_shell_output)
+                        },
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.5.sp,
                         lineHeight = 16.sp

@@ -207,6 +207,15 @@
     <string name="chat_shell_refresh">Refresh</string>
     <string name="chat_shell_output">Output appears here.</string>
     <string name="chat_shell_running">Running…</string>
+    <string name="chat_shells_title">Shells</string>
+    <string name="chat_shells_hint">Commands running in this workspace. Tap one to follow its output.</string>
+    <string name="chat_shells_running">Running now</string>
+    <string name="chat_shells_empty">Nothing is running.</string>
+    <string name="chat_shell_run_hint">Run a command in the session\'s directory.</string>
+    <plurals name="chat_shells_count">
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
+    </plurals>
     <string name="chat_ab">Model A/B</string>
     <string name="chat_compare">Compare with original</string>
     <string name="chat_compare_original">Original branch</string>

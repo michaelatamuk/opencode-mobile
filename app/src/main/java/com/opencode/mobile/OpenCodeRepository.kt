@@ -121,10 +121,17 @@ class OpenCodeRepository(val api: Api) {
     suspend fun connectIntegrationKey(id: String, key: String) =
         api.connectIntegrationKey(id, key)
 
-    suspend fun runShell(sessionID: String, command: String): ShellRun =
-        api.runShell(sessionID, command)
+    suspend fun runningShells(directory: String): List<RunningShell> =
+        api.runningShells(directory)
 
-    suspend fun shellOutput(shellID: String): String = api.shellOutput(shellID)
+    suspend fun runShell(sessionID: String, directory: String, command: String): ShellRun =
+        api.runShell(sessionID, directory, command)
+
+    suspend fun shellOutput(shellID: String, directory: String): String =
+        api.shellOutput(shellID, directory)
+
+    suspend fun stopShell(shellID: String, directory: String): Unit =
+        api.stopShell(shellID, directory)
 
     suspend fun vcsInfo(directory: String): VcsInfo? = api.vcsInfo(directory)
 
