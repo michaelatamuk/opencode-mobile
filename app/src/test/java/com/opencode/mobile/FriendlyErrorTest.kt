@@ -37,6 +37,14 @@ class FriendlyErrorTest {
     }
 
     @Test
+    fun `a workspace with automations disabled says so`() {
+        assertEquals(
+            "Schedules are disabled for this workspace. Set \"automations\": true in the server config, then check again.",
+            friendlyError(AutomationsDisabledException())
+        )
+    }
+
+    @Test
     fun `a server without schedule routes says so`() {
         assertEquals(SchedulesUnsupportedException::class.java, scheduleFailure(ApiException(404, "")).javaClass)
         assertEquals(

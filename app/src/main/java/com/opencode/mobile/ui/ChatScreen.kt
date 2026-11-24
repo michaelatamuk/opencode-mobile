@@ -207,6 +207,7 @@ import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
+import com.opencode.mobile.ApiException
 import com.opencode.mobile.RunningShell
 import com.opencode.mobile.ScheduleItem
 import com.opencode.mobile.SchedulesDisabledException
@@ -2918,6 +2919,7 @@ private fun SchedulesSheet(
     var items by remember { mutableStateOf<List<ScheduleItem>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var disabled by remember { mutableStateOf(false) }
+    var useAutomations by remember { mutableStateOf(true) }
     var prompt by remember { mutableStateOf("") }
     var minutes by remember { mutableStateOf(60) }
     var mode by remember { mutableStateOf("interval") }
@@ -2930,13 +2932,28 @@ private fun SchedulesSheet(
     fun reload() {
         scope.launch {
             try {
-                items = repo.schedules(sessionID)
+                items = repo.automations(sessionID)
+                useAutomations = true
                 error = null
                 disabled = false
             } catch (e: Exception) {
-                error = friendlyError(e)
-                disabled = e is SchedulesDisabledException
-                items = emptyList()
+                // OpenCode before 2.4 has no automation API; keep those servers working.
+                if (e is ApiException && (e.status == 404 || e.status == 405)) {
+                    try {
+                        items = repo.schedules(sessionID)
+                        useAutomations = false
+                        error = null
+                        disabled = false
+                    } catch (legacy: Exception) {
+                        error = friendlyError(legacy)
+                        disabled = legacy is SchedulesDisabledException
+                        items = emptyList()
+                    }
+                } else {
+                    error = friendlyError(e)
+                    disabled = false
+                    items = emptyList()
+                }
             }
         }
     }
@@ -3030,42 +3047,59 @@ private fun SchedulesSheet(
                 "cron" -> cron.isNotBlank()
                 else -> at.isNotBlank()
             }
-            OutlinedTextField(
-                value = endsTimes,
-                onValueChange = { endsTimes = it.filter { c -> c.isDigit() }.take(3) },
-                label = { Text("Stop after N runs (optional)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = ifRun,
-                onValueChange = { ifRun = it },
-                label = { Text("Wake only if this command succeeds (optional)") },
-                placeholder = { Text("git diff --quiet") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (!useAutomations) {
+                OutlinedTextField(
+                    value = endsTimes,
+                    onValueChange = { endsTimes = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("Stop after N runs (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = ifRun,
+                    onValueChange = { ifRun = it },
+                    label = { Text("Wake only if this command succeeds (optional)") },
+                    placeholder = { Text("git diff --quiet") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             Button(
                 onClick = {
                     if (prompt.isNotBlank() && whenReady) {
                         scope.launch {
                             try {
-                                val spec = when (mode) {
-                                    "cron" -> org.json.JSONObject().put("cron", cron.trim())
-                                    "at" -> org.json.JSONObject().put("at", at.trim())
-                                    else -> org.json.JSONObject()
-                                        .put("every", "$minutes minutes")
+                                if (useAutomations) {
+                                    val trigger = when (mode) {
+                                        "cron" -> org.json.JSONObject()
+                                            .put("type", "cron")
+                                            .put("cron", cron.trim())
+                                        "at" -> org.json.JSONObject()
+                                            .put("type", "at")
+                                            .put("at", at.trim())
+                                        else -> org.json.JSONObject()
+                                            .put("type", "every")
+                                            .put("every", "$minutes minutes")
+                                    }
+                                    repo.createAutomation(sessionID, prompt.trim(), trigger)
+                                } else {
+                                    val spec = when (mode) {
+                                        "cron" -> org.json.JSONObject().put("cron", cron.trim())
+                                        "at" -> org.json.JSONObject().put("at", at.trim())
+                                        else -> org.json.JSONObject()
+                                            .put("every", "$minutes minutes")
+                                    }
+                                    endsTimes.toIntOrNull()?.takeIf { it > 0 }?.let { times ->
+                                        spec.put("ends", org.json.JSONObject().put("times", times))
+                                    }
+                                    if (ifRun.isNotBlank()) {
+                                        spec.put(
+                                            "if",
+                                            org.json.JSONObject().put("run", ifRun.trim())
+                                        )
+                                    }
+                                    repo.createSchedule(sessionID, prompt.trim(), spec)
                                 }
-                                endsTimes.toIntOrNull()?.takeIf { it > 0 }?.let { times ->
-                                    spec.put("ends", org.json.JSONObject().put("times", times))
-                                }
-                                if (ifRun.isNotBlank()) {
-                                    spec.put(
-                                        "if",
-                                        org.json.JSONObject().put("run", ifRun.trim())
-                                    )
-                                }
-                                repo.createSchedule(sessionID, prompt.trim(), spec)
                                 prompt = ""
                                 endsTimes = ""
                                 ifRun = ""
@@ -3207,7 +3241,13 @@ private fun SchedulesSheet(
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        runCatching { repo.setSchedulePaused(schedule.id, !paused) }
+                                        runCatching {
+                                            if (useAutomations) {
+                                                repo.setAutomationPaused(schedule.id, !paused)
+                                            } else {
+                                                repo.setSchedulePaused(schedule.id, !paused)
+                                            }
+                                        }
                                         reload()
                                     }
                                 },
@@ -3222,7 +3262,13 @@ private fun SchedulesSheet(
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        runCatching { repo.deleteSchedule(schedule.id) }
+                                        runCatching {
+                                            if (useAutomations) {
+                                                repo.deleteAutomation(schedule.id)
+                                            } else {
+                                                repo.deleteSchedule(schedule.id)
+                                            }
+                                        }
                                         reload()
                                     }
                                 },

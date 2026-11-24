@@ -98,6 +98,19 @@ class OpenCodeRepository(val api: Api) {
     suspend fun updateInbox(sessionID: String, inboxID: String, delivery: String) =
         api.updateInbox(sessionID, inboxID, delivery)
 
+    suspend fun automations(sessionID: String): List<ScheduleItem> = api.automations(sessionID)
+
+    suspend fun createAutomation(
+        sessionID: String,
+        prompt: String,
+        trigger: org.json.JSONObject
+    ) = api.createAutomation(sessionID, prompt, trigger)
+
+    suspend fun setAutomationPaused(automationID: String, paused: Boolean) =
+        api.setAutomationPaused(automationID, paused)
+
+    suspend fun deleteAutomation(automationID: String) = api.deleteAutomation(automationID)
+
     suspend fun schedules(sessionID: String): List<ScheduleItem> = api.schedules(sessionID)
 
     suspend fun createSchedule(sessionID: String, prompt: String, whenSpec: org.json.JSONObject) =

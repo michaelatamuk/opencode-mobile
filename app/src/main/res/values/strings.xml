@@ -187,7 +187,7 @@
     <string name="chat_queue_edit_title">Edit queued message</string>
     <string name="chat_attach_file">Attach file</string>
     <string name="chat_schedules">Schedules</string>
-    <string name="chat_schedules_hint">Wake this session later or on an interval. Requires experimental.schedules on the server.</string>
+    <string name="chat_schedules_hint">Wake this session later or on an interval. Runs on the server.</string>
     <string name="chat_schedule_prompt">Prompt to send</string>
     <string name="chat_schedule_add">Add schedule</string>
     <string name="chat_schedule_empty">No schedules yet.</string>

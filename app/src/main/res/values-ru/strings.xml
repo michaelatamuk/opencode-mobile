@@ -182,7 +182,7 @@
     <string name="chat_queue_edit_title">Изменить сообщение в очереди</string>
     <string name="chat_attach_file">Прикрепить файл</string>
     <string name="chat_schedules">Расписания</string>
-    <string name="chat_schedules_hint">Разбудить сессию позже или по интервалу. Требует experimental.schedules на сервере.</string>
+    <string name="chat_schedules_hint">Разбудить сессию позже или по интервалу. Выполняется на сервере.</string>
     <string name="chat_schedule_prompt">Запрос для отправки</string>
     <string name="chat_schedule_add">Добавить расписание</string>
     <string name="chat_schedule_empty">Расписаний пока нет.</string>

@@ -209,6 +209,11 @@ class SchedulesUnsupportedException : Exception(
     "This server version has no schedules. Update OpenCode on the computer."
 )
 
+/** 2.4+ calls them automations; the workspace can turn them off. */
+class AutomationsDisabledException : Exception(
+    "Schedules are disabled for this workspace. Set \"automations\": true in the server config, then check again."
+)
+
 /** 403/404 on schedule routes mean a missing feature, not bad credentials. */
 internal fun scheduleFailure(error: ApiException): Exception = when (error.status) {
     403 -> SchedulesDisabledException()
@@ -372,7 +377,8 @@ object Pairing {
 
 /** A user-facing message for any failure from the API. */
 fun friendlyError(error: Throwable): String = when (error) {
-    is SchedulesDisabledException, is SchedulesUnsupportedException ->
+    is SchedulesDisabledException, is SchedulesUnsupportedException,
+    is AutomationsDisabledException ->
         error.message ?: "Schedules are unavailable on this server"
 
     is ApiException -> when (error.status) {
@@ -1042,14 +1048,9 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             )
         }
 
-    suspend fun schedules(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
-        val payload = try {
-            getJson("/api/experimental/schedule?sessionID=${Uri.encode(sessionID)}")
-        } catch (e: ApiException) {
-            throw scheduleFailure(e)
-        }
+    private fun parseScheduleItems(payload: JSONObject, whenKey: String): List<ScheduleItem> {
         val data = payload.optJSONArray("data") ?: JSONArray()
-        (0 until data.length()).map { i ->
+        return (0 until data.length()).map { i ->
             val o = data.getJSONObject(i)
             val raw = o.opt("status")
             val status = when (raw) {
@@ -1057,11 +1058,13 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                 is JSONObject -> raw.optString("type").ifBlank { raw.optString("status") }
                 else -> ""
             }
-            val whenObj = o.optJSONObject("when")
+            val whenObj = o.optJSONObject(whenKey)
             val whenType = whenObj?.optString("type").orEmpty()
+            val action = o.optJSONObject("action")
             ScheduleItem(
                 id = o.optString("id"),
-                prompt = o.optJSONObject("action")?.optString("prompt").orEmpty(),
+                prompt = action?.optString("prompt").orEmpty()
+                    .ifBlank { o.optString("name") },
                 status = status,
                 nextDueAt = o.optLong("nextDueAt"),
                 runCount = o.optInt("runCount"),
@@ -1078,6 +1081,57 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                 condition = o.optJSONObject("if")?.optString("run").orEmpty()
             )
         }
+    }
+
+    /** OpenCode 2.4 replaced experimental schedules with experimental automations. */
+    suspend fun automations(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
+        val payload = try {
+            getJson("/api/experimental/automation?sessionID=${Uri.encode(sessionID)}")
+        } catch (e: ApiException) {
+            if (e.status == 403) throw AutomationsDisabledException() else throw e
+        }
+        parseScheduleItems(payload, "trigger")
+    }
+
+    suspend fun schedules(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
+        val payload = try {
+            getJson("/api/experimental/schedule?sessionID=${Uri.encode(sessionID)}")
+        } catch (e: ApiException) {
+            throw scheduleFailure(e)
+        }
+        parseScheduleItems(payload, "when")
+    }
+
+    suspend fun createAutomation(
+        sessionID: String,
+        prompt: String,
+        trigger: JSONObject
+    ): Unit = withContext(Dispatchers.IO) {
+        val action = JSONObject()
+            .put("type", "prompt")
+            .put("prompt", prompt)
+            .put("to", JSONObject().put("session", sessionID))
+        val body = JSONObject()
+            .put("sessionID", sessionID)
+            .put("name", prompt.replace('\n', ' ').take(80))
+            .put("trigger", trigger)
+            .put("action", action)
+        try {
+            postJson("/api/experimental/automation", body.toString())
+        } catch (e: ApiException) {
+            if (e.status == 403) throw AutomationsDisabledException() else throw e
+        }
+        Unit
+    }
+
+    suspend fun setAutomationPaused(automationID: String, paused: Boolean): Unit =
+        withContext(Dispatchers.IO) {
+            val action = if (paused) "pause" else "resume"
+            postEmpty("/api/experimental/automation/$automationID/$action", "{}")
+        }
+
+    suspend fun deleteAutomation(automationID: String): Unit = withContext(Dispatchers.IO) {
+        deleteEmpty("/api/experimental/automation/$automationID")
     }
 
     suspend fun createSchedule(
