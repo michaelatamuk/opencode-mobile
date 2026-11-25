@@ -25,8 +25,14 @@
     <string name="sessions_mission_control">Mission Control</string>
     <string name="sessions_needs_you">Needs you</string>
     <string name="sessions_add_computer">Add computer</string>
-    <string name="sessions_switch_machine">Switch machine</string>
-    <string name="sessions_on_machine">On %1$s</string>
+    <string name="sessions_computers">Computers</string>
+    <string name="sessions_computers_hint">Sessions come from one computer at a time. Switch here, or add another.</string>
+    <string name="sessions_active">Active</string>
+    <string name="sessions_checking">checking…</string>
+    <string name="sessions_offline">offline</string>
+    <string name="sessions_machine_stats">%1$d sessions · $%2$.2f today</string>
+    <string name="sessions_notifications_always">notifications: always</string>
+    <string name="sessions_notifications_finish">notifications: finish only</string>
     <string name="sessions_automations">Automations</string>
     <string name="automations_new">New automation</string>
     <string name="automations_hint">Every automation across sessions. Runs on the server.</string>

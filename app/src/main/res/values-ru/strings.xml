@@ -23,8 +23,14 @@
     <string name="sessions_mission_control">Центр управления</string>
     <string name="sessions_needs_you">Нужно решение</string>
     <string name="sessions_add_computer">Добавить компьютер</string>
-    <string name="sessions_switch_machine">Сменить компьютер</string>
-    <string name="sessions_on_machine">На %1$s</string>
+    <string name="sessions_computers">Компьютеры</string>
+    <string name="sessions_computers_hint">Сессии относятся к одному компьютеру. Переключитесь здесь или добавьте новый.</string>
+    <string name="sessions_active">Активен</string>
+    <string name="sessions_checking">проверка…</string>
+    <string name="sessions_offline">не в сети</string>
+    <string name="sessions_machine_stats">%1$d сессий · $%2$.2f сегодня</string>
+    <string name="sessions_notifications_always">уведомления: всегда</string>
+    <string name="sessions_notifications_finish">уведомления: только завершение</string>
     <string name="sessions_automations">Автоматизации</string>
     <string name="automations_new">Новая автоматизация</string>
     <string name="automations_hint">Все автоматизации по сессиям. Выполняются на сервере.</string>
