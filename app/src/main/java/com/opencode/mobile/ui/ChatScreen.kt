@@ -1237,7 +1237,7 @@ fun ChatScreen(
                     )
                 }
             }
-            val hasChips = state.busy || runningShells.isNotEmpty() ||
+            val hasChips = runningShells.isNotEmpty() ||
                 runningJobs.isNotEmpty() || planTodos != null || contextFraction >= 0.6f
             if (hasChips) {
                 FlowRow(
@@ -1245,13 +1245,6 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    if (state.busy) {
-                        LiveStatusStrip(
-                            busy = true,
-                            messages = state.messages,
-                            onBackground = { vm.background() }
-                        )
-                    }
                     if (runningShells.isNotEmpty() || runningJobs.isNotEmpty()) {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1353,6 +1346,14 @@ fun ChatScreen(
                     "steer"
                 },
                 onDeliveryChange = { mode -> steerMode = mode == "steer" },
+                status = {
+                    if (state.busy) {
+                        ComposerStatus(
+                            messages = state.messages,
+                            onBackground = { vm.background() }
+                        )
+                    }
+                },
                 onAttach = {
                     picker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -5287,13 +5288,10 @@ private fun UnreadSeparator() {
 }
 
 @Composable
-private fun LiveStatusStrip(
-    busy: Boolean,
+private fun ComposerStatus(
     messages: List<Msg>,
-    onBackground: () -> Unit,
-    modifier: Modifier = Modifier
+    onBackground: () -> Unit
 ) {
-    if (!busy) return
     // Pending assistant messages are the live turn. Taking trailing messages up to
     // the last user message breaks after a steer prompt, and resetting the timer to
     // zero whenever no assistant message exists yet leaves "Working 0s" on screen.
@@ -5305,9 +5303,8 @@ private fun LiveStatusStrip(
             ?.name
     }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    var busySince by remember { mutableStateOf(0L) }
-    LaunchedEffect(busy) {
-        busySince = System.currentTimeMillis()
+    val busySince = remember { System.currentTimeMillis() }
+    LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
             delay(1000)
@@ -5327,42 +5324,39 @@ private fun LiveStatusStrip(
     val canBackground = tool != null &&
         tool.lowercase() in setOf("bash", "shell", "codemode", "code", "job")
 
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(50),
-        modifier = modifier
+    // A quiet one-line status inside the composer beats a floating pill above it.
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 10.dp, top = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            Modifier.padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (tool != null) {
-                ActivityBars(color = MaterialTheme.colorScheme.onSecondaryContainer)
-            } else {
-                TypingIndicator(compact = true)
-            }
-            Spacer(Modifier.width(8.dp))
+        if (tool != null) {
+            ActivityBars(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            TypingIndicator(compact = true)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        // Detach only tools that can actually run in the background.
+        if (canBackground) {
+            Spacer(Modifier.width(6.dp))
             Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 210.dp)
+                stringResource(R.string.chat_background),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onBackground)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             )
-            // Detach only tools that can actually run in the background.
-            if (canBackground) {
-                TextButton(
-                    onClick = onBackground,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.chat_background),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-            }
         }
     }
 }

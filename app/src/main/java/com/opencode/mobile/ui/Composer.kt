@@ -90,6 +90,7 @@ fun Composer(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     maxAttachments: Int = 8,
+    status: (@Composable () -> Unit)? = null,
     onVoice: (() -> Unit)? = null,
     onAttachFile: (() -> Unit)? = null,
     onCamera: (() -> Unit)? = null,
@@ -193,6 +194,11 @@ fun Composer(
                         }
                     }
                 }
+            }
+
+            // Live turn state lives with the input, not as a separate floating bubble.
+            if (status != null) {
+                status()
             }
 
             Row(
