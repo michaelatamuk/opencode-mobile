@@ -17,6 +17,14 @@ object PinnedStore {
         prefs.edit().putStringSet(KEY, current).apply()
         return current
     }
+
+    fun set(context: Context, sessionID: String, on: Boolean): Set<String> {
+        val prefs = SecurePrefs.get(context)
+        val current = prefs.getStringSet(KEY, emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (on) current.add(sessionID) else current.remove(sessionID)
+        prefs.edit().putStringSet(KEY, current).apply()
+        return current
+    }
 }
 
 /** Sessions whose notifications the user silenced. */
@@ -31,6 +39,14 @@ object MutedStore {
         val prefs = SecurePrefs.get(context)
         val current = prefs.getStringSet(KEY, emptySet())?.toMutableSet() ?: mutableSetOf()
         if (!current.add(sessionID)) current.remove(sessionID)
+        prefs.edit().putStringSet(KEY, current).apply()
+        return current
+    }
+
+    fun set(context: Context, sessionID: String, on: Boolean): Set<String> {
+        val prefs = SecurePrefs.get(context)
+        val current = prefs.getStringSet(KEY, emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (on) current.add(sessionID) else current.remove(sessionID)
         prefs.edit().putStringSet(KEY, current).apply()
         return current
     }

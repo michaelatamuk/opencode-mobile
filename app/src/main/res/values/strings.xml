@@ -25,7 +25,12 @@
     <string name="sessions_mission_control">Mission Control</string>
     <string name="sessions_needs_you">Needs you</string>
     <string name="sessions_add_computer">Add computer</string>
+    <string name="sessions_select">Select sessions</string>
+    <string name="sessions_select_all">All</string>
+    <string name="sessions_bulk_delete_title">Delete %1$d sessions?</string>
+    <string name="sessions_bulk_delete_body">The sessions and their history are removed from the server.</string>
     <string name="sessions_needs_you_open">Open</string>
+    <string name="sessions_review">Review</string>
     <string name="sessions_run_failed">Run failed</string>
     <string name="sessions_needs_you_more">+%1$d more</string>
     <string name="sessions_finished_since">Finished since you left</string>

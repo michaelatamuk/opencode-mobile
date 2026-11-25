@@ -242,6 +242,7 @@ private fun Root() {
     var watchdogMinutes by remember { mutableStateOf(prefs.getInt("watchdog_minutes", 0)) }
     var persistentWatch by remember { mutableStateOf(prefs.getBoolean("watch_persistent", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
+    var reviewAfterOpen by rememberSaveable { mutableStateOf<String?>(null) }
     val profileRevision by ProfileStore.revision.collectAsState()
     val profiles = remember(profileRevision) { ProfileStore.all(context) }
     val activeProfileID = remember(profileRevision) {
@@ -450,6 +451,11 @@ private fun Root() {
                     activeProfileID = activeProfileID,
                     onSwitchProfile = switchProfile,
                     onOpen = { openSessionID = it.id; draft = false },
+                    onReview = { session ->
+                        reviewAfterOpen = session.id
+                        openSessionID = session.id
+                        draft = false
+                    },
                     onSettings = { settingsOpen = true },
                     onNewSession = { openSessionID = null; draft = true },
                     modifier = Modifier.weight(0.42f)
@@ -462,6 +468,9 @@ private fun Root() {
                         showBack = false,
                         onBack = { openSessionID = null; draft = false },
                         onSessionCreated = { id -> draft = false; openSessionID = id },
+                        openDiffFirst = reviewAfterOpen != null &&
+                            reviewAfterOpen == openSessionID,
+                        onDiffOpened = { reviewAfterOpen = null },
                         modifier = Modifier.weight(0.58f)
                     )
                 } else {
@@ -490,6 +499,11 @@ private fun Root() {
                         activeProfileID = activeProfileID,
                         onSwitchProfile = switchProfile,
                         onOpen = { openSessionID = it.id; draft = false },
+                        onReview = { session ->
+                            reviewAfterOpen = session.id
+                            openSessionID = session.id
+                            draft = false
+                        },
                         onSettings = { settingsOpen = true },
                         onNewSession = { openSessionID = null; draft = true }
                     )
@@ -499,7 +513,10 @@ private fun Root() {
                         sessionID = if (key == "draft") null else key.toString(),
                         showBack = true,
                         onBack = { openSessionID = null; draft = false },
-                        onSessionCreated = { id -> draft = false; openSessionID = id }
+                        onSessionCreated = { id -> draft = false; openSessionID = id },
+                        openDiffFirst = reviewAfterOpen != null &&
+                            reviewAfterOpen == key.toString(),
+                        onDiffOpened = { reviewAfterOpen = null }
                     )
                 }
             }

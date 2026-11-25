@@ -23,7 +23,12 @@
     <string name="sessions_mission_control">Центр управления</string>
     <string name="sessions_needs_you">Нужно решение</string>
     <string name="sessions_add_computer">Добавить компьютер</string>
+    <string name="sessions_select">Выбрать сессии</string>
+    <string name="sessions_select_all">Все</string>
+    <string name="sessions_bulk_delete_title">Удалить сессии: %1$d?</string>
+    <string name="sessions_bulk_delete_body">Сессии и их история будут удалены с сервера.</string>
     <string name="sessions_needs_you_open">Открыть</string>
+    <string name="sessions_review">Проверить</string>
     <string name="sessions_run_failed">Запуск не удался</string>
     <string name="sessions_needs_you_more">Ещё %1$d</string>
     <string name="sessions_finished_since">Завершились без вас</string>

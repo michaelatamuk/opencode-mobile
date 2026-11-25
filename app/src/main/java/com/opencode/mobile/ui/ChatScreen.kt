@@ -245,6 +245,8 @@ fun ChatScreen(
     showBack: Boolean,
     onBack: () -> Unit,
     onSessionCreated: (String) -> Unit,
+    openDiffFirst: Boolean = false,
+    onDiffOpened: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -257,7 +259,7 @@ fun ChatScreen(
     var input by remember(sessionID) { mutableStateOf(DraftStore.get(context, sessionID)) }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
     var showTune by remember { mutableStateOf(false) }
-    var showDiff by remember { mutableStateOf(false) }
+    var showDiff by remember { mutableStateOf(openDiffFirst) }
     var searchOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var menuOpen by remember { mutableStateOf(false) }
@@ -281,6 +283,13 @@ fun ChatScreen(
     var shellRefreshKey by remember { mutableStateOf(0) }
     var dismissedRunId by remember { mutableStateOf<String?>(null) }
     var steerMode by remember { mutableStateOf(true) }
+    LaunchedEffect(openDiffFirst) {
+        if (openDiffFirst) {
+            showDiff = true
+            onDiffOpened()
+        }
+    }
+
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()

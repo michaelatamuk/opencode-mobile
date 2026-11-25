@@ -44,8 +44,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Close
@@ -108,6 +114,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.MutedStore
 import com.opencode.mobile.MutedProjectStore
+import com.opencode.mobile.Api
 import com.opencode.mobile.DraftStore
 import com.opencode.mobile.FormRequest
 import com.opencode.mobile.OpenCodeRepository
@@ -127,8 +134,12 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class SessionGroup { Today, Yesterday, Week, Earlier }
 
@@ -159,6 +170,7 @@ fun SessionListScreen(
     activeProfileID: String,
     onSwitchProfile: (String) -> Unit,
     onOpen: (SessionItem) -> Unit,
+    onReview: (SessionItem) -> Unit,
     onSettings: () -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier
@@ -188,6 +200,10 @@ fun SessionListScreen(
     var finishedMeta by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var showTemplates by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var confirmBulkDelete by remember { mutableStateOf(false) }
+    var profileStats by remember { mutableStateOf<Map<String, ProfileStat>>(emptyMap()) }
     val activeProfile = profiles.firstOrNull { it.id == activeProfileID }
     var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingPermissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
@@ -241,6 +257,60 @@ fun SessionListScreen(
             runCatching { repo.reply(request.sessionID, request.id, decision) }
             pendingPermissions = pendingPermissions.filterNot { it.id == request.id }
         }
+    }
+
+    fun exitSelection() {
+        selectionMode = false
+        selectedIds = emptySet()
+    }
+
+    fun bulkPin() {
+        selectedIds.forEach { PinnedStore.set(context, it, true) }
+        pinned = PinnedStore.all(context)
+        exitSelection()
+    }
+
+    fun bulkMute() {
+        selectedIds.forEach { MutedStore.set(context, it, true) }
+        muted = MutedStore.all(context)
+        exitSelection()
+    }
+
+    fun bulkArchive() {
+        selectedIds.forEach { vm.archive(it, true) }
+        exitSelection()
+    }
+
+    fun bulkDelete() {
+        val ids = selectedIds
+        exitSelection()
+        ids.forEach { vm.delete(it) }
+    }
+
+    BackHandler(enabled = selectionMode) { exitSelection() }
+
+    LaunchedEffect(profileMenu, profiles) {
+        if (!profileMenu) return@LaunchedEffect
+        val start = java.time.LocalDate.now()
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        val stats = withContext(Dispatchers.IO) {
+            profiles.map { profile ->
+                async {
+                    profile.id to runCatching {
+                        val list = Api(profile.server, profile.password, profile.fallback)
+                            .sessions()
+                        ProfileStat(
+                            online = true,
+                            cost = list.filter { it.updated >= start }.sumOf { it.cost },
+                            sessions = list.size
+                        )
+                    }.getOrElse { ProfileStat(false, 0.0, 0) }
+                }
+            }.awaitAll().toMap()
+        }
+        profileStats = stats
     }
 
     val scoped = remember(state.sessions, projectFilter, showArchived, state.pendingDelete) {
@@ -487,6 +557,35 @@ fun SessionListScreen(
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
+                                                    val stat = profileStats[profile.id]
+                                                    Text(
+                                                        buildString {
+                                                            when {
+                                                                stat == null -> append("checking…")
+                                                                !stat.online -> append("offline")
+                                                                else -> append(
+                                                                    "online · \$%.2f today · %d sessions"
+                                                                        .format(stat.cost, stat.sessions)
+                                                                )
+                                                            }
+                                                            append(" · ")
+                                                            append(
+                                                                if (profile.persistentWatch) {
+                                                                    "notifications: always"
+                                                                } else {
+                                                                    "notifications: finish only"
+                                                                }
+                                                            )
+                                                        },
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (stat?.online == false) {
+                                                            MaterialTheme.colorScheme.error
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                        },
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
                                                 }
                                             },
                                             trailingIcon = {
@@ -539,6 +638,19 @@ fun SessionListScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                    if (history.isNotEmpty() && !selectionMode) {
+                        IconButton(onClick = {
+                            selectionMode = true
+                            selectedIds = emptySet()
+                        }) {
+                            Icon(
+                                Icons.Rounded.Checklist,
+                                contentDescription = stringResource(R.string.sessions_select),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                     IconButton(onClick = { searchOpen = true }) {
@@ -604,6 +716,67 @@ fun SessionListScreen(
             }
         }
 
+        if (selectionMode) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { exitSelection() }) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.action_cancel)
+                    )
+                }
+                Text(
+                    "${selectedIds.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = { selectedIds = history.map { it.id }.toSet() }
+                ) {
+                    Text(stringResource(R.string.sessions_select_all))
+                }
+                IconButton(
+                    onClick = { bulkPin() },
+                    enabled = selectedIds.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Rounded.PushPin,
+                        contentDescription = stringResource(R.string.action_pin)
+                    )
+                }
+                IconButton(
+                    onClick = { bulkMute() },
+                    enabled = selectedIds.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Rounded.NotificationsOff,
+                        contentDescription = stringResource(R.string.action_mute)
+                    )
+                }
+                IconButton(
+                    onClick = { bulkArchive() },
+                    enabled = selectedIds.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Rounded.Archive,
+                        contentDescription = stringResource(R.string.action_archive)
+                    )
+                }
+                IconButton(
+                    onClick = { confirmBulkDelete = true },
+                    enabled = selectedIds.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = stringResource(R.string.action_delete),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
         // The list and its floating create button share one box so the button
         // is positioned inside the layout instead of relying on draw overflow.
         Box(
@@ -612,25 +785,27 @@ fun SessionListScreen(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(18.dp)
-                    .zIndex(1f)
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    .combinedClickable(
-                        onClick = onNewSession,
-                        onLongClick = { showTemplates = true }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.action_new_session),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
+            if (!selectionMode) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(18.dp)
+                        .zIndex(1f)
+                        .size(56.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .combinedClickable(
+                            onClick = onNewSession,
+                            onLongClick = { showTemplates = true }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.action_new_session),
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
             when {
                 state.loading && state.sessions.isEmpty() -> Column(Modifier.fillMaxWidth()) {
@@ -687,12 +862,16 @@ fun SessionListScreen(
                                 finishedIds = finishedIds - session.id
                                 onOpen(session)
                             },
+                            onReview = { session ->
+                                finishedIds = finishedIds - session.id
+                                onReview(session)
+                            },
                             onClear = { finishedIds = emptySet() }
                         )
                     }
                 }
 
-                if (running.isNotEmpty()) {
+                if (!selectionMode && running.isNotEmpty()) {
                     item(key = "active-strip") {
                         ActiveCards(
                             running = running,
@@ -819,6 +998,15 @@ fun SessionListScreen(
                                     subagentsExpanded = session.id in expandedParents,
                                     justFinished = session.id in flashIds,
                                     scheduled = session.id in state.scheduled,
+                                    selectionMode = selectionMode,
+                                    selected = session.id in selectedIds,
+                                    onToggleSelect = {
+                                        selectedIds = if (session.id in selectedIds) {
+                                            selectedIds - session.id
+                                        } else {
+                                            selectedIds + session.id
+                                        }
+                                    },
                                     onToggleSubagents = if (
                                         showSubagents &&
                                         (childCounts[session.id] ?: 0) > 0
@@ -875,6 +1063,15 @@ fun SessionListScreen(
                                                 subagent = true,
                                                 justFinished = child.id in flashIds,
                                                 scheduled = child.id in state.scheduled,
+                                                selectionMode = selectionMode,
+                                                selected = child.id in selectedIds,
+                                                onToggleSelect = {
+                                                    selectedIds = if (child.id in selectedIds) {
+                                                        selectedIds - child.id
+                                                    } else {
+                                                        selectedIds + child.id
+                                                    }
+                                                },
                                                 onOpen = { onOpen(child) },
                                                 onRename = { renaming = child },
                                                 onDelete = { deleting = child },
@@ -942,6 +1139,32 @@ fun SessionListScreen(
 
 }
 
+
+    if (confirmBulkDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmBulkDelete = false },
+            title = {
+                Text(stringResource(R.string.sessions_bulk_delete_title, selectedIds.size))
+            },
+            text = { Text(stringResource(R.string.sessions_bulk_delete_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmBulkDelete = false
+                    bulkDelete()
+                }) {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmBulkDelete = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 
     if (showTemplates) {
         TemplatesDialog(
@@ -1061,6 +1284,12 @@ private fun projectLabel(project: ProjectOption, sessions: List<SessionItem>): S
     }
 }
 
+private data class ProfileStat(
+    val online: Boolean,
+    val cost: Double,
+    val sessions: Int
+)
+
 @Composable
 private fun TemplatesDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val templates = listOf(
@@ -1107,6 +1336,7 @@ private fun FinishedStrip(
     sessions: List<SessionItem>,
     meta: Map<String, String>,
     onOpen: (SessionItem) -> Unit,
+    onReview: (SessionItem) -> Unit,
     onClear: () -> Unit
 ) {
     Surface(
@@ -1149,11 +1379,20 @@ private fun FinishedStrip(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        stringResource(R.string.sessions_needs_you_open),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { onReview(session) }) {
+                            Text(
+                                stringResource(R.string.sessions_review),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        TextButton(onClick = { onOpen(session) }) {
+                            Text(
+                                stringResource(R.string.sessions_needs_you_open),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
                 }
             }
             if (sessions.size > 3) {
@@ -1548,6 +1787,9 @@ private fun SessionRow(
     subagentsExpanded: Boolean = false,
     justFinished: Boolean = false,
     scheduled: Boolean = false,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: () -> Unit = {},
     onToggleSubagents: (() -> Unit)? = null,
     onOpen: () -> Unit,
     onRename: () -> Unit,
@@ -1609,15 +1851,29 @@ private fun SessionRow(
                 .combinedClickable(
                     interactionSource = interaction,
                     indication = LocalIndication.current,
-                    onClick = onOpen,
-                    onLongClick = { menuOpen = true }
+                    onClick = if (selectionMode) onToggleSelect else onOpen,
+                    onLongClick = {
+                        if (selectionMode) onToggleSelect() else menuOpen = true
+                    }
                 )
                 .padding(start = 12.dp, end = 4.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Reserved gutter: dots never shift titles out of alignment.
-            Box(Modifier.width(10.dp).height(30.dp), contentAlignment = Alignment.CenterStart) {
-                when {
+            Box(
+                Modifier.width(if (selectionMode) 28.dp else 10.dp).height(30.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (selectionMode) {
+                    Icon(
+                        if (selected) Icons.Rounded.CheckCircle
+                        else Icons.Rounded.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else when {
                     session.running -> PulsingDot(
                         color = MaterialTheme.colorScheme.secondary,
                         pulsing = true,
