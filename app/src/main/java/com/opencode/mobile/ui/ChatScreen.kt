@@ -994,6 +994,17 @@ fun ChatScreen(
                                 message = block.message,
                                 onBranch = { before ->
                                     vm.fork(before) { child -> onSessionCreated(child) }
+                                },
+                                onQuote = { text ->
+                                    input = text.lineSequence()
+                                        .joinToString("\n") { "> $it" } + "\n\n"
+                                },
+                                onEdit = {
+                                    val body = block.message.plainText
+                                    vm.fork(block.message.id) { child ->
+                                        DraftStore.save(context, child, body)
+                                        onSessionCreated(child)
+                                    }
                                 }
                             )
                             is ChatBlock.TurnBlock -> TurnMessage(
@@ -1154,6 +1165,27 @@ fun ChatScreen(
             }
             state.error?.let { message ->
                 PulsingError(message)
+            }
+            if (state.offlineQueued > 0) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.flushPending() }
+                        .padding(horizontal = 18.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PulsingDot(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        pulsing = true,
+                        size = 6
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.chat_offline_queued, state.offlineQueued),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
             }
             val hasChips = runningShells.isNotEmpty() || runningJobs.isNotEmpty() ||
                 planTodos != null || contextFraction >= 0.6f
@@ -4031,7 +4063,12 @@ private fun Base64Image(mime: String, base64: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
+private fun UserMessage(
+    message: Msg,
+    onBranch: (String) -> Unit,
+    onQuote: (String) -> Unit,
+    onEdit: () -> Unit
+) {
     var menuOpen by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val text = message.parts.filterIsInstance<Part.Text>()
@@ -4100,6 +4137,20 @@ private fun UserMessage(message: Msg, onBranch: (String) -> Unit) {
                                 onClick = {
                                     menuOpen = false
                                     clipboard.setText(AnnotatedString(text))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_quote_message)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onQuote(text)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_edit_resend)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onEdit()
                                 }
                             )
                         }

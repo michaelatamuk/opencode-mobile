@@ -21,6 +21,7 @@ data class ChatUiState(
     val permissions: List<PendingPermission> = emptyList(),
     val forms: List<FormRequest> = emptyList(),
     val queued: List<QueuedMessage> = emptyList(),
+    val offlineQueued: Int = 0,
     val agents: List<AgentOption> = emptyList(),
     val models: List<ModelOption> = emptyList(),
     val commands: List<CommandOption> = emptyList(),
@@ -71,6 +72,7 @@ class ChatViewModel(
 
     private var activeID: String? = sessionID
     private var pollJob: Job? = null
+    private var flushing = false
 
     private val _state = MutableStateFlow(ChatUiState(sessionID.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
@@ -201,9 +203,11 @@ class ChatViewModel(
 
     private suspend fun refreshNow() {
         val id = activeID ?: return
+        var reached = false
         refreshMutex.withLock {
             try {
                 val page = repo.messages(id)
+                reached = true
                 _state.update {
                     it.copy(
                         messages = mergeMessages(it.messages, page.messages),
@@ -232,6 +236,70 @@ class ChatViewModel(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(error = friendlyError(e)) }
+            }
+        }
+        if (reached) {
+            appContext?.let { ctx ->
+                _state.update {
+                    it.copy(
+                        offlineQueued = PendingStore.all(ctx)
+                            .count { pending -> pending.sessionID == id }
+                    )
+                }
+            }
+            flushPending()
+        }
+    }
+
+    /** Delivers prompts written while the server was unreachable. */
+    fun flushPending() {
+        val ctx = appContext ?: return
+        val id = activeID ?: return
+        if (flushing) return
+        val pending = PendingStore.all(ctx).filter { it.sessionID == id }
+        if (pending.isEmpty()) {
+            _state.update { it.copy(offlineQueued = 0) }
+            return
+        }
+        flushing = true
+        viewModelScope.launch {
+            try {
+                for (item in pending) {
+                    val files = item.attachments.mapNotNull { attachment ->
+                        runCatching {
+                            val bytes = java.io.File(attachment.path).readBytes()
+                            Attachment(
+                                name = attachment.name,
+                                mime = attachment.mime,
+                                base64 = android.util.Base64.encodeToString(
+                                    bytes,
+                                    android.util.Base64.NO_WRAP
+                                )
+                            )
+                        }.getOrNull()
+                    }
+                    try {
+                        repo.send(
+                            sessionID = id,
+                            text = item.text,
+                            files = files,
+                            skillIDs = item.skillIDs
+                        )
+                        PendingStore.remove(ctx, item.id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        break
+                    }
+                }
+            } finally {
+                flushing = false
+                _state.update {
+                    it.copy(
+                        offlineQueued = PendingStore.all(ctx)
+                            .count { pendingItem -> pendingItem.sessionID == id }
+                    )
+                }
             }
         }
     }
@@ -318,9 +386,10 @@ class ChatViewModel(
             } catch (e: Exception) {
                 val target = _state.value.sessionID
                 if (e is java.io.IOException && target.isNotBlank() && appContext != null) {
+                    val ctx = appContext
                     val saved = files.mapIndexedNotNull { index, file ->
                         runCatching {
-                            val dir = java.io.File(appContext.filesDir, "pending")
+                            val dir = java.io.File(ctx.filesDir, "pending")
                             dir.mkdirs()
                             val out = java.io.File(
                                 dir,
@@ -333,7 +402,7 @@ class ChatViewModel(
                         }.getOrNull()
                     }
                     PendingStore.add(
-                        appContext,
+                        ctx,
                         target,
                         _state.value.title,
                         text,
@@ -341,7 +410,11 @@ class ChatViewModel(
                         saved
                     )
                     _state.update {
-                        it.copy(error = "Queued - will send when the server is back.")
+                        it.copy(
+                            offlineQueued = PendingStore.all(ctx)
+                                .count { pending -> pending.sessionID == target },
+                            error = "Queued - will send when the server is back."
+                        )
                     }
                     ok = true
                 } else {

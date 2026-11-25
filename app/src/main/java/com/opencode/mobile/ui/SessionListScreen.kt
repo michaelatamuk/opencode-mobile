@@ -46,6 +46,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -114,6 +116,7 @@ import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.ProjectOption
 import com.opencode.mobile.R
 import com.opencode.mobile.SeenStore
+import com.opencode.mobile.ServerProfile
 import com.opencode.mobile.SessionCache
 import com.opencode.mobile.SessionItem
 import com.opencode.mobile.SessionListViewModel
@@ -151,13 +154,16 @@ private fun labelOf(group: SessionGroup): Int = when (group) {
 @Composable
 fun SessionListScreen(
     repo: OpenCodeRepository,
+    profiles: List<ServerProfile>,
+    activeProfileID: String,
+    onSwitchProfile: (String) -> Unit,
     onOpen: (SessionItem) -> Unit,
     onSettings: () -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val vm: SessionListViewModel = viewModel(key = "sessions") {
+    val vm: SessionListViewModel = viewModel(key = "sessions:$activeProfileID") {
         SessionListViewModel(repo, SessionCache(context), context)
     }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -179,6 +185,8 @@ fun SessionListScreen(
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var finishedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showTemplates by remember { mutableStateOf(false) }
+    var profileMenu by remember { mutableStateOf(false) }
+    val activeProfile = profiles.firstOrNull { it.id == activeProfileID }
     var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingPermissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
     var pendingForms by remember { mutableStateOf<List<FormRequest>>(emptyList()) }
@@ -372,11 +380,85 @@ fun SessionListScreen(
                                     .padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
-                        Text(
-                            stringResource(R.string.sessions_title),
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.sessions_title),
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(50),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .clickable { profileMenu = true }
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Computer,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            (activeProfile?.name ?: "Server").take(18),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = profileMenu,
+                                    onDismissRequest = { profileMenu = false }
+                                ) {
+                                    profiles.forEach { profile ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    profile.name.ifBlank { profile.server }
+                                                )
+                                            },
+                                            trailingIcon = {
+                                                if (profile.id == activeProfileID) {
+                                                    Icon(
+                                                        Icons.Rounded.Check,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                profileMenu = false
+                                                if (profile.id != activeProfileID) {
+                                                    onSwitchProfile(profile.id)
+                                                }
+                                            }
+                                        )
+                                    }
+                                    if (profiles.isNotEmpty()) {
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.sessions_add_computer)) },
+                                        onClick = {
+                                            profileMenu = false
+                                            onSettings()
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                     IconButton(onClick = { searchOpen = true }) {
                         Icon(

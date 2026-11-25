@@ -243,6 +243,16 @@ private fun Root() {
     var persistentWatch by remember { mutableStateOf(prefs.getBoolean("watch_persistent", false)) }
     var share by remember { mutableStateOf<SharePayload?>(null) }
     val profileRevision by ProfileStore.revision.collectAsState()
+    val profiles = remember(profileRevision) { ProfileStore.all(context) }
+    val activeProfileID = remember(profileRevision) {
+        ProfileStore.activeID(context).orEmpty()
+    }
+    val switchProfile: (String) -> Unit = { id ->
+        ProfileStore.switchTo(context, id)
+        openSessionID = null
+        draft = false
+        (context as? android.app.Activity)?.recreate()
+    }
 
     LaunchedEffect(profileRevision) {
         server = prefs.getString("server", "").orEmpty()
@@ -436,6 +446,9 @@ private fun Root() {
             wide -> Row(Modifier.fillMaxSize()) {
                 SessionListScreen(
                     repo = repo,
+                    profiles = profiles,
+                    activeProfileID = activeProfileID,
+                    onSwitchProfile = switchProfile,
                     onOpen = { openSessionID = it.id; draft = false },
                     onSettings = { settingsOpen = true },
                     onNewSession = { openSessionID = null; draft = true },
@@ -473,6 +486,9 @@ private fun Root() {
                 if (key == null) {
                     SessionListScreen(
                         repo = repo,
+                        profiles = profiles,
+                        activeProfileID = activeProfileID,
+                        onSwitchProfile = switchProfile,
                         onOpen = { openSessionID = it.id; draft = false },
                         onSettings = { settingsOpen = true },
                         onNewSession = { openSessionID = null; draft = true }
