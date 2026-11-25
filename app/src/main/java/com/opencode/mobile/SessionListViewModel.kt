@@ -14,11 +14,13 @@ import kotlinx.coroutines.launch
 data class SessionListUiState(
     val sessions: List<SessionItem> = emptyList(),
     val previews: Map<String, String> = emptyMap(),
+    val scheduled: Set<String> = emptySet(),
     val projects: List<ProjectOption> = emptyList(),
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
-    val failures: Int = 0
+    val failures: Int = 0,
+    val pendingDelete: SessionItem? = null
 )
 
 class SessionListViewModel(
@@ -31,6 +33,7 @@ class SessionListViewModel(
     val state: StateFlow<SessionListUiState> = _state.asStateFlow()
 
     private val previewCache = mutableMapOf<String, Pair<Long, String>>()
+    private var deleteJob: kotlinx.coroutines.Job? = null
 
     init {
         cache?.read()?.takeIf { it.isNotEmpty() }?.let { cached ->
@@ -89,8 +92,16 @@ class SessionListViewModel(
                 UsageStore.record(it, sessions)
                 Shortcuts.sync(it)
             }
+            val scheduled = runCatching { repo.sessionsWithAutomations() }
+                .getOrDefault(emptySet())
             _state.update {
-                it.copy(sessions = sessions, loading = false, error = null, failures = 0)
+                it.copy(
+                    sessions = sessions,
+                    scheduled = scheduled,
+                    loading = false,
+                    error = null,
+                    failures = 0
+                )
             }
             loadPreviews(sessions)
         } catch (e: CancellationException) {
@@ -106,6 +117,24 @@ class SessionListViewModel(
                 )
             }
         }
+    }
+
+    /** Removes the row immediately, with five seconds to undo before the server delete. */
+    fun scheduleDelete(session: SessionItem) {
+        deleteJob?.cancel()
+        _state.update { it.copy(pendingDelete = session) }
+        deleteJob = viewModelScope.launch {
+            delay(5_000)
+            if (_state.value.pendingDelete?.id != session.id) return@launch
+            runCatching { repo.deleteSession(session.id) }
+            _state.update { it.copy(pendingDelete = null) }
+            refreshNow()
+        }
+    }
+
+    fun undoDelete() {
+        deleteJob?.cancel()
+        _state.update { it.copy(pendingDelete = null) }
     }
 
     fun create(onCreated: (SessionItem) -> Unit) {

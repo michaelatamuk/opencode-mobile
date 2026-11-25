@@ -24,9 +24,11 @@
     <string name="sessions_needs_you">Нужно решение</string>
     <string name="sessions_add_computer">Добавить компьютер</string>
     <string name="sessions_needs_you_open">Открыть</string>
+    <string name="sessions_run_failed">Запуск не удался</string>
     <string name="sessions_needs_you_more">Ещё %1$d</string>
     <string name="sessions_finished_since">Завершились без вас</string>
     <string name="sessions_clear">Очистить</string>
+    <string name="sessions_deleted">%1$s удалена</string>
     <string name="sessions_templates">Начать с шаблона</string>
     <string name="sessions_template_review">Проверить мои изменения</string>
     <string name="sessions_template_tests">Починить падающие тесты</string>
@@ -179,6 +181,9 @@
     <string name="chat_quote_message">Цитировать</string>
     <string name="chat_offline_queued">%1$d в очереди · нажмите для повтора</string>
     <string name="chat_edit_resend">Изменить и отправить</string>
+    <string name="chat_run_keep">Оставить</string>
+    <string name="chat_run_revert">Откатить</string>
+    <string name="chat_run_continue">Продолжить</string>
     <string name="chat_activity_running_short">Выполняется %1$s</string>
     <string name="chat_activity_used">Использовано %1$s</string>
     <string name="chat_activity_thoughts_one">1 мысль</string>
@@ -195,6 +200,8 @@
     <string name="chat_status_running">выполняется</string>
     <string name="chat_queue_hint">Отмените элемент до того, как сервер его доставит.</string>
     <string name="chat_queue_steer">Вклинить</string>
+    <string name="chat_queue_mode">В очередь</string>
+    <string name="chat_delivery_busy">Пока занято</string>
     <string name="chat_queue_edit">Изменить</string>
     <string name="chat_queue_edit_title">Изменить сообщение в очереди</string>
     <string name="chat_attach_file">Прикрепить файл</string>

@@ -115,6 +115,7 @@ import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.ProjectOption
 import com.opencode.mobile.R
+import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.ServerProfile
 import com.opencode.mobile.SessionCache
@@ -184,6 +185,7 @@ fun SessionListScreen(
     var showMission by remember { mutableStateOf(false) }
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var finishedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var finishedMeta by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var showTemplates by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
     val activeProfile = profiles.firstOrNull { it.id == activeProfileID }
@@ -213,6 +215,21 @@ fun SessionListScreen(
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(finishedIds) {
+        finishedIds.take(5).forEach { id ->
+            if (finishedMeta[id] == null) {
+                val files = runCatching { repo.sessionDiff(id).size }.getOrDefault(0)
+                finishedMeta = finishedMeta + (
+                    id to if (files > 0) {
+                        "$files " + if (files == 1) "file" else "files"
+                    } else {
+                        "Finished"
+                    }
+                    )
+            }
+        }
+    }
     val sessionTitles = remember(state.sessions) {
         state.sessions.associate { it.id to it.title }
     }
@@ -226,15 +243,21 @@ fun SessionListScreen(
         }
     }
 
-    val scoped = remember(state.sessions, projectFilter, showArchived) {
-        var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
+    val scoped = remember(state.sessions, projectFilter, showArchived, state.pendingDelete) {
+        var base = state.sessions.filter {
+            (if (showArchived) it.archived else !it.archived) &&
+                it.id != state.pendingDelete?.id
+        }
         base = base.filter { it.parentID.isBlank() }
         if (projectFilter == null) base
         else base.filter { it.projectID == projectFilter }
     }
-    val filtered = remember(scoped, query, pinned, state.sessions) {
+    val filtered = remember(scoped, query, pinned, state.sessions, state.pendingDelete) {
         val base = if (query.isBlank()) scoped
-        else state.sessions.filter { it.title.contains(query, ignoreCase = true) }
+        else state.sessions.filter {
+            it.title.contains(query, ignoreCase = true) &&
+                it.id != state.pendingDelete?.id
+        }
         base.sortedWith(
             compareByDescending<SessionItem> { it.id in pinned }
                 .thenByDescending { it.updated }
@@ -250,6 +273,14 @@ fun SessionListScreen(
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
+    val failedSessions = remember(state.sessions) {
+        state.sessions.filter { session ->
+            !session.running && !session.archived &&
+                session.outcome.isNotBlank() && session.outcome != "succeeded" &&
+                (seenStore.lastSeen(session.id) <= 0L ||
+                    seenStore.lastSeen(session.id) < session.updated)
+        }
+    }
     // The saved scroll offset reopens the list mid-history. If anything is
     // running, its cards are at the top and would be invisible.
     var initialScrollSettled by remember { mutableStateOf(false) }
@@ -264,6 +295,15 @@ fun SessionListScreen(
     val grouped = remember(history) { history.groupBy { groupOf(it.updated) } }
     val projectNames = remember(state.projects) {
         state.projects.associate { it.id to it.name }
+    }
+    val todayStart = remember {
+        java.time.LocalDate.now()
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+    }
+    val todayCost = remember(state.sessions, todayStart) {
+        state.sessions.filter { it.updated >= todayStart }.sumOf { it.cost }
     }
 
     val focusRequester = remember { FocusRequester() }
@@ -371,7 +411,7 @@ fun SessionListScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                stringResource(R.string.cost_title),
+                                "${stringResource(R.string.cost_title)} · \$%.2f".format(todayCost),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
@@ -401,6 +441,19 @@ fun SessionListScreen(
                                         Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Box(
+                                            Modifier
+                                                .size(6.dp)
+                                                .background(
+                                                    if (state.error == null) {
+                                                        MaterialTheme.colorScheme.secondary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.error
+                                                    },
+                                                    CircleShape
+                                                )
+                                        )
+                                        Spacer(Modifier.width(6.dp))
                                         Icon(
                                             Icons.Rounded.Computer,
                                             contentDescription = null,
@@ -423,9 +476,18 @@ fun SessionListScreen(
                                     profiles.forEach { profile ->
                                         DropdownMenuItem(
                                             text = {
-                                                Text(
-                                                    profile.name.ifBlank { profile.server }
-                                                )
+                                                Column {
+                                                    Text(
+                                                        profile.name.ifBlank { profile.server }
+                                                    )
+                                                    Text(
+                                                        profile.server,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             },
                                             trailingIcon = {
                                                 if (profile.id == activeProfileID) {
@@ -449,6 +511,25 @@ fun SessionListScreen(
                                             color = MaterialTheme.colorScheme.outlineVariant
                                         )
                                     }
+                                    val watchPrefs = SecurePrefs.get(context)
+                                    val watch = watchPrefs.getBoolean("watch", false)
+                                    val persistent = watchPrefs.getBoolean("watch_persistent", false)
+                                    val notifications = when {
+                                        !watch -> "Notifications off"
+                                        persistent -> "Notifications: always"
+                                        else -> "Notifications: finish only"
+                                    }
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                notifications,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        onClick = {},
+                                        enabled = false
+                                    )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.sessions_add_computer)) },
                                         onClick = {
@@ -586,6 +667,7 @@ fun SessionListScreen(
                         NeedsYouCard(
                             permissions = pendingPermissions,
                             forms = pendingForms,
+                            failed = failedSessions,
                             titles = sessionTitles,
                             onOpen = openSession,
                             onReply = replyPermission
@@ -600,6 +682,7 @@ fun SessionListScreen(
                     item(key = "finished-strip") {
                         FinishedStrip(
                             sessions = finishedSessions,
+                            meta = finishedMeta,
                             onOpen = { session ->
                                 finishedIds = finishedIds - session.id
                                 onOpen(session)
@@ -646,32 +729,72 @@ fun SessionListScreen(
                             val seen = seenStore.lastSeen(session.id)
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
-                                    if (value == SwipeToDismissBoxValue.EndToStart) {
-                                        deleting = session
+                                    when (value) {
+                                        SwipeToDismissBoxValue.StartToEnd -> {
+                                            pinned = PinnedStore.toggle(context, session.id)
+                                            false
+                                        }
+
+                                        SwipeToDismissBoxValue.EndToStart -> {
+                                            vm.scheduleDelete(session)
+                                            true
+                                        }
+
+                                        else -> false
                                     }
-                                    false
                                 }
                             )
                             SwipeToDismissBox(
                                 state = dismissState,
-                                enableDismissFromStartToEnd = false,
+                                enableDismissFromStartToEnd = true,
                                 backgroundContent = {
-                                    Box(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 16.dp, vertical = 3.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.errorContainer,
-                                                RoundedCornerShape(16.dp)
-                                            )
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.CenterEnd
+                                    if (dismissState.dismissDirection ==
+                                        SwipeToDismissBoxValue.StartToEnd
                                     ) {
-                                        Text(
-                                            stringResource(R.string.action_delete),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
-                                        )
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 16.dp, vertical = 3.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.secondaryContainer,
+                                                    RoundedCornerShape(16.dp)
+                                                )
+                                                .padding(horizontal = 20.dp),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Rounded.PushPin,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    stringResource(R.string.action_pin),
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 16.dp, vertical = 3.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.errorContainer,
+                                                    RoundedCornerShape(16.dp)
+                                                )
+                                                .padding(horizontal = 20.dp),
+                                            contentAlignment = Alignment.CenterEnd
+                                        ) {
+                                            Text(
+                                                stringResource(R.string.action_delete),
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
                                     }
                                 }
                             ) {
@@ -695,6 +818,7 @@ fun SessionListScreen(
                                     },
                                     subagentsExpanded = session.id in expandedParents,
                                     justFinished = session.id in flashIds,
+                                    scheduled = session.id in state.scheduled,
                                     onToggleSubagents = if (
                                         showSubagents &&
                                         (childCounts[session.id] ?: 0) > 0
@@ -750,6 +874,7 @@ fun SessionListScreen(
                                                 subagents = 0,
                                                 subagent = true,
                                                 justFinished = child.id in flashIds,
+                                                scheduled = child.id in state.scheduled,
                                                 onOpen = { onOpen(child) },
                                                 onRename = { renaming = child },
                                                 onDelete = { deleting = child },
@@ -775,6 +900,37 @@ fun SessionListScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            state.pendingDelete?.let { pending ->
+                Surface(
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 82.dp)
+                        .zIndex(2f)
+                ) {
+                    Row(
+                        Modifier.padding(start = 14.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringResource(R.string.sessions_deleted, pending.title),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { vm.undoDelete() }) {
+                            Text(
+                                stringResource(R.string.chat_undo_confirm),
+                                color = MaterialTheme.colorScheme.inversePrimary
+                            )
                         }
                     }
                 }
@@ -949,6 +1105,7 @@ private fun TemplatesDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
 @Composable
 private fun FinishedStrip(
     sessions: List<SessionItem>,
+    meta: Map<String, String>,
     onOpen: (SessionItem) -> Unit,
     onClear: () -> Unit
 ) {
@@ -987,7 +1144,7 @@ private fun FinishedStrip(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "Finished",
+                            meta[session.id] ?: "Finished",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1014,6 +1171,7 @@ private fun FinishedStrip(
 private fun NeedsYouCard(
     permissions: List<PendingPermission>,
     forms: List<FormRequest>,
+    failed: List<SessionItem>,
     titles: Map<String, String>,
     onOpen: (String) -> Unit,
     onReply: (PendingPermission, String) -> Unit
@@ -1036,7 +1194,7 @@ private fun NeedsYouCard(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    "${permissions.size + forms.size}",
+                    "${permissions.size + forms.size + failed.size}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1108,8 +1266,38 @@ private fun NeedsYouCard(
                     )
                 }
             }
+            failed.take(3).forEach { session ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpen(session.id) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.sessions_run_failed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            session.title.ifBlank { stringResource(R.string.session_untitled) },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.sessions_needs_you_open),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
             val extra = (permissions.size - 3).coerceAtLeast(0) +
-                (forms.size - 3).coerceAtLeast(0)
+                (forms.size - 3).coerceAtLeast(0) +
+                (failed.size - 3).coerceAtLeast(0)
             if (extra > 0) {
                 Text(
                     stringResource(R.string.sessions_needs_you_more, extra),
@@ -1359,6 +1547,7 @@ private fun SessionRow(
     subagent: Boolean = false,
     subagentsExpanded: Boolean = false,
     justFinished: Boolean = false,
+    scheduled: Boolean = false,
     onToggleSubagents: (() -> Unit)? = null,
     onOpen: () -> Unit,
     onRename: () -> Unit,
@@ -1370,9 +1559,13 @@ private fun SessionRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val rowContext = LocalContext.current
+    val hasDraft = DraftStore.get(rowContext, session.id).isNotBlank()
     val cleanPreview = remember(preview) { cleanPreview(preview) }
-    val meta = remember(projectName, cleanPreview) {
+    val meta = remember(projectName, cleanPreview, hasDraft, scheduled) {
         listOfNotNull(
+            if (hasDraft) "Draft" else null,
+            if (scheduled) "Scheduled" else null,
             projectName.takeIf { it.isNotBlank() },
             cleanPreview
         ).joinToString(" · ")
@@ -1429,6 +1622,13 @@ private fun SessionRow(
                         color = MaterialTheme.colorScheme.secondary,
                         pulsing = true,
                         size = 6
+                    )
+
+                    session.outcome.isNotBlank() &&
+                        session.outcome != "succeeded" -> Box(
+                        Modifier
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.error, CircleShape)
                     )
 
                     unread -> Box(

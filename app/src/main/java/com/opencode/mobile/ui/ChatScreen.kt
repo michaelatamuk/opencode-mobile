@@ -280,6 +280,7 @@ fun ChatScreen(
     var runningJobs by remember { mutableStateOf<List<JobItem>>(emptyList()) }
     var shellRefreshKey by remember { mutableStateOf(0) }
     var dismissedRunId by remember { mutableStateOf<String?>(null) }
+    var steerMode by remember { mutableStateOf(true) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -1011,7 +1012,15 @@ fun ChatScreen(
                                 messages = block.messages,
                                 directory = state.directory,
                                 showTools = showTools,
-                                onSpeak = speak
+                                onSpeak = speak,
+                                onFork = { before ->
+                                    vm.fork(before) { child -> onSessionCreated(child) }
+                                },
+                                onRegenerate = if (block.key == blocks.lastOrNull()?.key && !state.busy) {
+                                    { vm.regenerateLast { prompt -> input = prompt } }
+                                } else {
+                                    null
+                                }
                             )
                         }
                         }
@@ -1026,6 +1035,12 @@ fun ChatScreen(
                             tools = lastTools,
                             onChanges = { showDiff = true },
                             onShare = { shareRunCard() },
+                            onKeep = { dismissedRunId = assistant.id },
+                            onRevert = { confirmUndo = true },
+                            onContinue = {
+                                input = "Continue from where you left off."
+                                dismissedRunId = assistant.id
+                            },
                             onDismiss = { dismissedRunId = assistant.id }
                         )
                     }
@@ -1187,6 +1202,29 @@ fun ChatScreen(
                     )
                 }
             }
+            if (state.busy) {
+                Row(
+                    Modifier.padding(start = 18.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.chat_delivery_busy),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FilterChip(
+                        selected = steerMode,
+                        onClick = { steerMode = true },
+                        label = { Text(stringResource(R.string.chat_queue_steer)) }
+                    )
+                    FilterChip(
+                        selected = !steerMode,
+                        onClick = { steerMode = false },
+                        label = { Text(stringResource(R.string.chat_queue_mode)) }
+                    )
+                }
+            }
             val hasChips = runningShells.isNotEmpty() || runningJobs.isNotEmpty() ||
                 planTodos != null || contextFraction >= 0.6f
             if (hasChips) {
@@ -1195,29 +1233,46 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    if (runningShells.isNotEmpty()) {
-                        ShellsPill(
-                            count = runningShells.size,
-                            onClick = { showShell = true }
-                        )
-                    }
-                    if (runningJobs.isNotEmpty()) {
-                        AssistChip(
-                            onClick = { showWorkspace = true },
-                            label = {
-                                Text(
-                                    if (runningJobs.size == 1) "1 job"
-                                    else "${runningJobs.size} jobs"
+                    if (runningShells.isNotEmpty() || runningJobs.isNotEmpty()) {
+                        val label = mutableListOf<String>()
+                        if (runningShells.isNotEmpty()) {
+                            label.add(
+                                "${runningShells.size} " +
+                                    if (runningShells.size == 1) "shell" else "shells"
+                            )
+                        }
+                        if (runningJobs.isNotEmpty()) {
+                            label.add(
+                                "${runningJobs.size} " +
+                                    if (runningJobs.size == 1) "job" else "jobs"
+                            )
+                        }
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable {
+                                    if (runningJobs.isNotEmpty()) showWorkspace = true
+                                    else showShell = true
+                                }
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                PulsingDot(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    pulsing = true,
+                                    size = 6
                                 )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Rounded.Build,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    label.joinToString(" · "),
+                                    style = MaterialTheme.typography.labelMedium
                                 )
                             }
-                        )
+                        }
                     }
                     if (planTodos != null) {
                         AssistChip(
@@ -1261,7 +1316,12 @@ fun ChatScreen(
                         vm.send(
                             text = text.ifBlank { screenshotOnlyText },
                             files = files,
-                            skillIDs = pickedSkills.map { it.id }
+                            skillIDs = pickedSkills.map { it.id },
+                            delivery = if (state.busy) {
+                                if (steerMode) "steer" else "queue"
+                            } else {
+                                null
+                            }
                         ) { ok ->
                             if (!ok) {
                                 input = text
@@ -4251,9 +4311,12 @@ private fun TurnMessage(
     messages: List<Msg>,
     directory: String,
     showTools: Boolean,
-    onSpeak: (String) -> Unit
+    onSpeak: (String) -> Unit,
+    onFork: (String) -> Unit,
+    onRegenerate: (() -> Unit)?
 ) {
     val pending = messages.lastOrNull()?.pending == true
+    val lastAssistantId = messages.lastOrNull { it.role == "assistant" }?.id.orEmpty()
     val entries = remember(messages) { buildTurnEntries(messages) }
     val fullText = remember(entries) {
         entries.filterIsInstance<TurnEntry.Text>().joinToString("\n\n") { it.body }
@@ -4313,6 +4376,43 @@ private fun TurnMessage(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(17.dp)
                     )
+                }
+                var menuOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = stringResource(R.string.chat_message_actions),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        if (lastAssistantId.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_branch_from_here)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onFork(lastAssistantId)
+                                }
+                            )
+                        }
+                        if (onRegenerate != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_regenerate)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onRegenerate()
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -5461,6 +5561,7 @@ private fun OverviewSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RunSummaryCard(
     assistant: Msg,
@@ -5468,6 +5569,9 @@ private fun RunSummaryCard(
     tools: List<Part.Tool>,
     onChanges: () -> Unit,
     onShare: () -> Unit,
+    onKeep: () -> Unit,
+    onRevert: () -> Unit,
+    onContinue: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val files = remember(tools) { editedPaths(tools) }
@@ -5531,7 +5635,10 @@ private fun RunSummaryCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 if (files.isNotEmpty()) {
                     Button(
                         onClick = onChanges,
@@ -5539,6 +5646,18 @@ private fun RunSummaryCard(
                     ) {
                         Text("Review changes")
                     }
+                }
+                TextButton(onClick = onContinue) {
+                    Text(stringResource(R.string.chat_run_continue))
+                }
+                TextButton(onClick = onKeep) {
+                    Text(stringResource(R.string.chat_run_keep))
+                }
+                TextButton(onClick = onRevert) {
+                    Text(
+                        stringResource(R.string.chat_run_revert),
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
                 TextButton(onClick = onShare) {
                     Text(stringResource(R.string.chat_share_card))

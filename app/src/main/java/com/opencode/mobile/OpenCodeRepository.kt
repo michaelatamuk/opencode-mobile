@@ -104,6 +104,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun automations(sessionID: String): List<ScheduleItem> = api.automations(sessionID)
 
+    suspend fun sessionsWithAutomations(): Set<String> = api.sessionsWithAutomations()
+
     suspend fun createAutomation(
         sessionID: String,
         prompt: String,

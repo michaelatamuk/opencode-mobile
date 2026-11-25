@@ -33,6 +33,7 @@ data class SessionItem(
     val parentID: String = "",
     val forkedFrom: String = "",
     val archived: Boolean = false,
+    val outcome: String = "",
     val tokensInput: Long = 0L,
     val tokensOutput: Long = 0L
 )
@@ -297,6 +298,7 @@ private fun JSONObject.toSession(): SessionItem {
         parentID = optString("parentID"),
         forkedFrom = optJSONObject("fork")?.optString("sessionID").orEmpty(),
         archived = (time?.optLong("archived") ?: 0L) > 0L,
+        outcome = optString("outcome"),
         tokensInput = optJSONObject("tokens")?.optLong("input") ?: 0L,
         tokensOutput = optJSONObject("tokens")?.optLong("output") ?: 0L
     )
@@ -581,7 +583,31 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             .replace(Regex("[#*_`>]+"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
-        return cleaned.take(120).ifBlank { null }
+        val runningTool = page.messages.asReversed()
+            .flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .firstOrNull { it.status == "running" || it.status == "streaming" }
+            ?.name
+            ?.replaceFirstChar { it.uppercase() }
+        return listOfNotNull(runningTool, cleaned.take(120).ifBlank { null })
+            .joinToString(" · ")
+            .ifBlank { null }
+    }
+
+    /** Sessions with at least one active automation, for the scheduled badge. */
+    suspend fun sessionsWithAutomations(): Set<String> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/experimental/automation").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.optJSONObject(i) ?: return@mapNotNull null
+            val status = o.optString("status")
+            if (status == "paused" || status == "done") return@mapNotNull null
+            o.optString("sessionID").ifBlank {
+                o.optJSONObject("action")
+                    ?.optJSONObject("to")
+                    ?.optString("session")
+                    .orEmpty()
+            }.ifBlank { null }
+        }.toSet()
     }
 
     suspend fun agents(): List<AgentOption> = withContext(Dispatchers.IO) {

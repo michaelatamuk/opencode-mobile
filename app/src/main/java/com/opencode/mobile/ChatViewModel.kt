@@ -334,6 +334,7 @@ class ChatViewModel(
         text: String,
         files: List<Attachment>,
         skillIDs: List<String> = emptyList(),
+        delivery: String? = null,
         onDone: (Boolean) -> Unit
     ) {
         viewModelScope.launch {
@@ -372,7 +373,7 @@ class ChatViewModel(
                         sessionID = id,
                         text = text,
                         files = files,
-                        delivery = if (_state.value.busy) "steer" else null,
+                        delivery = delivery ?: if (_state.value.busy) "steer" else null,
                         skillIDs = skillIDs,
                         onProgress = { progress ->
                             _state.update { it.copy(sendProgress = progress) }

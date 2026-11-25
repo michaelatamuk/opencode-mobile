@@ -26,9 +26,11 @@
     <string name="sessions_needs_you">Needs you</string>
     <string name="sessions_add_computer">Add computer</string>
     <string name="sessions_needs_you_open">Open</string>
+    <string name="sessions_run_failed">Run failed</string>
     <string name="sessions_needs_you_more">+%1$d more</string>
     <string name="sessions_finished_since">Finished since you left</string>
     <string name="sessions_clear">Clear</string>
+    <string name="sessions_deleted">%1$s deleted</string>
     <string name="sessions_templates">Start with a template</string>
     <string name="sessions_template_review">Review my changes</string>
     <string name="sessions_template_tests">Fix failing tests</string>
@@ -184,6 +186,9 @@
     <string name="chat_quote_message">Quote</string>
     <string name="chat_offline_queued">%1$d queued · tap to retry</string>
     <string name="chat_edit_resend">Edit &amp; resend</string>
+    <string name="chat_run_keep">Keep</string>
+    <string name="chat_run_revert">Revert</string>
+    <string name="chat_run_continue">Continue</string>
     <string name="chat_activity_running_short">Running %1$s</string>
     <string name="chat_activity_used">Used %1$s</string>
     <string name="chat_activity_thoughts_one">1 Thought</string>
@@ -200,6 +205,8 @@
     <string name="chat_status_running">running</string>
     <string name="chat_queue_hint">Cancel an item before the server delivers it.</string>
     <string name="chat_queue_steer">Steer</string>
+    <string name="chat_queue_mode">Queue</string>
+    <string name="chat_delivery_busy">While busy</string>
     <string name="chat_queue_edit">Edit</string>
     <string name="chat_queue_edit_title">Edit queued message</string>
     <string name="chat_attach_file">Attach file</string>
