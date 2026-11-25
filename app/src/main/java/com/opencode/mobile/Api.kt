@@ -1051,13 +1051,13 @@ class Api(server: String, private val password: String, fallbackServer: String? 
             Unit
         }
 
-    suspend fun forms(sessionID: String): List<FormRequest> = withContext(Dispatchers.IO) {
-        val data = getJson("/api/session/$sessionID/form").optJSONArray("data") ?: JSONArray()
-        (0 until data.length()).map { index ->
-            val form = data.getJSONObject(index)
+    private fun parseForms(payload: JSONObject, fallbackSessionID: String): List<FormRequest> {
+        val data = payload.optJSONArray("data") ?: JSONArray()
+        return (0 until data.length()).mapNotNull { index ->
+            val form = data.optJSONObject(index) ?: return@mapNotNull null
             val fieldsJson = form.optJSONArray("fields") ?: JSONArray()
-            val fields = (0 until fieldsJson.length()).map { i ->
-                val field = fieldsJson.getJSONObject(i)
+            val fields = (0 until fieldsJson.length()).mapNotNull { i ->
+                val field = fieldsJson.optJSONObject(i) ?: return@mapNotNull null
                 val optionsJson = field.optJSONArray("options") ?: JSONArray()
                 FormField(
                     key = field.optString("key"),
@@ -1065,8 +1065,8 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                     description = field.optString("description"),
                     type = field.optString("type", "string"),
                     required = field.optBoolean("required", false),
-                    options = (0 until optionsJson.length()).map { o ->
-                        val option = optionsJson.getJSONObject(o)
+                    options = (0 until optionsJson.length()).mapNotNull { o ->
+                        val option = optionsJson.optJSONObject(o) ?: return@mapNotNull null
                         FormOption(option.optString("value"), option.optString("label"))
                     },
                     default = if (field.has("default") && !field.isNull("default")) {
@@ -1077,12 +1077,21 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                 )
             }
             FormRequest(
-                id = form.getString("id"),
-                sessionID = form.optString("sessionID", sessionID),
+                id = form.optString("id"),
+                sessionID = form.optString("sessionID", fallbackSessionID),
                 title = form.optString("title").ifBlank { "Question" },
                 fields = fields
             )
         }
+    }
+
+    suspend fun forms(sessionID: String): List<FormRequest> = withContext(Dispatchers.IO) {
+        parseForms(getJson("/api/session/$sessionID/form"), sessionID)
+    }
+
+    /** Pending questions across every session, for the sessions-screen inbox. */
+    suspend fun allForms(): List<FormRequest> = withContext(Dispatchers.IO) {
+        parseForms(getJson("/api/form"), "")
     }
 
     suspend fun answerForm(sessionID: String, formID: String, answers: Map<String, Any>): Unit =

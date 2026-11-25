@@ -272,8 +272,11 @@ fun ChatScreen(
     var showSchedules by remember { mutableStateOf(false) }
     var showShell by remember { mutableStateOf(false) }
     var showWorkspace by remember { mutableStateOf(false) }
+    var showOverview by remember { mutableStateOf(false) }
     var runningShells by remember { mutableStateOf<List<RunningShell>>(emptyList()) }
+    var runningJobs by remember { mutableStateOf<List<JobItem>>(emptyList()) }
     var shellRefreshKey by remember { mutableStateOf(0) }
+    var dismissedRunId by remember { mutableStateOf<String?>(null) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -418,6 +421,14 @@ fun ChatScreen(
         else state.messages.filter { it.plainText.contains(query, ignoreCase = true) }
     }
     val blocks = remember(displayMessages) { buildChatBlocks(displayMessages) }
+
+    val lastAssistant = state.messages.lastOrNull { it.role == "assistant" }
+    val lastUser = state.messages.lastOrNull { it.role == "user" }
+    val lastTools = remember(lastAssistant?.id) {
+        lastAssistant?.parts?.filterIsInstance<Part.Tool>().orEmpty()
+    }
+    val showRunSummary = sessionID != null && !state.busy && lastAssistant != null &&
+        lastTools.isNotEmpty() && dismissedRunId != lastAssistant.id
 
     val lastId = state.messages.lastOrNull()?.id
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
@@ -621,6 +632,27 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(sessionID) {
+        val id = sessionID ?: return@LaunchedEffect
+        while (true) {
+            runningJobs = runCatching { repo.jobs(id) }.getOrDefault(emptyList())
+            delay(5_000)
+        }
+    }
+
+    val planTodos = remember(state.messages) {
+        state.messages.asReversed()
+            .flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .firstNotNullOfOrNull { parseTodos(it.input) }
+    }
+    val planDone = planTodos?.count { it.status == "completed" } ?: 0
+    val contextFraction = if (state.contextLimit > 0) {
+        (state.contextUsed.toFloat() / state.contextLimit).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
     LaunchedEffect(listState.firstVisibleItemIndex, state.olderCursor) {
         if (state.messages.isNotEmpty() &&
             state.olderCursor != null &&
@@ -692,7 +724,9 @@ fun ChatScreen(
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .clickable(enabled = sessionID != null) { showOverview = true }
                         )
                         if (state.busy) {
                             Spacer(Modifier.width(8.dp))
@@ -932,6 +966,19 @@ fun ChatScreen(
                         }
                     }
                 }
+                val assistant = lastAssistant
+                if (showRunSummary && assistant != null) {
+                    item(key = "run-summary-${assistant.id}") {
+                        RunSummaryCard(
+                            assistant = assistant,
+                            user = lastUser,
+                            tools = lastTools,
+                            onChanges = { showDiff = true },
+                            onShare = { shareRunCard() },
+                            onDismiss = { dismissedRunId = assistant.id }
+                        )
+                    }
+                }
             }
 
             Box(
@@ -1068,12 +1115,51 @@ fun ChatScreen(
             state.error?.let { message ->
                 PulsingError(message)
             }
-            if (runningShells.isNotEmpty()) {
-                ShellsPill(
-                    count = runningShells.size,
-                    onClick = { showShell = true },
-                    modifier = Modifier.padding(start = 18.dp, bottom = 2.dp)
-                )
+            val hasChips = runningShells.isNotEmpty() || runningJobs.isNotEmpty() ||
+                planTodos != null || contextFraction >= 0.6f
+            if (hasChips) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (runningShells.isNotEmpty()) {
+                        ShellsPill(
+                            count = runningShells.size,
+                            onClick = { showShell = true }
+                        )
+                    }
+                    if (runningJobs.isNotEmpty()) {
+                        AssistChip(
+                            onClick = { showWorkspace = true },
+                            label = {
+                                Text(
+                                    if (runningJobs.size == 1) "1 job"
+                                    else "${runningJobs.size} jobs"
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Build,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+                    if (planTodos != null) {
+                        AssistChip(
+                            onClick = { showOverview = true },
+                            label = { Text("$planDone/${planTodos.size} steps") }
+                        )
+                    }
+                    if (contextFraction >= 0.6f) {
+                        AssistChip(
+                            onClick = { showOverview = true },
+                            label = { Text("${(contextFraction * 100).toInt()}% context") }
+                        )
+                    }
+                }
             }
             Composer(
                 value = input,
@@ -1322,6 +1408,23 @@ fun ChatScreen(
             onImported = { imported ->
                 showWorkspace = false
                 onSessionCreated(imported)
+            }
+        )
+    }
+
+    if (showOverview && sessionID != null) {
+        OverviewSheet(
+            repo = repo,
+            sessionID = sessionID,
+            state = state,
+            onDismiss = { showOverview = false },
+            onChanges = {
+                showOverview = false
+                showDiff = true
+            },
+            onWorkspace = {
+                showOverview = false
+                showWorkspace = true
             }
         )
     }
@@ -5018,6 +5121,312 @@ private fun PermissionSheet(
             }
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+private val editedToolNames = setOf(
+    "edit", "write", "patch", "multiedit", "apply_patch",
+    "create_file", "str_replace_editor"
+)
+
+private fun editedPaths(tools: List<Part.Tool>): List<String> =
+    tools.filter { it.name.lowercase() in editedToolNames }
+        .mapNotNull { part ->
+            val input = runCatching { org.json.JSONObject(part.input) }.getOrNull()
+                ?: return@mapNotNull null
+            listOf("filePath", "path", "file", "filename")
+                .firstNotNullOfOrNull { key ->
+                    input.optString(key).takeIf { it.isNotBlank() }
+                }
+        }
+        .distinct()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OverviewSheet(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    state: ChatUiState,
+    onDismiss: () -> Unit,
+    onChanges: () -> Unit,
+    onWorkspace: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var branch by remember { mutableStateOf("") }
+    var changeCount by remember { mutableStateOf(0) }
+    var jobCount by remember { mutableStateOf(0) }
+    var loading by remember { mutableStateOf(true) }
+    val planTodos = remember(state.messages) {
+        state.messages.asReversed()
+            .flatMap { it.parts }
+            .filterIsInstance<Part.Tool>()
+            .firstNotNullOfOrNull { parseTodos(it.input) }
+    }
+    val planDone = planTodos?.count { it.status == "completed" } ?: 0
+    val contextFraction = if (state.contextLimit > 0) {
+        (state.contextUsed.toFloat() / state.contextLimit).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val agentName = state.agents.firstOrNull { it.id == state.agentID }?.name.orEmpty()
+    val modelName = state.models.firstOrNull {
+        it.id == state.modelID && it.providerID == state.modelProviderID
+    }?.name.orEmpty()
+
+    LaunchedEffect(sessionID) {
+        loading = true
+        branch = runCatching { repo.vcsInfo(state.directory) }
+            .getOrNull()
+            ?.branch
+            .orEmpty()
+        changeCount = runCatching {
+            val diffs = repo.sessionDiff(sessionID)
+            if (diffs.isNotEmpty()) {
+                diffs.size
+            } else {
+                editedPaths(
+                    state.messages.flatMap { it.parts }.filterIsInstance<Part.Tool>()
+                ).size
+            }
+        }.getOrDefault(0)
+        jobCount = runCatching { repo.jobs(sessionID).size }.getOrDefault(0)
+        loading = false
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Session overview", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                state.title.ifBlank { stringResource(R.string.session_new) },
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                listOf(agentName, modelName).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (branch.isNotBlank()) {
+                Text(
+                    branch,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Context", style = MaterialTheme.typography.titleSmall)
+            LinearProgressIndicator(
+                progress = { contextFraction },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+            Text(
+                if (state.contextLimit > 0) {
+                    "${state.contextUsed} / ${state.contextLimit} tokens · ${(contextFraction * 100).toInt()}%"
+                } else {
+                    "${state.contextUsed} tokens"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Cost \$%.4f · tokens in %d / out %d".format(
+                    state.cost,
+                    state.tokensInput,
+                    state.tokensOutput
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Plan", style = MaterialTheme.typography.titleSmall)
+            if (planTodos == null) {
+                Text(
+                    "No active plan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "$planDone/${planTodos.size} steps",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                planTodos.take(7).forEach { todo ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (todo.status == "completed") Icons.Rounded.CheckCircle
+                            else Icons.Rounded.RadioButtonUnchecked,
+                            contentDescription = null,
+                            tint = if (todo.status == "completed") {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(todo.text, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (planTodos.size > 7) {
+                    Text(
+                        "+${planTodos.size - 7} more",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Changes",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("$changeCount", style = MaterialTheme.typography.labelMedium)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Background jobs",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (loading) "…" else "$jobCount",
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+            if (state.pendingPermission != null) {
+                Text(
+                    "Waiting for approval: ${state.pendingPermission!!.action}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+            if (state.pendingForm != null) {
+                Text(
+                    "Waiting for an answer: ${state.pendingForm!!.title}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onChanges,
+                    enabled = changeCount > 0,
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Review changes")
+                }
+                TextButton(onClick = onWorkspace) {
+                    Text("Workspace")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RunSummaryCard(
+    assistant: Msg,
+    user: Msg?,
+    tools: List<Part.Tool>,
+    onChanges: () -> Unit,
+    onShare: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val files = remember(tools) { editedPaths(tools) }
+    val errors = tools.count { it.status == "error" || it.status == "failed" }
+    val duration = if (user != null && assistant.completed > user.created) {
+        assistant.completed - user.created
+    } else {
+        0L
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (errors > 0) Icons.Rounded.ErrorOutline else Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = if (errors > 0) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (errors > 0) "Run finished with errors" else "Run finished",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        Icons.Rounded.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Text(
+                buildString {
+                    formatElapsed(duration)?.let { append(it).append(" · ") }
+                    append(tools.size).append(if (tools.size == 1) " tool" else " tools")
+                    if (files.isNotEmpty()) {
+                        append(" · ").append(files.size)
+                            .append(if (files.size == 1) " file" else " files")
+                    }
+                    if (errors > 0) append(" · ").append(errors).append(" errors")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (files.isNotEmpty()) {
+                Text(
+                    files.take(3).joinToString("\n"),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (files.isNotEmpty()) {
+                    Button(
+                        onClick = onChanges,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Review changes")
+                    }
+                }
+                TextButton(onClick = onShare) {
+                    Text(stringResource(R.string.chat_share_card))
+                }
+            }
         }
     }
 }

@@ -23,6 +23,9 @@
     <string name="sessions_greeting_afternoon">Good afternoon</string>
     <string name="sessions_greeting_evening">Good evening</string>
     <string name="sessions_mission_control">Mission Control</string>
+    <string name="sessions_needs_you">Needs you</string>
+    <string name="sessions_needs_you_open">Open</string>
+    <string name="sessions_needs_you_more">+%1$d more</string>
     <string name="sessions_jump_live">Jump to the running sessions</string>
     <string name="sessions_empty_title">No sessions yet</string>
     <string name="sessions_empty_body">Start a session from the TUI, or create one here.</string>

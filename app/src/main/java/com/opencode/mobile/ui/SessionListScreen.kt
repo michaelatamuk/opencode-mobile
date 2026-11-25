@@ -106,7 +106,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.MutedStore
 import com.opencode.mobile.MutedProjectStore
+import com.opencode.mobile.FormRequest
 import com.opencode.mobile.OpenCodeRepository
+import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.ProjectOption
 import com.opencode.mobile.R
@@ -175,6 +177,16 @@ fun SessionListScreen(
     var showMission by remember { mutableStateOf(false) }
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingPermissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
+    var pendingForms by remember { mutableStateOf<List<FormRequest>>(emptyList()) }
+
+    LaunchedEffect(repo) {
+        while (true) {
+            runCatching { repo.permissions() }.onSuccess { pendingPermissions = it }
+            runCatching { repo.allForms() }.onSuccess { pendingForms = it }
+            delay(5_000)
+        }
+    }
 
     LaunchedEffect(state.sessions) {
         val runningNow = state.sessions.filter { it.running }.map { it.id }.toSet()
@@ -189,6 +201,18 @@ fun SessionListScreen(
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val sessionTitles = remember(state.sessions) {
+        state.sessions.associate { it.id to it.title }
+    }
+    val openSession: (String) -> Unit = { id ->
+        state.sessions.firstOrNull { it.id == id }?.let(onOpen)
+    }
+    val replyPermission: (PendingPermission, String) -> Unit = { request, decision ->
+        scope.launch {
+            runCatching { repo.reply(request.sessionID, request.id, decision) }
+            pendingPermissions = pendingPermissions.filterNot { it.id == request.id }
+        }
+    }
 
     val scoped = remember(state.sessions, projectFilter, showArchived) {
         var base = state.sessions.filter { if (showArchived) it.archived else !it.archived }
@@ -466,6 +490,18 @@ fun SessionListScreen(
                     state = listState,
                     contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
+                if (pendingPermissions.isNotEmpty() || pendingForms.isNotEmpty()) {
+                    item(key = "needs-you") {
+                        NeedsYouCard(
+                            permissions = pendingPermissions,
+                            forms = pendingForms,
+                            titles = sessionTitles,
+                            onOpen = openSession,
+                            onReply = replyPermission
+                        )
+                    }
+                }
+
                 if (running.isNotEmpty()) {
                     item(key = "active-strip") {
                         ActiveCards(
@@ -748,6 +784,117 @@ private fun projectLabel(project: ProjectOption, sessions: List<SessionItem>): S
         .substringAfterLast('/')
     return base.ifBlank {
         stringResource(R.string.sessions_project_fallback, project.id.take(4))
+    }
+}
+
+@Composable
+private fun NeedsYouCard(
+    permissions: List<PendingPermission>,
+    forms: List<FormRequest>,
+    titles: Map<String, String>,
+    onOpen: (String) -> Unit,
+    onReply: (PendingPermission, String) -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PulsingDot(color = MaterialTheme.colorScheme.primary, pulsing = true, size = 7)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.sessions_needs_you),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    "${permissions.size + forms.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            permissions.take(3).forEach { permission ->
+                Column(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                    Text(
+                        permission.action.ifBlank { stringResource(R.string.permission_title) },
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        titles[permission.sessionID]
+                            ?: stringResource(R.string.session_untitled),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        TextButton(onClick = { onReply(permission, "once") }) {
+                            Text(
+                                stringResource(R.string.permission_allow_once),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        TextButton(onClick = { onReply(permission, "always") }) {
+                            Text(
+                                stringResource(R.string.permission_always),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        TextButton(onClick = { onReply(permission, "reject") }) {
+                            Text(
+                                stringResource(R.string.permission_reject),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+            forms.take(3).forEach { form ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpen(form.sessionID) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            form.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            titles[form.sessionID] ?: stringResource(R.string.session_untitled),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.sessions_needs_you_open),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            val extra = (permissions.size - 3).coerceAtLeast(0) +
+                (forms.size - 3).coerceAtLeast(0)
+            if (extra > 0) {
+                Text(
+                    stringResource(R.string.sessions_needs_you_more, extra),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

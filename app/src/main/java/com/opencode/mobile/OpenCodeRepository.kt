@@ -89,6 +89,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun forms(sessionID: String): List<FormRequest> = api.forms(sessionID)
 
+    suspend fun allForms(): List<FormRequest> = api.allForms()
+
     suspend fun answerForm(sessionID: String, formID: String, answers: Map<String, Any>) =
         api.answerForm(sessionID, formID, answers)
 
