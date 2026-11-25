@@ -55,6 +55,12 @@ class OpenCodeRepository(val api: Api) {
     suspend fun writeFile(path: String, directory: String, content: String) =
         api.writeFile(path, directory, content)
 
+    suspend fun listFiles(directory: String, path: String): List<FileEntry> =
+        api.listFiles(directory, path)
+
+    suspend fun references(directory: String): List<ReferenceItem> =
+        api.references(directory)
+
     /**
      * Reverts one file by reverse-applying its patch. Returns false without
      * writing anything when the patch no longer matches the file.

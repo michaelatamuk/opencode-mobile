@@ -221,6 +221,10 @@ data class VcsChange(
 
 data class WorktreeEntry(val directory: String, val strategy: String)
 
+data class FileEntry(val path: String, val directory: Boolean)
+
+data class ReferenceItem(val name: String, val type: String, val detail: String)
+
 data class VcsInfo(val provider: String, val branch: String, val defaultBranch: String)
 
 data class SkillOption(
@@ -770,6 +774,47 @@ class Api(server: String, private val password: String, fallbackServer: String? 
     }
 
     /** Reads a text file relative to [directory] (or an absolute path). */
+    suspend fun listFiles(directory: String, path: String): List<FileEntry> =
+        withContext(Dispatchers.IO) {
+            val query = buildString {
+                append("?path=").append(Uri.encode(path.ifBlank { "." }))
+                if (directory.isNotBlank()) {
+                    append("&location[directory]=").append(Uri.encode(directory))
+                }
+            }
+            val data = getJson("/api/fs/list$query").optJSONArray("data") ?: JSONArray()
+            (0 until data.length()).mapNotNull { i ->
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                val filePath = o.optString("path").trimEnd('\\', '/')
+                if (filePath.isBlank()) return@mapNotNull null
+                FileEntry(filePath, o.optString("type") == "directory")
+            }.sortedWith(
+                compareByDescending<FileEntry> { it.directory }
+                    .thenBy { it.path.lowercase() }
+            )
+        }
+
+    suspend fun references(directory: String): List<ReferenceItem> =
+        withContext(Dispatchers.IO) {
+            val data = getJson("/api/reference${locationQuery(directory)}")
+                .optJSONArray("data") ?: JSONArray()
+            (0 until data.length()).mapNotNull { i ->
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                val source = o.optJSONObject("source")
+                val path = source?.optString("path").orEmpty()
+                val repository = source?.optString("repository").orEmpty()
+                ReferenceItem(
+                    name = o.optString("name")
+                        .ifBlank { source?.optString("name").orEmpty() }
+                        .ifBlank {
+                            path.substringAfterLast('\\').substringAfterLast('/')
+                        },
+                    type = source?.optString("type").orEmpty(),
+                    detail = path.ifBlank { repository }
+                )
+            }
+        }
+
     suspend fun readFile(path: String, directory: String): String = withContext(Dispatchers.IO) {
         val normalized = path.replace('\\', '/').removePrefix("/")
         val encodedPath = Uri.encode(normalized, "/:")

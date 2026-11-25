@@ -209,6 +209,7 @@ fun SessionListScreen(
     var showTemplates by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
     var showAutomations by remember { mutableStateOf(false) }
+    var subagentsFor by remember { mutableStateOf<SessionItem?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmBulkDelete by remember { mutableStateOf(false) }
@@ -899,6 +900,7 @@ fun SessionListScreen(
                             onOpen = onOpen,
                             onRename = { renaming = it },
                             onDelete = { deleting = it },
+                            onSubagents = { subagentsFor = it },
                             onMissionControl = { showMission = true }
                         )
                     }
@@ -1017,6 +1019,11 @@ fun SessionListScreen(
                                     subagentsExpanded = session.id in expandedParents,
                                     justFinished = session.id in flashIds,
                                     scheduled = session.id in state.scheduled,
+                                    onSubagents = if ((childCounts[session.id] ?: 0) > 0) {
+                                        { subagentsFor = session }
+                                    } else {
+                                        null
+                                    },
                                     selectionMode = selectionMode,
                                     selected = session.id in selectedIds,
                                     onToggleSelect = {
@@ -1082,6 +1089,11 @@ fun SessionListScreen(
                                                 subagent = true,
                                                 justFinished = child.id in flashIds,
                                                 scheduled = child.id in state.scheduled,
+                                                onSubagents = if ((childCounts[child.id] ?: 0) > 0) {
+                                                    { subagentsFor = child }
+                                                } else {
+                                                    null
+                                                },
                                                 selectionMode = selectionMode,
                                                 selected = child.id in selectedIds,
                                                 onToggleSelect = {
@@ -1182,6 +1194,19 @@ fun SessionListScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             }
+        )
+    }
+
+    subagentsFor?.let { root ->
+        SubagentsSheet(
+            root = root,
+            sessions = state.sessions,
+            onOpen = { child ->
+                subagentsFor = null
+                onOpen(child)
+            },
+            onStop = { child -> vm.stop(child.id) },
+            onDismiss = { subagentsFor = null }
         )
     }
 
@@ -1592,6 +1617,7 @@ private fun ActiveCards(
     onOpen: (SessionItem) -> Unit,
     onRename: (SessionItem) -> Unit,
     onDelete: (SessionItem) -> Unit,
+    onSubagents: (SessionItem) -> Unit,
     onMissionControl: () -> Unit
 ) {
     var showAll by remember { mutableStateOf(false) }
@@ -1631,7 +1657,12 @@ private fun ActiveCards(
                 subagents = childCounts[session.id] ?: 0,
                 onClick = { onOpen(session) },
                 onRename = { onRename(session) },
-                onDelete = { onDelete(session) }
+                onDelete = { onDelete(session) },
+                onSubagents = if ((childCounts[session.id] ?: 0) > 0) {
+                    { onSubagents(session) }
+                } else {
+                    null
+                }
             )
         }
 
@@ -1707,7 +1738,8 @@ private fun ActiveCard(
     subagents: Int,
     onClick: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onSubagents: (() -> Unit)? = null
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -1784,6 +1816,15 @@ private fun ActiveCard(
                             onRename()
                         }
                     )
+                    if (onSubagents != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.sessions_subagents)) },
+                            onClick = {
+                                menuOpen = false
+                                onSubagents()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = {
                             Text(
@@ -1818,6 +1859,7 @@ private fun SessionRow(
     subagentsExpanded: Boolean = false,
     justFinished: Boolean = false,
     scheduled: Boolean = false,
+    onSubagents: (() -> Unit)? = null,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {},
@@ -2055,6 +2097,15 @@ private fun SessionRow(
                     onRename()
                 }
             )
+            if (onSubagents != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sessions_subagents)) },
+                    onClick = {
+                        menuOpen = false
+                        onSubagents()
+                    }
+                )
+            }
             DropdownMenuItem(
                 text = {
                     Text(
@@ -2571,6 +2622,139 @@ private fun EmptySessions(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.action_new_session))
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SubagentsSheet(
+    root: SessionItem,
+    sessions: List<SessionItem>,
+    onOpen: (SessionItem) -> Unit,
+    onStop: (SessionItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    val rows = remember(root.id, sessions) {
+        val byParent = sessions.groupBy { it.parentID }
+        val out = mutableListOf<Pair<SessionItem, Int>>()
+        fun walk(id: String, depth: Int) {
+            byParent[id].orEmpty().forEach { child ->
+                if (child.id != root.id) {
+                    out.add(child to depth)
+                    walk(child.id, depth + 1)
+                }
+            }
+        }
+        walk(root.id, 0)
+        out
+    }
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.8f)
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            Text(
+                stringResource(R.string.sessions_subagents),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                root.title.ifBlank { stringResource(R.string.session_untitled) },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            if (rows.isEmpty()) {
+                Text(
+                    stringResource(R.string.subagents_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                LazyColumn(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(rows) { (child, depth) ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(start = (depth * 16).dp)
+                                .clickable { onOpen(child) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    child.title.ifBlank {
+                                        stringResource(R.string.session_untitled)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    if (child.running) {
+                                        stringResource(
+                                            R.string.chat_activity_running_short,
+                                            elapsedClock(child.busyAt, now)
+                                        )
+                                    } else {
+                                        child.outcome.ifBlank {
+                                            stringResource(R.string.session_idle)
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (child.outcome.isNotBlank() &&
+                                        child.outcome != "succeeded" &&
+                                        !child.running
+                                    ) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                            if (child.running) {
+                                IconButton(
+                                    onClick = { onStop(child) },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Stop,
+                                        contentDescription = stringResource(R.string.action_stop),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                stringResource(R.string.sessions_needs_you_open),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
             }
         }
     }

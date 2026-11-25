@@ -93,6 +93,8 @@
     <string name="action_unarchive">Unarchive</string>
     <string name="sessions_archived">Archived</string>
     <string name="sessions_subagents">Subagents</string>
+    <string name="subagents_empty">No subagents.</string>
+    <string name="session_idle">Idle</string>
     <string name="sessions_show_subagents">Show %1$d subagent runs</string>
     <string name="sessions_hide_subagents">Hide %1$d subagent runs</string>
     <string name="session_subagent_count">%1$d subagents</string>
@@ -226,6 +228,7 @@
     <string name="chat_queue_edit">Edit</string>
     <string name="chat_queue_edit_title">Edit queued message</string>
     <string name="chat_attach_file">Attach file</string>
+    <string name="chat_project">Project</string>
     <string name="chat_workspace">Workspace</string>
     <string name="workspace_jobs">Jobs</string>
     <string name="workspace_context">Context</string>

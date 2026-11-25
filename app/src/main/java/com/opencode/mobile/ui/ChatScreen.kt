@@ -103,9 +103,11 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -212,6 +214,8 @@ import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
 import com.opencode.mobile.ApiException
 import com.opencode.mobile.ContextSummary
+import com.opencode.mobile.FileEntry
+import com.opencode.mobile.ReferenceItem
 import com.opencode.mobile.InstructionEntry
 import com.opencode.mobile.JobItem
 import com.opencode.mobile.RunningShell
@@ -277,6 +281,7 @@ fun ChatScreen(
     var showSchedules by remember { mutableStateOf(false) }
     var showShell by remember { mutableStateOf(false) }
     var showWorkspace by remember { mutableStateOf(false) }
+    var showProject by remember { mutableStateOf(false) }
     var showOverview by remember { mutableStateOf(false) }
     var runningShells by remember { mutableStateOf<List<RunningShell>>(emptyList()) }
     var runningJobs by remember { mutableStateOf<List<JobItem>>(emptyList()) }
@@ -937,6 +942,13 @@ fun ChatScreen(
                                 }
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_project)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showProject = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_workspace)) },
                                 onClick = {
                                     menuOpen = false
@@ -1534,6 +1546,15 @@ fun ChatScreen(
                 showWorkspace = false
                 onSessionCreated(imported)
             }
+        )
+    }
+
+    if (showProject && sessionID != null) {
+        ProjectSheet(
+            repo = repo,
+            directory = state.directory,
+            projectID = state.projectID,
+            onDismiss = { showProject = false }
         )
     }
 
@@ -5736,6 +5757,381 @@ private fun RunSummaryCard(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProjectSheet(
+    repo: OpenCodeRepository,
+    directory: String,
+    projectID: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var branch by remember { mutableStateOf("") }
+    var instruction by remember { mutableStateOf<String?>(null) }
+    var instructionDraft by remember { mutableStateOf("") }
+    var editingInstruction by remember { mutableStateOf(false) }
+    var savingInstruction by remember { mutableStateOf(false) }
+    var filePath by remember { mutableStateOf("") }
+    var files by remember { mutableStateOf<List<FileEntry>?>(null) }
+    var references by remember { mutableStateOf<List<ReferenceItem>>(emptyList()) }
+    var worktrees by remember { mutableStateOf<List<WorktreeEntry>>(emptyList()) }
+    var worktreeName by remember { mutableStateOf("") }
+    var viewFile by remember { mutableStateOf<String?>(null) }
+    var confirmRemove by remember { mutableStateOf<WorktreeEntry?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var projectReload by remember { mutableStateOf(0) }
+    var fileReload by remember { mutableStateOf(0) }
+
+    LaunchedEffect(directory, projectReload) {
+        if (directory.isBlank()) {
+            error = "This session has no project directory."
+            return@LaunchedEffect
+        }
+        branch = runCatching { repo.vcsInfo(directory) }.getOrNull()?.branch.orEmpty()
+        instruction = try {
+            repo.readFile("AGENTS.md", directory)
+        } catch (e: ApiException) {
+            if (e.status == 404) "" else {
+                error = friendlyError(e)
+                null
+            }
+        } catch (e: Exception) {
+            error = friendlyError(e)
+            null
+        }
+        instructionDraft = instruction.orEmpty()
+        references = runCatching { repo.references(directory) }.getOrDefault(emptyList())
+        worktrees = if (projectID.isBlank()) {
+            emptyList()
+        } else {
+            runCatching { repo.worktrees(projectID) }.getOrDefault(emptyList())
+        }
+    }
+
+    LaunchedEffect(filePath, directory, fileReload) {
+        if (directory.isBlank()) return@LaunchedEffect
+        files = runCatching { repo.listFiles(directory, filePath) }
+            .getOrElse {
+                error = friendlyError(it)
+                emptyList()
+            }
+    }
+
+    fun saveInstruction() {
+        if (directory.isBlank() || savingInstruction) return
+        savingInstruction = true
+        scope.launch {
+            try {
+                repo.writeFile("AGENTS.md", directory, instructionDraft)
+                instruction = instructionDraft
+                editingInstruction = false
+                error = null
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                savingInstruction = false
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.chat_project),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.workspace_close))
+                }
+            }
+            Text(
+                directory.ifBlank { "No workspace directory" },
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (branch.isNotBlank()) {
+                Text(
+                    branch,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            error?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Instructions · AGENTS.md", style = MaterialTheme.typography.titleSmall)
+            if (editingInstruction) {
+                OutlinedTextField(
+                    value = instructionDraft,
+                    onValueChange = { instructionDraft = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 360.dp),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.5.sp,
+                        lineHeight = 17.sp
+                    ),
+                    maxLines = 1000
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { saveInstruction() },
+                        enabled = !savingInstruction,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                    TextButton(onClick = {
+                        editingInstruction = false
+                        instructionDraft = instruction.orEmpty()
+                    }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            } else {
+                Text(
+                    instruction.orEmpty().ifBlank { "No AGENTS.md yet." }.take(1_500),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = {
+                    instructionDraft = instruction.orEmpty()
+                    editingInstruction = true
+                }) {
+                    Text(if (instruction.orEmpty().isBlank()) "Create AGENTS.md" else "Edit AGENTS.md")
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Files", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                if (filePath.isNotBlank()) {
+                    TextButton(onClick = {
+                        filePath = filePath.substringBeforeLast('/', "")
+                    }) {
+                        Text("Up")
+                    }
+                }
+                TextButton(onClick = { fileReload++ }) {
+                    Text(stringResource(R.string.workspace_refresh))
+                }
+            }
+            Text(
+                "/" + filePath,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            when {
+                files == null -> CircularProgressIndicator(Modifier.size(22.dp))
+                files!!.isEmpty() -> Text(
+                    "No files here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> {
+                    files!!.take(80).forEach { entry ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (entry.directory) {
+                                        filePath = entry.path.replace('\\', '/')
+                                    } else {
+                                        viewFile = entry.path.replace('\\', '/')
+                                    }
+                                }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (entry.directory) Icons.Rounded.Folder
+                                else Icons.Rounded.Description,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                entry.path.replace('\\', '/').substringAfterLast('/'),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (files!!.size > 80) {
+                        Text(
+                            "+${files!!.size - 80} more",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("References", style = MaterialTheme.typography.titleSmall)
+            if (references.isEmpty()) {
+                Text(
+                    "No references.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                references.take(12).forEach { reference ->
+                    Text(
+                        reference.name.ifBlank { reference.detail },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        listOf(reference.type, reference.detail)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Worktrees", style = MaterialTheme.typography.titleSmall)
+            if (projectID.isBlank()) {
+                Text(
+                    "This session has no project yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = worktreeName,
+                        onValueChange = { worktreeName = it },
+                        label = { Text(stringResource(R.string.workspace_worktree_name)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            val name = worktreeName.trim()
+                            if (name.isNotEmpty()) {
+                                scope.launch {
+                                    try {
+                                        repo.createWorktree(projectID, name)
+                                        worktreeName = ""
+                                        projectReload++
+                                    } catch (e: Exception) {
+                                        error = friendlyError(e)
+                                    }
+                                }
+                            }
+                        },
+                        enabled = worktreeName.isNotBlank(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(stringResource(R.string.workspace_create))
+                    }
+                }
+                worktrees.take(12).forEach { entry ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            entry.directory,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (entry.strategy.isNotBlank()) {
+                            IconButton(
+                                onClick = { confirmRemove = entry },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.workspace_remove_worktree),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    viewFile?.let { file ->
+        FileSheet(
+            repo = repo,
+            path = file,
+            directory = directory,
+            onDismiss = { viewFile = null }
+        )
+    }
+
+    confirmRemove?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { confirmRemove = null },
+            title = { Text(stringResource(R.string.workspace_remove_worktree)) },
+            text = {
+                Text(
+                    stringResource(R.string.workspace_remove_worktree_body) +
+                        "\n\n" + entry.directory
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRemove = null
+                    scope.launch {
+                        runCatching { repo.removeWorktree(projectID, entry.directory, true) }
+                            .onFailure { error = friendlyError(it) }
+                        projectReload++
+                    }
+                }) {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRemove = null }) {
+                    Text(stringResource(R.string.workspace_cancel))
+                }
+            }
+        )
     }
 }
 

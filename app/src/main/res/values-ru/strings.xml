@@ -91,6 +91,8 @@
     <string name="action_unarchive">Из архива</string>
     <string name="sessions_archived">Архив</string>
     <string name="sessions_subagents">Субагенты</string>
+    <string name="subagents_empty">Субагентов нет.</string>
+    <string name="session_idle">Ожидает</string>
     <string name="sessions_show_subagents">Показать запуски субагентов: %1$d</string>
     <string name="sessions_hide_subagents">Скрыть запуски субагентов: %1$d</string>
     <string name="session_subagent_count">%1$d субагентов</string>
@@ -221,6 +223,7 @@
     <string name="chat_queue_edit">Изменить</string>
     <string name="chat_queue_edit_title">Изменить сообщение в очереди</string>
     <string name="chat_attach_file">Прикрепить файл</string>
+    <string name="chat_project">Проект</string>
     <string name="chat_workspace">Рабочая область</string>
     <string name="workspace_jobs">Задачи</string>
     <string name="workspace_context">Контекст</string>
