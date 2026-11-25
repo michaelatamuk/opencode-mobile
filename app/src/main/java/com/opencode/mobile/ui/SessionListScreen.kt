@@ -106,6 +106,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opencode.mobile.MutedStore
 import com.opencode.mobile.MutedProjectStore
+import com.opencode.mobile.DraftStore
 import com.opencode.mobile.FormRequest
 import com.opencode.mobile.OpenCodeRepository
 import com.opencode.mobile.PendingPermission
@@ -176,6 +177,8 @@ fun SessionListScreen(
     var showCost by remember { mutableStateOf(false) }
     var showMission by remember { mutableStateOf(false) }
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var finishedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showTemplates by remember { mutableStateOf(false) }
     var previousRunning by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingPermissions by remember { mutableStateOf<List<PendingPermission>>(emptyList()) }
     var pendingForms by remember { mutableStateOf<List<FormRequest>>(emptyList()) }
@@ -194,6 +197,7 @@ fun SessionListScreen(
         previousRunning = runningNow
         if (finished.isNotEmpty()) {
             flashIds = flashIds + finished
+            finishedIds = finishedIds + finished
             delay(1400)
             flashIds = flashIds - finished
         }
@@ -445,18 +449,23 @@ fun SessionListScreen(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-            FloatingActionButton(
-                onClick = onNewSession,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
+            Box(
+                Modifier
                     .align(Alignment.BottomEnd)
                     .padding(18.dp)
                     .zIndex(1f)
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .combinedClickable(
+                        onClick = onNewSession,
+                        onLongClick = { showTemplates = true }
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Rounded.Add,
                     contentDescription = stringResource(R.string.action_new_session),
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -498,6 +507,22 @@ fun SessionListScreen(
                             titles = sessionTitles,
                             onOpen = openSession,
                             onReply = replyPermission
+                        )
+                    }
+                }
+
+                val finishedSessions = state.sessions.filter {
+                    it.id in finishedIds && !it.archived
+                }
+                if (finishedSessions.isNotEmpty()) {
+                    item(key = "finished-strip") {
+                        FinishedStrip(
+                            sessions = finishedSessions,
+                            onOpen = { session ->
+                                finishedIds = finishedIds - session.id
+                                onOpen(session)
+                            },
+                            onClear = { finishedIds = emptySet() }
                         )
                     }
                 }
@@ -680,6 +705,17 @@ fun SessionListScreen(
 }
 
 
+    if (showTemplates) {
+        TemplatesDialog(
+            onDismiss = { showTemplates = false },
+            onPick = { prompt ->
+                DraftStore.save(context, null, prompt)
+                showTemplates = false
+                onNewSession()
+            }
+        )
+    }
+
     if (showCost) {
         CostSheet(sessions = state.sessions, onDismiss = { showCost = false })
     }
@@ -784,6 +820,111 @@ private fun projectLabel(project: ProjectOption, sessions: List<SessionItem>): S
         .substringAfterLast('/')
     return base.ifBlank {
         stringResource(R.string.sessions_project_fallback, project.id.take(4))
+    }
+}
+
+@Composable
+private fun TemplatesDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val templates = listOf(
+        R.string.sessions_template_review to
+            "Review the uncommitted changes in this project. Explain the intent, flag risky edits, and suggest the smallest safe fixes.",
+        R.string.sessions_template_tests to
+            "Run the test suite, identify the failures, and fix them. Keep the changes minimal and report what changed.",
+        R.string.sessions_template_write to
+            "Write focused tests for the most important untested behavior in this project. Run them and report the results.",
+        R.string.sessions_template_explain to
+            "Give me a concise architecture tour of this repository: main entry points, data flow, and where to start for a new feature.",
+        R.string.sessions_template_ci to
+            "Investigate the failing CI run, find the root cause, and fix it with the smallest change."
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sessions_templates)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                templates.forEach { (title, prompt) ->
+                    TextButton(
+                        onClick = { onPick(prompt) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(title),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Start
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun FinishedStrip(
+    sessions: List<SessionItem>,
+    onOpen: (SessionItem) -> Unit,
+    onClear: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.sessions_finished_since),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClear) {
+                    Text(
+                        stringResource(R.string.sessions_clear),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+            sessions.take(3).forEach { session ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpen(session) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            session.title.ifBlank { stringResource(R.string.session_untitled) },
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "Finished",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.sessions_needs_you_open),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (sessions.size > 3) {
+                Text(
+                    stringResource(R.string.sessions_needs_you_more, sessions.size - 3),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

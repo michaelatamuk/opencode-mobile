@@ -10,16 +10,25 @@ object UiPrefs {
     private const val MODE = "theme_mode"
     private const val ACCENT = "accent"
     private const val SHOW_SUBAGENTS = "show_subagents"
+    private const val SHOW_TOOLS = "show_tools"
 
     val mode = MutableStateFlow("dynamic")
     val accent = MutableStateFlow("blue")
     val showSubagents = MutableStateFlow(false)
+    val showTools = MutableStateFlow(true)
 
     fun load(context: Context) {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         mode.value = prefs.getString(MODE, "dynamic") ?: "dynamic"
         accent.value = prefs.getString(ACCENT, "blue") ?: "blue"
         showSubagents.value = prefs.getBoolean(SHOW_SUBAGENTS, false)
+        showTools.value = prefs.getBoolean(SHOW_TOOLS, true)
+    }
+
+    fun setShowTools(context: Context, value: Boolean) {
+        showTools.value = value
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .edit().putBoolean(SHOW_TOOLS, value).apply()
     }
 
     fun setShowSubagents(context: Context, value: Boolean) {

@@ -84,6 +84,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -215,6 +216,7 @@ import com.opencode.mobile.InstructionEntry
 import com.opencode.mobile.JobItem
 import com.opencode.mobile.RunningShell
 import com.opencode.mobile.SavedPermission
+import com.opencode.mobile.UiPrefs
 import com.opencode.mobile.VcsChange
 import com.opencode.mobile.WorktreeEntry
 import com.opencode.mobile.ScheduleItem
@@ -250,6 +252,7 @@ fun ChatScreen(
         ChatViewModel(repo, sessionID, context)
     }
     val state by vm.state.collectAsStateWithLifecycle()
+    val showTools by UiPrefs.showTools.collectAsStateWithLifecycle()
 
     var input by remember(sessionID) { mutableStateOf(DraftStore.get(context, sessionID)) }
     var picked by remember { mutableStateOf<List<PickedAttachment>>(emptyList()) }
@@ -416,11 +419,31 @@ fun ChatScreen(
         }
     }
 
+    val seenStore = remember(context) { SeenStore(context) }
+    val previousSeen = remember(sessionID) {
+        if (sessionID == null) 0L else seenStore.lastSeen(sessionID)
+    }
+
     val displayMessages = remember(state.messages, query) {
         if (query.isBlank()) state.messages
         else state.messages.filter { it.plainText.contains(query, ignoreCase = true) }
     }
     val blocks = remember(displayMessages) { buildChatBlocks(displayMessages) }
+
+    val unread = remember(displayMessages, previousSeen) {
+        if (previousSeen <= 0L) emptyList()
+        else displayMessages.filter { it.created > previousSeen && it.role == "assistant" }
+    }
+    val firstUnread = unread.firstOrNull()
+    val unreadBlockIndex = remember(blocks, firstUnread) {
+        if (firstUnread == null) -1 else blocks.indexOfFirst { block ->
+            when (block) {
+                is ChatBlock.UserBlock -> block.message.id == firstUnread.id
+                is ChatBlock.TurnBlock -> block.messages.any { it.id == firstUnread.id }
+                else -> false
+            }
+        }
+    }
 
     val lastAssistant = state.messages.lastOrNull { it.role == "assistant" }
     val lastUser = state.messages.lastOrNull { it.role == "user" }
@@ -432,7 +455,6 @@ fun ChatScreen(
 
     val lastId = state.messages.lastOrNull()?.id
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
-    val seenStore = remember(context) { SeenStore(context) }
     var initialPositioned by remember(sessionID) { mutableStateOf(false) }
     var restoreKey by remember(sessionID) { mutableStateOf<String?>(null) }
     // Follow the live turn unless the reader has scrolled up. Lazy item indices
@@ -893,6 +915,18 @@ fun ChatScreen(
                                 )
                             }
                             DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (showTools) "Hide tool calls"
+                                        else "Show tool calls"
+                                    )
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    UiPrefs.setShowTools(context, !showTools)
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_workspace)) },
                                 onClick = {
                                     menuOpen = false
@@ -942,7 +976,7 @@ fun ChatScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom)
             ) {
-                items(blocks, key = { it.key }) { block ->
+                itemsIndexed(blocks, key = { _, block -> block.key }) { index, block ->
                     Box(
                         Modifier.animateItem(
                             fadeInSpec = tween(200),
@@ -950,6 +984,10 @@ fun ChatScreen(
                             fadeOutSpec = tween(140)
                         )
                     ) {
+                        Column {
+                        if (index == unreadBlockIndex && unread.isNotEmpty()) {
+                            UnreadSeparator(unread.size)
+                        }
                         when (block) {
                             is ChatBlock.DaySeparator -> DayPill(block.at)
                             is ChatBlock.UserBlock -> UserMessage(
@@ -961,8 +999,10 @@ fun ChatScreen(
                             is ChatBlock.TurnBlock -> TurnMessage(
                                 messages = block.messages,
                                 directory = state.directory,
+                                showTools = showTools,
                                 onSpeak = speak
                             )
+                        }
                         }
                     }
                 }
@@ -4159,6 +4199,7 @@ private fun DayPill(at: Long) {
 private fun TurnMessage(
     messages: List<Msg>,
     directory: String,
+    showTools: Boolean,
     onSpeak: (String) -> Unit
 ) {
     val pending = messages.lastOrNull()?.pending == true
@@ -4174,11 +4215,13 @@ private fun TurnMessage(
     ) {
         entries.forEachIndexed { index, entry ->
             when (entry) {
-                is TurnEntry.Steps -> StepLine(
-                    parts = entry.parts,
-                    directory = directory,
-                    pending = pending
-                )
+                is TurnEntry.Steps -> if (showTools) {
+                    StepLine(
+                        parts = entry.parts,
+                        directory = directory,
+                        pending = pending
+                    )
+                }
 
                 is TurnEntry.Text -> SelectionContainer {
                     // Intermediate narration stays quieter; the latest block is the answer.
@@ -4924,6 +4967,29 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
  * stays visible no matter where the transcript is scrolled. Mirrors the TUI's
  * bottom "Working" line instead of duplicating it inside the transcript.
  */
+@Composable
+private fun UnreadSeparator(count: Int) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HorizontalDivider(
+            Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+        Text(
+            stringResource(R.string.chat_new_since, count),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+        HorizontalDivider(
+            Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
 @Composable
 private fun LiveStatusStrip(
     busy: Boolean,

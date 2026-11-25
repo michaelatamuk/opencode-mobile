@@ -26,6 +26,14 @@
     <string name="sessions_needs_you">Needs you</string>
     <string name="sessions_needs_you_open">Open</string>
     <string name="sessions_needs_you_more">+%1$d more</string>
+    <string name="sessions_finished_since">Finished since you left</string>
+    <string name="sessions_clear">Clear</string>
+    <string name="sessions_templates">Start with a template</string>
+    <string name="sessions_template_review">Review my changes</string>
+    <string name="sessions_template_tests">Fix failing tests</string>
+    <string name="sessions_template_write">Write tests</string>
+    <string name="sessions_template_explain">Explain this repository</string>
+    <string name="sessions_template_ci">Fix CI</string>
     <string name="sessions_jump_live">Jump to the running sessions</string>
     <string name="sessions_empty_title">No sessions yet</string>
     <string name="sessions_empty_body">Start a session from the TUI, or create one here.</string>
@@ -171,6 +179,7 @@
     <string name="chat_activity_thought_for">Thought for %1$ds</string>
     <string name="chat_activity_working">Working %1$s</string>
     <string name="chat_background">Background</string>
+    <string name="chat_new_since">%1$d new</string>
     <string name="chat_activity_running_short">Running %1$s</string>
     <string name="chat_activity_used">Used %1$s</string>
     <string name="chat_activity_thoughts_one">1 Thought</string>

@@ -24,6 +24,14 @@
     <string name="sessions_needs_you">Нужно решение</string>
     <string name="sessions_needs_you_open">Открыть</string>
     <string name="sessions_needs_you_more">Ещё %1$d</string>
+    <string name="sessions_finished_since">Завершились без вас</string>
+    <string name="sessions_clear">Очистить</string>
+    <string name="sessions_templates">Начать с шаблона</string>
+    <string name="sessions_template_review">Проверить мои изменения</string>
+    <string name="sessions_template_tests">Починить падающие тесты</string>
+    <string name="sessions_template_write">Написать тесты</string>
+    <string name="sessions_template_explain">Объяснить репозиторий</string>
+    <string name="sessions_template_ci">Починить CI</string>
     <string name="sessions_jump_live">К работающим сессиям</string>
     <string name="sessions_empty_title">Сессий пока нет</string>
     <string name="sessions_empty_body">Запустите сессию в TUI или создайте её здесь.</string>
@@ -166,6 +174,7 @@
     <string name="chat_activity_thought_for">Размышление %1$d с</string>
     <string name="chat_activity_working">Работа %1$s</string>
     <string name="chat_background">В фон</string>
+    <string name="chat_new_since">%1$d новых</string>
     <string name="chat_activity_running_short">Выполняется %1$s</string>
     <string name="chat_activity_used">Использовано %1$s</string>
     <string name="chat_activity_thoughts_one">1 мысль</string>
