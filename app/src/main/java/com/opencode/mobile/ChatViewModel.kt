@@ -365,6 +365,20 @@ class ChatViewModel(
         }
     }
 
+    fun background() {
+        val id = activeID ?: return
+        viewModelScope.launch {
+            try {
+                repo.background(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = friendlyError(e)) }
+            }
+            refreshNow()
+        }
+    }
+
     fun reply(decision: String) {
         val request = _state.value.pendingPermission ?: return
         viewModelScope.launch {

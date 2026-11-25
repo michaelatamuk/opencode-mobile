@@ -83,6 +83,8 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun interrupt(sessionID: String) = api.interrupt(sessionID)
 
+    suspend fun background(sessionID: String) = api.background(sessionID)
+
     suspend fun permissions(): List<PendingPermission> = api.permissions()
 
     suspend fun forms(sessionID: String): List<FormRequest> = api.forms(sessionID)

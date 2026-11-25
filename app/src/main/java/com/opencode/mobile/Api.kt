@@ -947,6 +947,11 @@ class Api(server: String, private val password: String, fallbackServer: String? 
         Unit
     }
 
+    /** Detaches the session's active foreground tools and lets the turn continue. */
+    suspend fun background(sessionID: String): Unit = withContext(Dispatchers.IO) {
+        postEmpty("/api/session/$sessionID/background", "{}")
+    }
+
     suspend fun permissions(): List<PendingPermission> = withContext(Dispatchers.IO) {
         val data = getJson("/api/permission/request").optJSONArray("data") ?: JSONArray()
         (0 until data.length()).map { i ->

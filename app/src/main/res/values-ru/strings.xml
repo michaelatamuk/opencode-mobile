@@ -162,6 +162,7 @@
     <string name="chat_activity_thought">Размышление</string>
     <string name="chat_activity_thought_for">Размышление %1$d с</string>
     <string name="chat_activity_working">Работа %1$s</string>
+    <string name="chat_background">В фон</string>
     <string name="chat_activity_running_short">Выполняется %1$s</string>
     <string name="chat_activity_used">Использовано %1$s</string>
     <string name="chat_activity_thoughts_one">1 мысль</string>

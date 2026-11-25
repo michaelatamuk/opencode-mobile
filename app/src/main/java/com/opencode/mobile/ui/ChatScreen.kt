@@ -958,6 +958,7 @@ fun ChatScreen(
             LiveStatusStrip(
                 busy = state.busy,
                 messages = state.messages,
+                onBackground = { vm.background() },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
@@ -4791,6 +4792,7 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
 private fun LiveStatusStrip(
     busy: Boolean,
     messages: List<Msg>,
+    onBackground: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (!busy) return
@@ -4840,8 +4842,21 @@ private fun LiveStatusStrip(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        // Detach the running tool and let the turn continue, like the desktop.
+        if (tool != null) {
+            TextButton(
+                onClick = onBackground,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    stringResource(R.string.chat_background),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
     }
 }
 
