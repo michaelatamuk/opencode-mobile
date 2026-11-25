@@ -147,7 +147,9 @@ data class ScheduleItem(
     /** Runs left for a schedule with a stop limit; 0 when unlimited. */
     val remainingRuns: Int = 0,
     /** Shell command that must succeed before the wake, when set. */
-    val condition: String = ""
+    val condition: String = "",
+    /** Owning session for a global automation. */
+    val sessionID: String = ""
 )
 
 data class McpServer(val name: String, val status: String)
@@ -1190,12 +1192,20 @@ class Api(server: String, private val password: String, fallbackServer: String? 
                     else -> ""
                 },
                 remainingRuns = o.optInt("remainingRuns"),
-                condition = o.optJSONObject("if")?.optString("run").orEmpty()
+                condition = o.optJSONObject("if")?.optString("run").orEmpty(),
+                sessionID = o.optString("sessionID").ifBlank {
+                    action?.optJSONObject("to")?.optString("session").orEmpty()
+                }
             )
         }
     }
 
     /** OpenCode 2.4 replaced experimental schedules with experimental automations. */
+    /** Every automation in the workspace, across sessions. */
+    suspend fun allAutomations(): List<ScheduleItem> = withContext(Dispatchers.IO) {
+        parseScheduleItems(getJson("/api/experimental/automation"), "trigger")
+    }
+
     suspend fun automations(sessionID: String): List<ScheduleItem> = withContext(Dispatchers.IO) {
         val payload = try {
             getJson("/api/experimental/automation?sessionID=${Uri.encode(sessionID)}")

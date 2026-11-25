@@ -23,6 +23,12 @@
     <string name="sessions_mission_control">Центр управления</string>
     <string name="sessions_needs_you">Нужно решение</string>
     <string name="sessions_add_computer">Добавить компьютер</string>
+    <string name="sessions_automations">Автоматизации</string>
+    <string name="automations_new">Новая автоматизация</string>
+    <string name="automations_hint">Все автоматизации по сессиям. Выполняются на сервере.</string>
+    <string name="automations_empty">Автоматизаций пока нет.</string>
+    <string name="automations_create">Создать</string>
+    <string name="automations_session">Выберите сессию</string>
     <string name="sessions_select">Выбрать сессии</string>
     <string name="sessions_select_all">Все</string>
     <string name="sessions_bulk_delete_title">Удалить сессии: %1$d?</string>
@@ -75,6 +81,8 @@
     <string name="action_rename">Переименовать</string>
     <string name="action_delete">Удалить</string>
     <string name="action_copy_id">Копировать ID сессии</string>
+    <string name="action_edit">Изменить</string>
+    <string name="file_view_only">Большой файл — редактирование отключено.</string>
     <string name="action_pin">Закрепить</string>
     <string name="action_unpin">Открепить</string>
     <string name="action_mute">Отключить уведомления</string>
@@ -225,6 +233,8 @@
     <string name="workspace_refresh">Обновить</string>
     <string name="workspace_close">Закрыть</string>
     <string name="workspace_export">Экспорт</string>
+    <string name="workspace_export_md">Markdown</string>
+    <string name="workspace_export_html">HTML</string>
     <string name="workspace_import">Импорт из файла</string>
     <string name="workspace_add">Добавить</string>
     <string name="workspace_save">Сохранить</string>

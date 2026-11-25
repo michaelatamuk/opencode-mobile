@@ -52,6 +52,9 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun readFile(path: String, directory: String): String = api.readFile(path, directory)
 
+    suspend fun writeFile(path: String, directory: String, content: String) =
+        api.writeFile(path, directory, content)
+
     /**
      * Reverts one file by reverse-applying its patch. Returns false without
      * writing anything when the patch no longer matches the file.
@@ -105,6 +108,8 @@ class OpenCodeRepository(val api: Api) {
     suspend fun automations(sessionID: String): List<ScheduleItem> = api.automations(sessionID)
 
     suspend fun sessionsWithAutomations(): Set<String> = api.sessionsWithAutomations()
+
+    suspend fun allAutomations(): List<ScheduleItem> = api.allAutomations()
 
     suspend fun createAutomation(
         sessionID: String,

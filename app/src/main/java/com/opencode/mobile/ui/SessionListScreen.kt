@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,7 +60,10 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
@@ -68,6 +72,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -118,10 +124,12 @@ import com.opencode.mobile.Api
 import com.opencode.mobile.DraftStore
 import com.opencode.mobile.FormRequest
 import com.opencode.mobile.OpenCodeRepository
+import com.opencode.mobile.friendlyError
 import com.opencode.mobile.PendingPermission
 import com.opencode.mobile.PinnedStore
 import com.opencode.mobile.ProjectOption
 import com.opencode.mobile.R
+import com.opencode.mobile.ScheduleItem
 import com.opencode.mobile.SecurePrefs
 import com.opencode.mobile.SeenStore
 import com.opencode.mobile.ServerProfile
@@ -200,6 +208,7 @@ fun SessionListScreen(
     var finishedMeta by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var showTemplates by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
+    var showAutomations by remember { mutableStateOf(false) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmBulkDelete by remember { mutableStateOf(false) }
@@ -638,6 +647,16 @@ fun SessionListScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                    if (!selectionMode) {
+                        IconButton(onClick = { showAutomations = true }) {
+                            Icon(
+                                Icons.Rounded.Schedule,
+                                contentDescription = stringResource(R.string.sessions_automations),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                     if (history.isNotEmpty() && !selectionMode) {
@@ -1163,6 +1182,18 @@ fun SessionListScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             }
+        )
+    }
+
+    if (showAutomations) {
+        AutomationsSheet(
+            repo = repo,
+            sessions = state.sessions.filter { !it.archived },
+            onOpen = { session ->
+                showAutomations = false
+                onOpen(session)
+            },
+            onDismiss = { showAutomations = false }
         )
     }
 
@@ -2543,4 +2574,360 @@ private fun EmptySessions(
             }
         }
     }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun AutomationsSheet(
+    repo: OpenCodeRepository,
+    sessions: List<SessionItem>,
+    onOpen: (SessionItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    val scope = rememberCoroutineScope()
+    var items by remember { mutableStateOf<List<ScheduleItem>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var showCreate by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    val titles = remember(sessions) { sessions.associate { it.id to it.title } }
+
+    suspend fun load() {
+        try {
+            items = repo.allAutomations()
+            error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    LaunchedEffect(Unit) { load() }
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.sessions_automations),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { showCreate = true }) {
+                    Text(stringResource(R.string.automations_new))
+                }
+            }
+            Text(
+                stringResource(R.string.automations_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            when {
+                items == null && error == null -> Box(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                }
+
+                error != null -> Column {
+                    Text(
+                        error!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = { scope.launch { load() } }) {
+                        Text(stringResource(R.string.workspace_refresh))
+                    }
+                }
+
+                items!!.isEmpty() -> Text(
+                    stringResource(R.string.automations_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                else -> LazyColumn(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(items!!) { item ->
+                        AutomationRow(
+                            item = item,
+                            sessionTitle = titles[item.sessionID].orEmpty(),
+                            onOpen = {
+                                sessions.firstOrNull { it.id == item.sessionID }
+                                    ?.let(onOpen)
+                            },
+                            onPause = {
+                                scope.launch {
+                                    runCatching {
+                                        repo.setAutomationPaused(
+                                            item.id,
+                                            !item.status.contains("pause", ignoreCase = true)
+                                        )
+                                    }
+                                    load()
+                                }
+                            },
+                            onDelete = {
+                                scope.launch {
+                                    runCatching { repo.deleteAutomation(item.id) }
+                                    load()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCreate) {
+        AutomationCreateDialog(
+            sessions = sessions,
+            creating = creating,
+            onDismiss = { if (!creating) showCreate = false },
+            onCreate = { sessionID, prompt, trigger ->
+                scope.launch {
+                    creating = true
+                    try {
+                        repo.createAutomation(sessionID, prompt, trigger)
+                        showCreate = false
+                        load()
+                    } catch (e: Exception) {
+                        error = friendlyError(e)
+                    } finally {
+                        creating = false
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun AutomationRow(
+    item: ScheduleItem,
+    sessionTitle: String,
+    onOpen: () -> Unit,
+    onPause: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val paused = item.status.contains("pause", ignoreCase = true)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)
+    ) {
+        Row(
+            Modifier.padding(start = 14.dp, end = 2.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    item.prompt.ifBlank { stringResource(R.string.sessions_automations) },
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    listOfNotNull(
+                        automationWhenText(item),
+                        item.status.replaceFirstChar { it.uppercase() },
+                        sessionTitle.takeIf { it.isNotBlank() }
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (item.lastOutput.isNotBlank()) {
+                    Text(
+                        item.lastOutput.replace('\n', ' '),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            IconButton(onClick = onPause, modifier = Modifier.size(34.dp)) {
+                Icon(
+                    if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                Icon(
+                    Icons.Rounded.Delete,
+                    contentDescription = stringResource(R.string.action_delete),
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun automationWhenText(item: ScheduleItem): String = when (item.whenType) {
+    "every" -> "Every ${item.whenValue}"
+    "cron" -> "Cron ${item.whenValue}"
+    "at" -> "Once at ${item.whenValue}"
+    "in" -> "Once in ${item.whenValue}"
+    else -> ""
+}
+
+@Composable
+private fun AutomationCreateDialog(
+    sessions: List<SessionItem>,
+    creating: Boolean,
+    onDismiss: () -> Unit,
+    onCreate: (String, String, org.json.JSONObject) -> Unit
+) {
+    var selectedID by remember { mutableStateOf(sessions.firstOrNull()?.id.orEmpty()) }
+    var sessionMenu by remember { mutableStateOf(false) }
+    var prompt by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf("interval") }
+    var minutes by remember { mutableStateOf(60) }
+    var cron by remember { mutableStateOf("") }
+    var at by remember { mutableStateOf("") }
+    val selectedTitle = sessions.firstOrNull { it.id == selectedID }?.title ?: ""
+    val whenReady = when (mode) {
+        "interval" -> true
+        "cron" -> cron.isNotBlank()
+        else -> at.isNotBlank()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.automations_new)) },
+        text = {
+            Column(
+                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box {
+                    TextButton(onClick = { sessionMenu = true }) {
+                        Text(
+                            selectedTitle.ifBlank {
+                                stringResource(R.string.automations_session)
+                            }
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = sessionMenu,
+                        onDismissRequest = { sessionMenu = false }
+                    ) {
+                        sessions.take(30).forEach { session ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        session.title.ifBlank {
+                                            stringResource(R.string.session_untitled)
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                onClick = {
+                                    selectedID = session.id
+                                    sessionMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    label = { Text(stringResource(R.string.chat_schedule_prompt)) },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("interval" to "Every", "cron" to "Cron", "at" to "At")
+                        .forEach { (value, label) ->
+                            FilterChip(
+                                selected = mode == value,
+                                onClick = { mode = value },
+                                label = { Text(label) }
+                            )
+                        }
+                }
+                when (mode) {
+                    "interval" -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(15 to "15m", 60 to "1h", 1440 to "1d")
+                            .forEach { (value, label) ->
+                                FilterChip(
+                                    selected = minutes == value,
+                                    onClick = { minutes = value },
+                                    label = { Text(label) }
+                                )
+                            }
+                    }
+
+                    "cron" -> OutlinedTextField(
+                        value = cron,
+                        onValueChange = { cron = it },
+                        label = { Text("Cron") },
+                        placeholder = { Text("0 9 * * 1-5") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    else -> OutlinedTextField(
+                        value = at,
+                        onValueChange = { at = it },
+                        label = { Text("At") },
+                        placeholder = { Text("2026-12-01T09:00") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !creating && selectedID.isNotBlank() &&
+                    prompt.isNotBlank() && whenReady,
+                onClick = {
+                    val trigger = when (mode) {
+                        "cron" -> org.json.JSONObject()
+                            .put("type", "cron")
+                            .put("cron", cron.trim())
+                        "at" -> org.json.JSONObject()
+                            .put("type", "at")
+                            .put("at", at.trim())
+                        else -> org.json.JSONObject()
+                            .put("type", "every")
+                            .put("every", "$minutes minutes")
+                    }
+                    onCreate(selectedID, prompt.trim(), trigger)
+                },
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(stringResource(R.string.automations_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !creating) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
 }

@@ -25,6 +25,12 @@
     <string name="sessions_mission_control">Mission Control</string>
     <string name="sessions_needs_you">Needs you</string>
     <string name="sessions_add_computer">Add computer</string>
+    <string name="sessions_automations">Automations</string>
+    <string name="automations_new">New automation</string>
+    <string name="automations_hint">Every automation across sessions. Runs on the server.</string>
+    <string name="automations_empty">No automations yet.</string>
+    <string name="automations_create">Create</string>
+    <string name="automations_session">Choose a session</string>
     <string name="sessions_select">Select sessions</string>
     <string name="sessions_select_all">All</string>
     <string name="sessions_bulk_delete_title">Delete %1$d sessions?</string>
@@ -77,6 +83,8 @@
     <string name="action_rename">Rename</string>
     <string name="action_delete">Delete</string>
     <string name="action_copy_id">Copy session ID</string>
+    <string name="action_edit">Edit</string>
+    <string name="file_view_only">Large file — editing is disabled.</string>
     <string name="action_pin">Pin</string>
     <string name="action_unpin">Unpin</string>
     <string name="action_mute">Mute notifications</string>
@@ -230,6 +238,8 @@
     <string name="workspace_refresh">Refresh</string>
     <string name="workspace_close">Close</string>
     <string name="workspace_export">Export &amp; share</string>
+    <string name="workspace_export_md">Markdown</string>
+    <string name="workspace_export_html">HTML</string>
     <string name="workspace_import">Import from file</string>
     <string name="workspace_add">Add</string>
     <string name="workspace_save">Save</string>

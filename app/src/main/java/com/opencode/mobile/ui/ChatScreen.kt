@@ -1528,6 +1528,7 @@ fun ChatScreen(
             cost = state.cost,
             tokensInput = state.tokensInput,
             tokensOutput = state.tokensOutput,
+            messages = state.messages,
             onDismiss = { showWorkspace = false },
             onImported = { imported ->
                 showWorkspace = false
@@ -1797,12 +1798,21 @@ private fun FileSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     var content by remember { mutableStateOf<String?>(null) }
+    var draft by remember { mutableStateOf("") }
+    var truncated by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(path) {
         try {
-            content = repo.readFile(path, directory).take(120_000)
+            val raw = repo.readFile(path, directory)
+            truncated = raw.length > 120_000
+            content = if (truncated) raw.take(120_000) else raw
+            draft = content.orEmpty()
         } catch (e: Exception) {
             error = friendlyError(e)
         }
@@ -1821,10 +1831,54 @@ private fun FileSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                path.replace('\\', '/').substringAfterLast('/'),
-                style = MaterialTheme.typography.headlineSmall
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    path.replace('\\', '/').substringAfterLast('/'),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!editing && content != null && !truncated) {
+                    TextButton(onClick = {
+                        draft = content.orEmpty()
+                        editing = true
+                        note = null
+                    }) {
+                        Text(stringResource(R.string.action_edit))
+                    }
+                }
+                if (editing) {
+                    TextButton(
+                        enabled = !saving,
+                        onClick = {
+                            saving = true
+                            scope.launch {
+                                try {
+                                    repo.writeFile(path, directory, draft)
+                                    content = draft
+                                    editing = false
+                                    note = "Saved"
+                                    error = null
+                                } catch (e: Exception) {
+                                    error = friendlyError(e)
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                    TextButton(
+                        enabled = !saving,
+                        onClick = {
+                            editing = false
+                            draft = content.orEmpty()
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            }
             Text(
                 path,
                 style = MaterialTheme.typography.labelSmall,
@@ -1841,11 +1895,37 @@ private fun FileSheet(
 
                 content == null -> CircularProgressIndicator(Modifier.size(28.dp))
 
+                editing -> OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp, max = 520.dp),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.5.sp,
+                        lineHeight = 17.sp
+                    ),
+                    maxLines = 2000
+                )
+
                 else -> Column(
                     Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                 ) {
+                    if (truncated) {
+                        Text(
+                            stringResource(R.string.file_view_only),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    if (note != null) {
+                        Text(
+                            note!!,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                     SelectionContainer {
                         Text(
                             content!!,
@@ -5673,6 +5753,7 @@ private fun WorkspaceSheet(
     cost: Double,
     tokensInput: Long,
     tokensOutput: Long,
+    messages: List<Msg>,
     onDismiss: () -> Unit,
     onImported: (String) -> Unit
 ) {
@@ -5732,7 +5813,7 @@ private fun WorkspaceSheet(
                     "files" -> FilesTab(repo, directory)
                     "worktrees" -> WorktreesTab(repo, projectID, directory)
                     "usage" -> UsageTab(repo, directory, cost, tokensInput, tokensOutput)
-                    else -> SessionTab(repo, sessionID, onImported)
+                    else -> SessionTab(repo, sessionID, messages, onImported)
                 }
             }
         }
@@ -6503,6 +6584,7 @@ private fun UsageTab(
 private fun SessionTab(
     repo: OpenCodeRepository,
     sessionID: String,
+    messages: List<Msg>,
     onImported: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -6510,6 +6592,92 @@ private fun SessionTab(
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    fun shareText(fileName: String, mime: String, body: String) {
+        if (busy) return
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                val dir = java.io.File(context.cacheDir, "shared")
+                dir.mkdirs()
+                val file = java.io.File(dir, fileName)
+                file.writeText(body)
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = mime
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, "Export session"))
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun markdownTranscript(): String {
+        val out = StringBuilder("# Session $sessionID\n\n")
+        messages.forEach { message ->
+            out.append("## ").append(message.role.replaceFirstChar { it.uppercase() })
+                .append("\n\n")
+            message.parts.forEach { part ->
+                when (part) {
+                    is Part.Text -> if (part.text.isNotBlank()) {
+                        out.append(part.text).append("\n\n")
+                    }
+
+                    is Part.Tool -> out.append("- `").append(part.name).append("` — ")
+                        .append(part.status).append("\n")
+
+                    is Part.Image -> out.append("_[image]_\n")
+                    else -> Unit
+                }
+            }
+            out.append("\n")
+        }
+        return out.toString()
+    }
+
+    fun htmlTranscript(): String {
+        fun esc(value: String): String = value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+        val body = messages.joinToString("\n") { message ->
+            val parts = message.parts.joinToString("\n") { part ->
+                when (part) {
+                    is Part.Text -> "<p>" + esc(part.text).replace("\n", "<br>") + "</p>"
+                    is Part.Tool -> "<pre>" + esc(part.name + " (" + part.status + ")") + "</pre>"
+                    is Part.Image -> "<p><em>[image]</em></p>"
+                    else -> ""
+                }
+            }
+            "<section><h2>" + esc(message.role.replaceFirstChar { it.uppercase() }) +
+                "</h2>" + parts + "</section>"
+        }
+        return """
+            <!doctype html>
+            <html><head><meta charset="utf-8">
+            <title>Session $sessionID</title>
+            <style>
+            body{font-family:system-ui,sans-serif;max-width:760px;margin:0 auto;padding:28px;line-height:1.55;color:#16181d;background:#fff}
+            h1{font-size:24px} h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:#5a6170;margin-top:28px}
+            p{margin:8px 0} pre{background:#f4f5f7;padding:10px;border-radius:8px;white-space:pre-wrap;font-size:12px}
+            section{border-bottom:1px solid #e6e8ec;padding-bottom:12px}
+            </style></head><body>
+            <h1>Session $sessionID</h1>
+            $body
+            </body></html>
+        """.trimIndent()
+    }
 
     fun export() {
         if (busy) return
@@ -6597,6 +6765,34 @@ private fun SessionTab(
             Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.workspace_export))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    shareText(
+                        "opencode-session-$sessionID.md",
+                        "text/markdown",
+                        markdownTranscript()
+                    )
+                },
+                enabled = !busy,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(stringResource(R.string.workspace_export_md))
+            }
+            OutlinedButton(
+                onClick = {
+                    shareText(
+                        "opencode-session-$sessionID.html",
+                        "text/html",
+                        htmlTranscript()
+                    )
+                },
+                enabled = !busy,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(stringResource(R.string.workspace_export_html))
+            }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Text("Import", style = MaterialTheme.typography.titleSmall)
