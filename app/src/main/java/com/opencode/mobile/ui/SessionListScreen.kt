@@ -48,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Checklist
@@ -537,16 +538,28 @@ fun SessionListScreen(
                                         Spacer(Modifier.width(6.dp))
                                         Icon(
                                             Icons.Rounded.Computer,
-                                            contentDescription = null,
+                                            contentDescription = stringResource(
+                                                R.string.sessions_switch_machine
+                                            ),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            (activeProfile?.name ?: "Server").take(12),
+                                            stringResource(
+                                                R.string.sessions_on_machine,
+                                                (activeProfile?.name ?: "Server").take(12)
+                                            ),
                                             style = MaterialTheme.typography.labelSmall,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(Modifier.width(3.dp))
+                                        Icon(
+                                            Icons.Rounded.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
@@ -1300,6 +1313,157 @@ fun SessionListScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun MachinePill(
+    profiles: List<ServerProfile>,
+    activeProfileID: String,
+    activeProfile: ServerProfile?,
+    stats: Map<String, ProfileStat>,
+    online: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSwitch: (String) -> Unit,
+    onAdd: () -> Unit
+) {
+    val context = LocalContext.current
+    Box {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(50),
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable { onExpandedChange(true) }
+        ) {
+            Row(
+                Modifier.padding(start = 10.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(6.dp)
+                        .background(
+                            if (online) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.error,
+                            CircleShape
+                        )
+                )
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    Icons.Rounded.Computer,
+                    contentDescription = stringResource(R.string.sessions_switch_machine),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    (activeProfile?.name ?: "Server").take(14),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Rounded.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) }
+        ) {
+            profiles.forEach { profile ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(profile.name.ifBlank { profile.server })
+                            Text(
+                                profile.server,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val stat = stats[profile.id]
+                            Text(
+                                buildString {
+                                    when {
+                                        stat == null -> append("checking…")
+                                        !stat.online -> append("offline")
+                                        else -> append(
+                                            "online · \$%.2f today · %d sessions"
+                                                .format(stat.cost, stat.sessions)
+                                        )
+                                    }
+                                    append(" · ")
+                                    append(
+                                        if (profile.persistentWatch) {
+                                            "notifications: always"
+                                        } else {
+                                            "notifications: finish only"
+                                        }
+                                    )
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (stat?.online == false) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    trailingIcon = {
+                        if (profile.id == activeProfileID) {
+                            Icon(
+                                Icons.Rounded.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    },
+                    onClick = {
+                        onExpandedChange(false)
+                        if (profile.id != activeProfileID) onSwitch(profile.id)
+                    }
+                )
+            }
+            if (profiles.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            val prefs = SecurePrefs.get(context)
+            val watch = prefs.getBoolean("watch", false)
+            val persistent = prefs.getBoolean("watch_persistent", false)
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        when {
+                            !watch -> "Notifications off"
+                            persistent -> "Notifications: always"
+                            else -> "Notifications: finish only"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {},
+                enabled = false
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.sessions_add_computer)) },
+                onClick = {
+                    onExpandedChange(false)
+                    onAdd()
+                }
+            )
+        }
     }
 }
 

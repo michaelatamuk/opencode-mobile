@@ -451,8 +451,16 @@ fun ChatScreen(
     val blocks = remember(displayMessages) { buildChatBlocks(displayMessages) }
 
     val unread = remember(displayMessages, previousSeen) {
-        if (previousSeen <= 0L) emptyList()
-        else displayMessages.filter { it.created > previousSeen && it.role == "assistant" }
+        if (previousSeen <= 0L) {
+            emptyList()
+        } else {
+            displayMessages.filter {
+                it.created > previousSeen &&
+                    it.role == "assistant" &&
+                    !it.pending &&
+                    it.plainText.isNotBlank()
+            }
+        }
     }
     val firstUnread = unread.firstOrNull()
     val unreadBlockIndex = remember(blocks, firstUnread) {
@@ -1013,7 +1021,7 @@ fun ChatScreen(
                     ) {
                         Column {
                         if (index == unreadBlockIndex && unread.isNotEmpty()) {
-                            UnreadSeparator(unread.size)
+                            UnreadSeparator()
                         }
                         when (block) {
                             is ChatBlock.DaySeparator -> DayPill(block.at)
@@ -4289,7 +4297,7 @@ private fun UserMessage(
                     )
 
                     is Part.Text -> Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         shape = RoundedCornerShape(
                             topStart = 20.dp,
                             topEnd = 6.dp,
@@ -4302,7 +4310,7 @@ private fun UserMessage(
                             Text(
                                 part.text,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                             )
                         }
@@ -5256,7 +5264,7 @@ private fun StepDetail(label: String, text: String, color: Color = MaterialTheme
  * bottom "Working" line instead of duplicating it inside the transcript.
  */
 @Composable
-private fun UnreadSeparator(count: Int) {
+private fun UnreadSeparator() {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -5266,7 +5274,7 @@ private fun UnreadSeparator(count: Int) {
             color = MaterialTheme.colorScheme.outlineVariant
         )
         Text(
-            stringResource(R.string.chat_new_since, count),
+            stringResource(R.string.chat_new_marker),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 8.dp)
@@ -5316,6 +5324,8 @@ private fun LiveStatusStrip(
         append(stringResource(R.string.chat_activity_working, formatElapsed(elapsed) ?: "…"))
         if (tool != null) append(" · ").append(tool.replaceFirstChar { it.uppercase() })
     }
+    val canBackground = tool != null &&
+        tool.lowercase() in setOf("bash", "shell", "codemode", "code", "job")
 
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -5340,8 +5350,8 @@ private fun LiveStatusStrip(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 210.dp)
             )
-            // Detach the running tool inline, not as a separate strip.
-            if (tool != null) {
+            // Detach only tools that can actually run in the background.
+            if (canBackground) {
                 TextButton(
                     onClick = onBackground,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)

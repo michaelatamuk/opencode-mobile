@@ -450,6 +450,7 @@ fun friendlyError(error: Throwable): String = when (error) {
     is ApiException -> when (error.status) {
         401, 403 -> "Wrong or missing server password"
         404 -> "Not found on this server"
+        409 -> "That action conflicts with the current server state"
         in 500..599 -> "Server error (${error.status})"
         else -> error.message ?: "Request failed"
     }

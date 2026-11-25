@@ -578,6 +578,11 @@ class ChatViewModel(
                 repo.updateInbox(id, inboxID, "steer")
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ApiException) {
+                // 409 means it was already delivered or is no longer steerable.
+                if (e.status != 409) {
+                    _state.update { it.copy(error = friendlyError(e)) }
+                }
             } catch (e: Exception) {
                 _state.update { it.copy(error = friendlyError(e)) }
             }
