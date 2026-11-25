@@ -103,6 +103,8 @@ import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -208,7 +210,13 @@ import com.opencode.mobile.PresetStore
 import com.opencode.mobile.QueuedMessage
 import com.opencode.mobile.R
 import com.opencode.mobile.ApiException
+import com.opencode.mobile.ContextSummary
+import com.opencode.mobile.InstructionEntry
+import com.opencode.mobile.JobItem
 import com.opencode.mobile.RunningShell
+import com.opencode.mobile.SavedPermission
+import com.opencode.mobile.VcsChange
+import com.opencode.mobile.WorktreeEntry
 import com.opencode.mobile.ScheduleItem
 import com.opencode.mobile.SchedulesDisabledException
 import com.opencode.mobile.SecurePrefs
@@ -263,6 +271,7 @@ fun ChatScreen(
     var showCompare by remember { mutableStateOf(false) }
     var showSchedules by remember { mutableStateOf(false) }
     var showShell by remember { mutableStateOf(false) }
+    var showWorkspace by remember { mutableStateOf(false) }
     var runningShells by remember { mutableStateOf<List<RunningShell>>(emptyList()) }
     var shellRefreshKey by remember { mutableStateOf(0) }
     val haptics = LocalHapticFeedback.current
@@ -850,6 +859,13 @@ fun ChatScreen(
                                 )
                             }
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_workspace)) },
+                                onClick = {
+                                    menuOpen = false
+                                    showWorkspace = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_schedules)) },
                                 onClick = {
                                     menuOpen = false
@@ -1290,6 +1306,23 @@ fun ChatScreen(
             directory = state.directory,
             onDismiss = { showShell = false },
             onShellsChanged = { shellRefreshKey++ }
+        )
+    }
+
+    if (showWorkspace && sessionID != null) {
+        WorkspaceSheet(
+            repo = repo,
+            sessionID = sessionID,
+            directory = state.directory,
+            projectID = state.projectID,
+            cost = state.cost,
+            tokensInput = state.tokensInput,
+            tokensOutput = state.tokensOutput,
+            onDismiss = { showWorkspace = false },
+            onImported = { imported ->
+                showWorkspace = false
+                onSessionCreated(imported)
+            }
         )
     }
 
@@ -4990,3 +5023,971 @@ private fun PermissionSheet(
 }
 
 private data class PickedAttachment(val attachment: com.opencode.mobile.Attachment, val uri: Uri)
+
+// ---- Workspace -------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorkspaceSheet(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    directory: String,
+    projectID: String,
+    cost: Double,
+    tokensInput: Long,
+    tokensOutput: Long,
+    onDismiss: () -> Unit,
+    onImported: (String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var tab by remember { mutableStateOf("jobs") }
+    val tabs = listOf(
+        "jobs" to stringResource(R.string.workspace_jobs),
+        "context" to stringResource(R.string.workspace_context),
+        "permissions" to stringResource(R.string.workspace_permissions),
+        "instructions" to stringResource(R.string.workspace_instructions),
+        "files" to stringResource(R.string.workspace_files),
+        "worktrees" to stringResource(R.string.workspace_worktrees),
+        "usage" to stringResource(R.string.workspace_usage),
+        "session" to stringResource(R.string.workspace_session)
+    )
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 18.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.chat_workspace),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.workspace_close))
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                tabs.forEach { (key, label) ->
+                    FilterChip(
+                        selected = tab == key,
+                        onClick = { tab = key },
+                        label = { Text(label) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (tab) {
+                    "jobs" -> JobsTab(repo, sessionID)
+                    "context" -> ContextTab(repo, sessionID)
+                    "permissions" -> PermissionsTab(repo)
+                    "instructions" -> InstructionsTab(repo, sessionID)
+                    "files" -> FilesTab(repo, directory)
+                    "worktrees" -> WorktreesTab(repo, projectID, directory)
+                    "usage" -> UsageTab(repo, directory, cost, tokensInput, tokensOutput)
+                    else -> SessionTab(repo, sessionID, onImported)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceHeader(title: String, onRefresh: (() -> Unit)? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f)
+        )
+        if (onRefresh != null) {
+            TextButton(onClick = onRefresh) {
+                Text(stringResource(R.string.workspace_refresh))
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceLoading() {
+    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun WorkspaceEmpty(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 12.dp)
+    )
+}
+
+@Composable
+private fun WorkspaceError(message: String, onRetry: () -> Unit) {
+    Column {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+        TextButton(onClick = onRetry) {
+            Text(stringResource(R.string.workspace_refresh))
+        }
+    }
+}
+
+@Composable
+private fun JobsTab(repo: OpenCodeRepository, sessionID: String) {
+    var jobs by remember { mutableStateOf<List<JobItem>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun load() {
+        try {
+            jobs = repo.jobs(sessionID)
+            error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    LaunchedEffect(sessionID) {
+        while (true) {
+            load()
+            delay(3_000)
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceHeader("Background jobs") { scope.launch { load() } }
+        when {
+            jobs == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { scope.launch { load() } }
+            jobs!!.isEmpty() -> WorkspaceEmpty(stringResource(R.string.workspace_empty_jobs))
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(jobs!!) { job ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.Build,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    job.title.ifBlank { job.kind },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    buildString {
+                                        append(job.kind.ifBlank { "job" })
+                                        append(" · ").append(job.status)
+                                        if (job.startedAt > 0) {
+                                            append(" · ").append(elapsedLabel(job.startedAt))
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repo.cancelJob(job.id) }
+                                        load()
+                                    }
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Stop,
+                                    contentDescription = stringResource(R.string.action_stop),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContextTab(repo: OpenCodeRepository, sessionID: String) {
+    var summary by remember { mutableStateOf<ContextSummary?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                summary = repo.contextSummary(sessionID)
+                error = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    LaunchedEffect(sessionID) { load() }
+
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceHeader("Context") { load() }
+        when {
+            summary == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { load() }
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val s = summary!!
+                item {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${s.total} entries", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                s.counts.entries.joinToString(" · ") { "${it.value} ${it.key}" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Tokens in ${s.inputTokens} · out ${s.outputTokens} · \$%.4f".format(s.cost),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                if (s.compactionSummary.isNotBlank()) {
+                    item {
+                        Text("Compaction summary", style = MaterialTheme.typography.titleSmall)
+                        SelectionContainer {
+                            Text(
+                                s.compactionSummary.take(2_500),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+                if (s.recent.isNotEmpty()) {
+                    item { Text("Recent context", style = MaterialTheme.typography.titleSmall) }
+                    items(s.recent) { entry ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                entry.type.take(9),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(64.dp)
+                            )
+                            Text(
+                                entry.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionsTab(repo: OpenCodeRepository) {
+    var items by remember { mutableStateOf<List<SavedPermission>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun load() {
+        try {
+            items = repo.savedPermissions()
+            error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    LaunchedEffect(Unit) { load() }
+
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceHeader("Saved permissions") { scope.launch { load() } }
+        when {
+            items == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { scope.launch { load() } }
+            items!!.isEmpty() -> WorkspaceEmpty(stringResource(R.string.workspace_empty_permissions))
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items!!) { permission ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "${permission.action} · ${permission.resource}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    permission.effect,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repo.deleteSavedPermission(permission.id) }
+                                        load()
+                                    }
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstructionsTab(repo: OpenCodeRepository, sessionID: String) {
+    var items by remember { mutableStateOf<List<InstructionEntry>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
+    var editingKey by remember { mutableStateOf<String?>(null) }
+    var key by remember { mutableStateOf("") }
+    var value by remember { mutableStateOf("") }
+    var editorError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun load() {
+        try {
+            items = repo.instructions(sessionID)
+            error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    fun open(entry: InstructionEntry?) {
+        editingKey = entry?.key
+        key = entry?.key.orEmpty()
+        value = entry?.value.orEmpty()
+        editorError = null
+        showEditor = true
+    }
+
+    fun save() {
+        val name = key.trim()
+        if (!Regex("^[a-z0-9][a-z0-9._-]*$").matches(name)) {
+            editorError = "Use lowercase letters, digits, dots, dashes and underscores."
+            return
+        }
+        scope.launch {
+            try {
+                repo.putInstruction(sessionID, name, value)
+                showEditor = false
+                load()
+            } catch (e: Exception) {
+                editorError = friendlyError(e)
+            }
+        }
+    }
+
+    LaunchedEffect(sessionID) { load() }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Instructions",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { open(null) }) {
+                Text(stringResource(R.string.workspace_add))
+            }
+            TextButton(onClick = { scope.launch { load() } }) {
+                Text(stringResource(R.string.workspace_refresh))
+            }
+        }
+        when {
+            items == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { scope.launch { load() } }
+            items!!.isEmpty() -> WorkspaceEmpty(stringResource(R.string.workspace_empty_instructions))
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items!!) { entry ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { open(entry) }
+                    ) {
+                        Row(
+                            Modifier.padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    entry.key,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    entry.value.replace('\n', ' '),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repo.deleteInstruction(sessionID, entry.key) }
+                                        load()
+                                    }
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showEditor) {
+        AlertDialog(
+            onDismissRequest = { showEditor = false },
+            title = { Text(if (editingKey == null) "New instruction" else "Edit instruction") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = key,
+                        onValueChange = { key = it },
+                        label = { Text(stringResource(R.string.workspace_instruction_key)) },
+                        singleLine = true,
+                        enabled = editingKey == null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { value = it },
+                        label = { Text(stringResource(R.string.workspace_instruction_value)) },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (editorError != null) {
+                        Text(
+                            editorError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { save() }) {
+                    Text(stringResource(R.string.workspace_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditor = false }) {
+                    Text(stringResource(R.string.workspace_cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FilesTab(repo: OpenCodeRepository, directory: String) {
+    var status by remember { mutableStateOf<List<VcsChange>?>(null) }
+    var branches by remember { mutableStateOf<List<String>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                branches = repo.vcsBranches(directory)
+                status = repo.vcsStatus(directory)
+                error = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    LaunchedEffect(directory) { if (directory.isNotBlank()) load() }
+
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceHeader("Files") { load() }
+        if (directory.isBlank()) {
+            WorkspaceEmpty("No workspace directory for this session.")
+            return@Column
+        }
+        if (branches.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(branches.take(12)) { branch ->
+                    AssistChip(onClick = {}, label = { Text(branch) })
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        when {
+            status == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { load() }
+            status!!.isEmpty() -> WorkspaceEmpty(stringResource(R.string.workspace_empty_files))
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(status!!) { change ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            change.status.uppercase().take(4),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.width(42.dp)
+                        )
+                        Text(
+                            change.path,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (change.additions > 0 || change.deletions > 0) {
+                            Text(
+                                "+${change.additions} -${change.deletions}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorktreesTab(repo: OpenCodeRepository, projectID: String, directory: String) {
+    var items by remember { mutableStateOf<List<WorktreeEntry>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf<WorktreeEntry?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun load() {
+        if (projectID.isBlank()) {
+            items = emptyList()
+            return
+        }
+        try {
+            items = repo.worktrees(projectID)
+            error = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = friendlyError(e)
+        }
+    }
+
+    LaunchedEffect(projectID) { load() }
+
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceHeader("Worktrees") { scope.launch { load() } }
+        if (projectID.isBlank()) {
+            WorkspaceEmpty("This session has no project yet.")
+            return@Column
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.workspace_worktree_name)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = {
+                    scope.launch {
+                        try {
+                            repo.createWorktree(projectID, name.trim())
+                            name = ""
+                            load()
+                        } catch (e: Exception) {
+                            error = friendlyError(e)
+                        }
+                    }
+                },
+                enabled = name.isNotBlank(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(stringResource(R.string.workspace_create))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        when {
+            items == null && error == null -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { scope.launch { load() } }
+            items!!.isEmpty() -> WorkspaceEmpty(stringResource(R.string.workspace_empty_worktrees))
+            else -> LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(items!!) { entry ->
+                    val isRoot = entry.strategy.isBlank() || entry.directory == directory
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                entry.directory,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                if (isRoot) "current" else entry.strategy.ifBlank { "worktree" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!isRoot) {
+                            IconButton(
+                                onClick = { confirm = entry },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = stringResource(R.string.workspace_remove_worktree),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    confirm?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text(stringResource(R.string.workspace_remove_worktree)) },
+            text = {
+                Text(
+                    stringResource(R.string.workspace_remove_worktree_body) +
+                        "\n\n" + entry.directory
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirm = null
+                        scope.launch {
+                            runCatching { repo.removeWorktree(projectID, entry.directory, true) }
+                                .onFailure { error = friendlyError(it) }
+                            load()
+                        }
+                    }
+                ) {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = null }) {
+                    Text(stringResource(R.string.workspace_cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun UsageTab(
+    repo: OpenCodeRepository,
+    directory: String,
+    cost: Double,
+    tokensInput: Long,
+    tokensOutput: Long
+) {
+    var limits by remember { mutableStateOf<String?>(null) }
+    var loaded by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun load() {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                limits = repo.usageLimits(directory)
+                error = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                loading = false
+                loaded = true
+            }
+        }
+    }
+
+    LaunchedEffect(directory) { load() }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        WorkspaceHeader("Usage") { load() }
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("This session", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Tokens in $tokensInput · out $tokensOutput · \$%.4f".format(cost),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Server limits", style = MaterialTheme.typography.titleSmall)
+        when {
+            !loaded -> WorkspaceLoading()
+            error != null -> WorkspaceError(error!!) { load() }
+            limits == null -> WorkspaceEmpty(stringResource(R.string.workspace_no_limits))
+            else -> SelectionContainer {
+                Text(
+                    limits!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionTab(
+    repo: OpenCodeRepository,
+    sessionID: String,
+    onImported: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun export() {
+        if (busy) return
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                val bundle = repo.exportSession(sessionID)
+                val dir = java.io.File(context.cacheDir, "shared")
+                dir.mkdirs()
+                val file = java.io.File(dir, "opencode-session-$sessionID.json")
+                file.writeText(bundle.toString())
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, "Export session"))
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                val text = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+                val root = org.json.JSONObject(text)
+                val bundle = root.optJSONObject("data") ?: root
+                val imported = repo.importSession(bundle)
+                if (imported.isBlank()) {
+                    error = "Import returned no session"
+                } else {
+                    onImported(imported)
+                }
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Session", style = MaterialTheme.typography.titleMedium)
+        Text(
+            sessionID,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+        TextButton(
+            onClick = { clipboard.setText(AnnotatedString(sessionID)) }
+        ) {
+            Text(stringResource(R.string.action_copy_id))
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Text("Export", style = MaterialTheme.typography.titleSmall)
+        Text(
+            stringResource(R.string.workspace_export_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Button(
+            onClick = { export() },
+            enabled = !busy,
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.workspace_export))
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Text("Import", style = MaterialTheme.typography.titleSmall)
+        Text(
+            stringResource(R.string.workspace_import_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedButton(
+            onClick = {
+                picker.launch(arrayOf("application/json", "text/plain", "*/*"))
+            },
+            enabled = !busy,
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Rounded.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.workspace_import))
+        }
+        if (busy) {
+            CircularProgressIndicator(Modifier.size(22.dp))
+        }
+        error?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}

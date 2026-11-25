@@ -177,6 +177,47 @@ data class RunningShell(
     val sessionID: String = ""
 )
 
+/** A background job owned by a session: shell, Code Mode, or subagent work. */
+data class JobItem(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val status: String,
+    val sessionID: String,
+    val startedAt: Long
+)
+
+data class ContextEntry(val type: String, val text: String, val created: Long)
+
+data class ContextSummary(
+    val total: Int,
+    val counts: Map<String, Int>,
+    val inputTokens: Long,
+    val outputTokens: Long,
+    val cost: Double,
+    val compactionSummary: String,
+    val compactionRecent: String,
+    val recent: List<ContextEntry>
+)
+
+data class SavedPermission(
+    val id: String,
+    val action: String,
+    val resource: String,
+    val effect: String
+)
+
+data class InstructionEntry(val key: String, val value: String)
+
+data class VcsChange(
+    val path: String,
+    val status: String,
+    val additions: Int,
+    val deletions: Int
+)
+
+data class WorktreeEntry(val directory: String, val strategy: String)
+
 data class VcsInfo(val provider: String, val branch: String, val defaultBranch: String)
 
 data class SkillOption(
@@ -219,6 +260,23 @@ internal fun scheduleFailure(error: ApiException): Exception = when (error.statu
     403 -> SchedulesDisabledException()
     404 -> SchedulesUnsupportedException()
     else -> error
+}
+
+/** Condenses an assistant context item into one line of prose and tool names. */
+private fun assistantContextText(o: JSONObject): String {
+    val content = o.optJSONArray("content") ?: return o.optString("text")
+    val parts = mutableListOf<String>()
+    for (i in 0 until content.length()) {
+        val p = content.optJSONObject(i) ?: continue
+        when (p.optString("type")) {
+            "text" -> p.optString("text").takeIf { it.isNotBlank() }?.let(parts::add)
+            "tool" -> p.optString("name")
+                .ifBlank { p.optString("tool") }
+                .takeIf { it.isNotBlank() }
+                ?.let { parts.add("[$it]") }
+        }
+    }
+    return parts.joinToString(" ")
 }
 
 private fun JSONObject.toSession(): SessionItem {
@@ -476,6 +534,20 @@ class Api(server: String, private val password: String, fallbackServer: String? 
 
     private fun patchEmpty(path: String, payload: String) = withFallback {
         val req = request(path).patch(payload.toRequestBody(jsonType)).build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
+    private fun putEmpty(path: String, payload: String) = withFallback {
+        val req = request(path).put(payload.toRequestBody(jsonType)).build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
+        }
+    }
+
+    private fun deleteWithBody(path: String, payload: String) = withFallback {
+        val req = request(path).delete(payload.toRequestBody(jsonType)).build()
         client.newCall(req).execute().use { r ->
             if (!r.isSuccessful) throw ApiException(r.code, r.body?.string().orEmpty().take(300))
         }
@@ -1164,6 +1236,229 @@ class Api(server: String, private val password: String, fallbackServer: String? 
 
     suspend fun deleteSchedule(scheduleID: String): Unit = withContext(Dispatchers.IO) {
         deleteEmpty("/api/experimental/schedule/$scheduleID")
+    }
+
+    // ---- Workspace surfaces ------------------------------------------------
+
+    suspend fun jobs(sessionID: String): List<JobItem> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/experimental/job?sessionID=${Uri.encode(sessionID)}")
+            .optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.optJSONObject(i) ?: return@mapNotNull null
+            JobItem(
+                id = o.optString("id"),
+                kind = o.optString("kind"),
+                title = o.optString("title").ifBlank { o.optString("command") },
+                status = o.optString("status"),
+                sessionID = o.optString("sessionID"),
+                startedAt = o.optJSONObject("time")?.optLong("started") ?: 0L
+            )
+        }
+    }
+
+    suspend fun cancelJob(jobID: String): Unit = withContext(Dispatchers.IO) {
+        postEmpty("/api/experimental/job/$jobID/cancel", "{}")
+    }
+
+    suspend fun contextSummary(sessionID: String): ContextSummary =
+        withContext(Dispatchers.IO) {
+            val data = getJson("/api/session/$sessionID/context").optJSONArray("data")
+                ?: JSONArray()
+            val counts = mutableMapOf<String, Int>()
+            var input = 0L
+            var output = 0L
+            var cost = 0.0
+            var compactionSummary = ""
+            var compactionRecent = ""
+            val entries = mutableListOf<ContextEntry>()
+            for (i in 0 until data.length()) {
+                val o = data.optJSONObject(i) ?: continue
+                val type = o.optString("type")
+                counts[type] = (counts[type] ?: 0) + 1
+                val tokens = o.optJSONObject("tokens")
+                input += tokens?.optLong("input") ?: 0L
+                output += tokens?.optLong("output") ?: 0L
+                cost += o.optDouble("cost", 0.0)
+                if (type == "compaction") {
+                    compactionSummary = o.optString("summary")
+                    compactionRecent = o.optJSONObject("metadata")?.optString("recent").orEmpty()
+                }
+                val text = when (type) {
+                    "user" -> o.optString("text")
+                    "assistant" -> assistantContextText(o)
+                    "synthetic" -> o.optString("text").ifBlank { o.optString("summary") }
+                    "compaction" -> o.optString("summary")
+                    else -> ""
+                }
+                if (text.isNotBlank()) {
+                    entries.add(
+                        ContextEntry(
+                            type = type,
+                            text = text.replace(Regex("\\s+"), " ").trim(),
+                            created = o.optJSONObject("time")?.optLong("created") ?: 0L
+                        )
+                    )
+                }
+            }
+            ContextSummary(
+                total = data.length(),
+                counts = counts,
+                inputTokens = input,
+                outputTokens = output,
+                cost = cost,
+                compactionSummary = compactionSummary,
+                compactionRecent = compactionRecent,
+                recent = entries.takeLast(24)
+            )
+        }
+
+    suspend fun savedPermissions(): List<SavedPermission> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/permission/saved").optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.optJSONObject(i) ?: return@mapNotNull null
+            SavedPermission(
+                id = o.optString("id"),
+                action = o.optString("action"),
+                resource = o.optString("resource"),
+                effect = o.optString("effect")
+            )
+        }
+    }
+
+    suspend fun deleteSavedPermission(id: String): Unit = withContext(Dispatchers.IO) {
+        deleteEmpty("/api/permission/saved/$id")
+    }
+
+    suspend fun instructions(sessionID: String): List<InstructionEntry> =
+        withContext(Dispatchers.IO) {
+            val data = getJson("/api/experimental/session/$sessionID/instructions/entries")
+                .optJSONArray("data") ?: JSONArray()
+            (0 until data.length()).mapNotNull { i ->
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                InstructionEntry(
+                    key = o.optString("key"),
+                    value = o.optString("value")
+                )
+            }
+        }
+
+    suspend fun putInstruction(sessionID: String, key: String, value: String): Unit =
+        withContext(Dispatchers.IO) {
+            putEmpty(
+                "/api/experimental/session/$sessionID/instructions/entries/${Uri.encode(key)}",
+                JSONObject().put("value", value).toString()
+            )
+        }
+
+    suspend fun deleteInstruction(sessionID: String, key: String): Unit =
+        withContext(Dispatchers.IO) {
+            deleteEmpty(
+                "/api/experimental/session/$sessionID/instructions/entries/${Uri.encode(key)}"
+            )
+        }
+
+    suspend fun exportSession(sessionID: String): JSONObject = withContext(Dispatchers.IO) {
+        getJson("/api/experimental/session/$sessionID/export").optJSONObject("data")
+            ?: throw ApiException(500, "empty session export")
+    }
+
+    suspend fun importSession(bundle: JSONObject): String = withContext(Dispatchers.IO) {
+        val info = bundle.optJSONObject("info") ?: JSONObject()
+        val body = JSONObject()
+            .put("info", info)
+            .put("messages", bundle.optJSONArray("messages") ?: JSONArray())
+        val location = bundle.optJSONObject("location")
+            ?: info.optJSONObject("location")
+        if (location != null) body.put("location", location)
+        postJson("/api/experimental/session/import", body.toString())
+            .optJSONObject("data")
+            ?.optString("id")
+            .orEmpty()
+    }
+
+    suspend fun vcsStatus(directory: String): List<VcsChange> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/vcs/status${locationQuery(directory)}")
+            .optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            val o = data.optJSONObject(i) ?: return@mapNotNull null
+            val rawStatus = o.opt("status")
+            VcsChange(
+                path = o.optString("path").ifBlank { o.optString("file") },
+                status = when (rawStatus) {
+                    is String -> rawStatus
+                    is JSONObject -> rawStatus.optString("type")
+                        .ifBlank { rawStatus.optString("status") }
+                    else -> ""
+                },
+                additions = o.optInt("additions"),
+                deletions = o.optInt("deletions")
+            )
+        }
+    }
+
+    suspend fun vcsBranches(directory: String): List<String> = withContext(Dispatchers.IO) {
+        val data = getJson("/api/vcs/branch${locationQuery(directory)}")
+            .optJSONArray("data") ?: JSONArray()
+        (0 until data.length()).mapNotNull { i ->
+            when (val value = data.opt(i)) {
+                is String -> value.takeIf { it.isNotBlank() }
+                is JSONObject -> value.optString("name").takeIf { it.isNotBlank() }
+                else -> null
+            }
+        }
+    }
+
+    suspend fun worktrees(projectID: String): List<WorktreeEntry> =
+        withContext(Dispatchers.IO) {
+            val payload = getJson("/api/worktree?projectID=${Uri.encode(projectID)}")
+            val out = mutableListOf<WorktreeEntry>()
+            when (val data = payload.opt("data")) {
+                is JSONArray -> for (i in 0 until data.length()) {
+                    val o = data.optJSONObject(i)
+                    if (o != null) {
+                        out.add(WorktreeEntry(o.optString("directory"), o.optString("strategy")))
+                    } else {
+                        data.optJSONArray(i)?.let { pair ->
+                            out.add(WorktreeEntry(pair.optString(0), pair.optString(1)))
+                        }
+                    }
+                }
+                is JSONObject -> out.add(
+                    WorktreeEntry(data.optString("directory"), data.optString("strategy"))
+                )
+            }
+            out.filter { it.directory.isNotBlank() }
+        }
+
+    suspend fun createWorktree(projectID: String, name: String): Unit =
+        withContext(Dispatchers.IO) {
+            postJson(
+                "/api/worktree",
+                JSONObject().put("projectID", projectID).put("name", name).toString()
+            )
+            Unit
+        }
+
+    suspend fun removeWorktree(projectID: String, directory: String, force: Boolean): Unit =
+        withContext(Dispatchers.IO) {
+            deleteWithBody(
+                "/api/worktree",
+                JSONObject()
+                    .put("projectID", projectID)
+                    .put("directory", directory)
+                    .put("force", force)
+                    .toString()
+            )
+        }
+
+    suspend fun usageLimits(directory: String): String? = withContext(Dispatchers.IO) {
+        val data = getJson("/api/experimental/usage/limits${locationQuery(directory)}").opt("data")
+        when {
+            data == null || data == JSONObject.NULL -> null
+            data is JSONObject -> data.toString(2)
+            data is JSONArray -> data.toString(2)
+            else -> data.toString()
+        }
     }
 
     suspend fun mcpServers(): List<McpServer> = withContext(Dispatchers.IO) {

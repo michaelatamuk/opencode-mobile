@@ -123,6 +123,44 @@ class OpenCodeRepository(val api: Api) {
 
     suspend fun deleteSchedule(scheduleID: String) = api.deleteSchedule(scheduleID)
 
+    suspend fun jobs(sessionID: String): List<JobItem> = api.jobs(sessionID)
+
+    suspend fun cancelJob(jobID: String) = api.cancelJob(jobID)
+
+    suspend fun contextSummary(sessionID: String): ContextSummary = api.contextSummary(sessionID)
+
+    suspend fun savedPermissions(): List<SavedPermission> = api.savedPermissions()
+
+    suspend fun deleteSavedPermission(id: String) = api.deleteSavedPermission(id)
+
+    suspend fun instructions(sessionID: String): List<InstructionEntry> =
+        api.instructions(sessionID)
+
+    suspend fun putInstruction(sessionID: String, key: String, value: String) =
+        api.putInstruction(sessionID, key, value)
+
+    suspend fun deleteInstruction(sessionID: String, key: String) =
+        api.deleteInstruction(sessionID, key)
+
+    suspend fun exportSession(sessionID: String): org.json.JSONObject =
+        api.exportSession(sessionID)
+
+    suspend fun importSession(bundle: org.json.JSONObject): String = api.importSession(bundle)
+
+    suspend fun vcsStatus(directory: String): List<VcsChange> = api.vcsStatus(directory)
+
+    suspend fun vcsBranches(directory: String): List<String> = api.vcsBranches(directory)
+
+    suspend fun worktrees(projectID: String): List<WorktreeEntry> = api.worktrees(projectID)
+
+    suspend fun createWorktree(projectID: String, name: String) =
+        api.createWorktree(projectID, name)
+
+    suspend fun removeWorktree(projectID: String, directory: String, force: Boolean) =
+        api.removeWorktree(projectID, directory, force)
+
+    suspend fun usageLimits(directory: String): String? = api.usageLimits(directory)
+
     suspend fun mcpServers(): List<McpServer> = api.mcpServers()
 
     suspend fun mcpConnect(name: String) = api.mcpConnect(name)

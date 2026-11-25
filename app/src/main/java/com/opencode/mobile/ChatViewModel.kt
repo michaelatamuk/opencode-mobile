@@ -33,6 +33,7 @@ data class ChatUiState(
     val tokensOutput: Long = 0L,
     val updated: Long = 0L,
     val directory: String = "",
+    val projectID: String = "",
     val parentID: String = "",
     val olderCursor: String? = null,
     val loadingOlder: Boolean = false,
@@ -132,6 +133,7 @@ class ChatViewModel(
                     tokensOutput = session.tokensOutput,
                     updated = session.updated,
                     directory = session.directory,
+                    projectID = session.projectID,
                     parentID = session.forkedFrom
                 )
             }
