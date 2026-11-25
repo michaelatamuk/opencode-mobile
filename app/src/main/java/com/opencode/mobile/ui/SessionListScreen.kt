@@ -208,7 +208,9 @@ fun SessionListScreen(
     var finishedMeta by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var showTemplates by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
+    var headerMenuOpen by remember { mutableStateOf(false) }
     var showAutomations by remember { mutableStateOf(false) }
+    var showFinished by remember { mutableStateOf(false) }
     var subagentsFor by remember { mutableStateOf<SessionItem?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -323,10 +325,17 @@ fun SessionListScreen(
         profileStats = stats
     }
 
-    val scoped = remember(state.sessions, projectFilter, showArchived, state.pendingDelete) {
+    val scoped = remember(
+        state.sessions,
+        projectFilter,
+        showArchived,
+        state.pendingDelete,
+        finishedIds
+    ) {
         var base = state.sessions.filter {
             (if (showArchived) it.archived else !it.archived) &&
-                it.id != state.pendingDelete?.id
+                it.id != state.pendingDelete?.id &&
+                it.id !in finishedIds
         }
         base = base.filter { it.parentID.isBlank() }
         if (projectFilter == null) base
@@ -353,6 +362,9 @@ fun SessionListScreen(
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
+    val finishedSessions = remember(state.sessions, finishedIds) {
+        state.sessions.filter { it.id in finishedIds && !it.archived }
+    }
     val failedSessions = remember(state.sessions) {
         state.sessions.filter { session ->
             !session.running && !session.archived &&
@@ -436,24 +448,13 @@ fun SessionListScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        val greeting = remember {
-                            when (java.time.LocalTime.now().hour) {
-                                in 5..11 -> R.string.sessions_greeting_morning
-                                in 12..17 -> R.string.sessions_greeting_afternoon
-                                else -> R.string.sessions_greeting_evening
-                            }
-                        }
-                        val eyebrow = when {
-                            state.error != null -> stringResource(R.string.sessions_reconnecting_short)
-                            else -> buildString {
-                                append(stringResource(greeting))
-                                append(" · ")
-                                append(stringResource(R.string.sessions_count, filtered.size))
-                            }
-                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                eyebrow,
+                                if (state.error != null) {
+                                    stringResource(R.string.sessions_reconnecting_short)
+                                } else {
+                                    stringResource(R.string.sessions_count, filtered.size)
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (state.error != null) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -503,7 +504,7 @@ fun SessionListScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 stringResource(R.string.sessions_title),
-                                style = MaterialTheme.typography.displaySmall,
+                                style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 modifier = Modifier.weight(1f, fill = false)
@@ -542,7 +543,7 @@ fun SessionListScreen(
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            (activeProfile?.name ?: "Server").take(18),
+                                            (activeProfile?.name ?: "Server").take(12),
                                             style = MaterialTheme.typography.labelSmall,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -650,29 +651,6 @@ fun SessionListScreen(
                             }
                         }
                     }
-                    if (!selectionMode) {
-                        IconButton(onClick = { showAutomations = true }) {
-                            Icon(
-                                Icons.Rounded.Schedule,
-                                contentDescription = stringResource(R.string.sessions_automations),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    if (history.isNotEmpty() && !selectionMode) {
-                        IconButton(onClick = {
-                            selectionMode = true
-                            selectedIds = emptySet()
-                        }) {
-                            Icon(
-                                Icons.Rounded.Checklist,
-                                contentDescription = stringResource(R.string.sessions_select),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
                     IconButton(onClick = { searchOpen = true }) {
                         Icon(
                             Icons.Rounded.Search,
@@ -681,13 +659,44 @@ fun SessionListScreen(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    IconButton(onClick = onSettings) {
-                        Icon(
-                            Icons.Rounded.Settings,
-                            contentDescription = stringResource(R.string.action_settings),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Box {
+                        IconButton(onClick = { headerMenuOpen = true }) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = headerMenuOpen,
+                            onDismissRequest = { headerMenuOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sessions_automations)) },
+                                onClick = {
+                                    headerMenuOpen = false
+                                    showAutomations = true
+                                }
+                            )
+                            if (history.isNotEmpty() && !selectionMode) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.sessions_select)) },
+                                    onClick = {
+                                        headerMenuOpen = false
+                                        selectionMode = true
+                                        selectedIds = emptySet()
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_settings)) },
+                                onClick = {
+                                    headerMenuOpen = false
+                                    onSettings()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -870,22 +879,11 @@ fun SessionListScreen(
                     }
                 }
 
-                val finishedSessions = state.sessions.filter {
-                    it.id in finishedIds && !it.archived
-                }
                 if (finishedSessions.isNotEmpty()) {
-                    item(key = "finished-strip") {
-                        FinishedStrip(
-                            sessions = finishedSessions,
-                            meta = finishedMeta,
-                            onOpen = { session ->
-                                finishedIds = finishedIds - session.id
-                                onOpen(session)
-                            },
-                            onReview = { session ->
-                                finishedIds = finishedIds - session.id
-                                onReview(session)
-                            },
+                    item(key = "finished-banner") {
+                        WhileAwayBanner(
+                            count = finishedSessions.size,
+                            onClick = { showFinished = true },
                             onClear = { finishedIds = emptySet() }
                         )
                     }
@@ -1197,6 +1195,28 @@ fun SessionListScreen(
         )
     }
 
+    if (showFinished) {
+        FinishedSheet(
+            sessions = finishedSessions,
+            meta = finishedMeta,
+            onOpen = { session ->
+                finishedIds = finishedIds - session.id
+                showFinished = false
+                onOpen(session)
+            },
+            onReview = { session ->
+                finishedIds = finishedIds - session.id
+                showFinished = false
+                onReview(session)
+            },
+            onClear = {
+                finishedIds = emptySet()
+                showFinished = false
+            },
+            onDismiss = { showFinished = false }
+        )
+    }
+
     subagentsFor?.let { root ->
         SubagentsSheet(
             root = root,
@@ -1296,16 +1316,10 @@ private fun ProjectChip(
             .clip(shape)
             .background(
                 if (selected) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent
-            )
-            .border(
-                width = 1.dp,
-                color = if (selected) Color.Transparent
-                else MaterialTheme.colorScheme.outlineVariant,
-                shape = shape
+                else MaterialTheme.colorScheme.surfaceContainerHigh
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -1385,6 +1399,136 @@ private fun TemplatesDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
             }
         }
     )
+}
+
+@Composable
+private fun WhileAwayBanner(
+    count: Int,
+    onClick: () -> Unit,
+    onClear: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.sessions_finished_while, count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onClear) {
+                Text(
+                    stringResource(R.string.sessions_clear),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Text(
+                stringResource(R.string.sessions_review),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun FinishedSheet(
+    sessions: List<SessionItem>,
+    meta: Map<String, String>,
+    onOpen: (SessionItem) -> Unit,
+    onReview: (SessionItem) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.sessions_finished_since),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClear) {
+                    Text(stringResource(R.string.sessions_clear))
+                }
+            }
+            if (sessions.isEmpty()) {
+                Text(
+                    "Nothing new.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                LazyColumn(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(sessions) { session ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpen(session) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    session.title.ifBlank {
+                                        stringResource(R.string.session_untitled)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    meta[session.id] ?: "Finished",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { onReview(session) }) {
+                                Text(stringResource(R.string.sessions_review))
+                            }
+                            TextButton(onClick = { onOpen(session) }) {
+                                Text(stringResource(R.string.sessions_needs_you_open))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1917,7 +2061,7 @@ private fun SessionRow(
                     }
                 )
                 .border(
-                    width = if (justFinished) 1.5.dp else 1.dp,
+                    width = if (justFinished) 1.5.dp else 0.dp,
                     color = borderColor,
                     shape = shape
                 )
@@ -1929,7 +2073,7 @@ private fun SessionRow(
                         if (selectionMode) onToggleSelect() else menuOpen = true
                     }
                 )
-                .padding(start = 12.dp, end = 4.dp, top = 11.dp, bottom = 11.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Reserved gutter: dots never shift titles out of alignment.

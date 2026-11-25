@@ -40,6 +40,7 @@
     <string name="sessions_run_failed">Run failed</string>
     <string name="sessions_needs_you_more">+%1$d more</string>
     <string name="sessions_finished_since">Finished since you left</string>
+    <string name="sessions_finished_while">%1$d finished while you were away</string>
     <string name="sessions_clear">Clear</string>
     <string name="sessions_deleted">%1$s deleted</string>
     <string name="sessions_templates">Start with a template</string>

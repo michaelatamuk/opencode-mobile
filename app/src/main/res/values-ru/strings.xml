@@ -38,6 +38,7 @@
     <string name="sessions_run_failed">Запуск не удался</string>
     <string name="sessions_needs_you_more">Ещё %1$d</string>
     <string name="sessions_finished_since">Завершились без вас</string>
+    <string name="sessions_finished_while">%1$d завершились без вас</string>
     <string name="sessions_clear">Очистить</string>
     <string name="sessions_deleted">%1$s удалена</string>
     <string name="sessions_templates">Начать с шаблона</string>

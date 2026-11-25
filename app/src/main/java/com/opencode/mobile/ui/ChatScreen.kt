@@ -295,6 +295,11 @@ fun ChatScreen(
         }
     }
 
+    // Steer is the default for a fresh busy turn; queueing is an explicit exception.
+    LaunchedEffect(state.busy) {
+        if (!state.busy) steerMode = true
+    }
+
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -1105,16 +1110,6 @@ fun ChatScreen(
             // layout height would shrink the list whenever a run starts or stops,
             // and a list sitting at its end would lose its last lines and show the
             // jump-to-latest button. The list reserves 40dp for it instead.
-            LiveStatusStrip(
-                busy = state.busy,
-                messages = state.messages,
-                onBackground = { vm.background() },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(start = 20.dp, end = 60.dp, bottom = 6.dp)
-            )
             CompletionFlash(
                 tick = completionTick,
                 modifier = Modifier
@@ -1153,8 +1148,19 @@ fun ChatScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    TextButton(
+                        onClick = { vm.steerQueued(state.queued.first().id) },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.chat_queue_steer),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                 }
             }
             if (pickedSkills.isNotEmpty()) {
@@ -1223,52 +1229,89 @@ fun ChatScreen(
                     )
                 }
             }
-            val hasChips = runningShells.isNotEmpty() || runningJobs.isNotEmpty() ||
-                planTodos != null || contextFraction >= 0.6f
+            val hasChips = state.busy || runningShells.isNotEmpty() ||
+                runningJobs.isNotEmpty() || planTodos != null || contextFraction >= 0.6f
             if (hasChips) {
                 FlowRow(
                     Modifier.fillMaxWidth().padding(horizontal = 18.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    if (state.busy) {
+                        LiveStatusStrip(
+                            busy = true,
+                            messages = state.messages,
+                            onBackground = { vm.background() }
+                        )
+                    }
                     if (runningShells.isNotEmpty() || runningJobs.isNotEmpty()) {
-                        val label = mutableListOf<String>()
-                        if (runningShells.isNotEmpty()) {
-                            label.add(
-                                "${runningShells.size} " +
-                                    if (runningShells.size == 1) "shell" else "shells"
-                            )
-                        }
-                        if (runningJobs.isNotEmpty()) {
-                            label.add(
-                                "${runningJobs.size} " +
-                                    if (runningJobs.size == 1) "job" else "jobs"
-                            )
-                        }
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable {
-                                    if (runningJobs.isNotEmpty()) showWorkspace = true
-                                    else showShell = true
-                                }
+                            shape = RoundedCornerShape(50)
                         ) {
-                            Row(
-                                Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                PulsingDot(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    pulsing = true,
-                                    size = 6
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    label.joinToString(" · "),
-                                    style = MaterialTheme.typography.labelMedium
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (runningShells.isNotEmpty()) {
+                                    Row(
+                                        Modifier
+                                            .clickable { showShell = true }
+                                            .padding(
+                                                start = 12.dp,
+                                                end = if (runningJobs.isEmpty()) 12.dp else 8.dp,
+                                                top = 7.dp,
+                                                bottom = 7.dp
+                                            ),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        PulsingDot(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            pulsing = true,
+                                            size = 6
+                                        )
+                                        Spacer(Modifier.width(7.dp))
+                                        Text(
+                                            "${runningShells.size} " +
+                                                if (runningShells.size == 1) "shell"
+                                                else "shells",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+                                }
+                                if (runningShells.isNotEmpty() && runningJobs.isNotEmpty()) {
+                                    Box(
+                                        Modifier
+                                            .width(1.dp)
+                                            .height(16.dp)
+                                            .background(MaterialTheme.colorScheme.outlineVariant)
+                                    )
+                                }
+                                if (runningJobs.isNotEmpty()) {
+                                    Row(
+                                        Modifier
+                                            .clickable { showWorkspace = true }
+                                            .padding(
+                                                start = if (runningShells.isEmpty()) 12.dp else 8.dp,
+                                                end = 12.dp,
+                                                top = 7.dp,
+                                                bottom = 7.dp
+                                            ),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (runningShells.isEmpty()) {
+                                            PulsingDot(
+                                                color = MaterialTheme.colorScheme.primary,
+                                                pulsing = true,
+                                                size = 6
+                                            )
+                                            Spacer(Modifier.width(7.dp))
+                                        }
+                                        Text(
+                                            "${runningJobs.size} " +
+                                                if (runningJobs.size == 1) "job"
+                                                else "jobs",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1331,6 +1374,7 @@ fun ChatScreen(
                                 input = text
                                 DraftStore.save(context, sessionID, text)
                             } else {
+                                steerMode = true
                                 pickedSkills = emptyList()
                                 DraftStore.clear(context, null)
                                 DraftStore.clear(context, state.sessionID.ifBlank { null })
@@ -5273,34 +5317,41 @@ private fun LiveStatusStrip(
         if (tool != null) append(" · ").append(tool.replaceFirstChar { it.uppercase() })
     }
 
-    Row(
-        modifier,
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(50),
+        modifier = modifier
     ) {
-        if (tool != null) {
-            ActivityBars()
-        } else {
-            TypingIndicator(compact = true)
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        // Detach the running tool and let the turn continue, like the desktop.
-        if (tool != null) {
-            TextButton(
-                onClick = onBackground,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    stringResource(R.string.chat_background),
-                    style = MaterialTheme.typography.labelSmall
-                )
+        Row(
+            Modifier.padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (tool != null) {
+                ActivityBars(color = MaterialTheme.colorScheme.onSecondaryContainer)
+            } else {
+                TypingIndicator(compact = true)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 210.dp)
+            )
+            // Detach the running tool inline, not as a separate strip.
+            if (tool != null) {
+                TextButton(
+                    onClick = onBackground,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.chat_background),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
             }
         }
     }
