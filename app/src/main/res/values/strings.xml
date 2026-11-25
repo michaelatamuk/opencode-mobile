@@ -103,6 +103,9 @@
     <!-- Chat -->
     <string name="chat_placeholder">Message OpenCode</string>
     <string name="chat_placeholder_busy">Steer the run…</string>
+    <string name="chat_placeholder_queue">Queue a message…</string>
+    <string name="chat_steer_now">Steer now</string>
+    <string name="chat_queue_add">Add to queue</string>
     <string name="chat_jump_latest">Jump to latest</string>
     <string name="chat_queued">%1$d queued</string>
     <string name="form_submit">Submit</string>

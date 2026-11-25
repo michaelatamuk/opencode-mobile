@@ -98,6 +98,9 @@
 
     <string name="chat_placeholder">Сообщение OpenCode</string>
     <string name="chat_placeholder_busy">Вклиниться в текущий ход…</string>
+    <string name="chat_placeholder_queue">Сообщение в очередь…</string>
+    <string name="chat_steer_now">Вклинить сейчас</string>
+    <string name="chat_queue_add">Добавить в очередь</string>
     <string name="chat_jump_latest">К последнему сообщению</string>
     <string name="chat_queued">В очереди: %1$d</string>
     <string name="form_submit">Отправить</string>

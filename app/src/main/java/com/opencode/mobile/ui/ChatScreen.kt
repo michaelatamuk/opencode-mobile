@@ -1211,29 +1211,6 @@ fun ChatScreen(
                     )
                 }
             }
-            if (state.busy) {
-                Row(
-                    Modifier.padding(start = 18.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.chat_delivery_busy),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    FilterChip(
-                        selected = steerMode,
-                        onClick = { steerMode = true },
-                        label = { Text(stringResource(R.string.chat_queue_steer)) }
-                    )
-                    FilterChip(
-                        selected = !steerMode,
-                        onClick = { steerMode = false },
-                        label = { Text(stringResource(R.string.chat_queue_mode)) }
-                    )
-                }
-            }
             val hasChips = runningShells.isNotEmpty() || runningJobs.isNotEmpty() ||
                 planTodos != null || contextFraction >= 0.6f
             if (hasChips) {
@@ -1307,6 +1284,12 @@ fun ChatScreen(
                     AttachmentPreview(it.uri, it.attachment.name, it.attachment.mime)
                 },
                 busy = state.busy,
+                delivery = if (state.busy) {
+                    if (steerMode) "steer" else "queue"
+                } else {
+                    "steer"
+                },
+                onDeliveryChange = { mode -> steerMode = mode == "steer" },
                 onAttach = {
                     picker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)

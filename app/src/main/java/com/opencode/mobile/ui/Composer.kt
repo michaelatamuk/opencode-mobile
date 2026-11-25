@@ -34,8 +34,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoCamera
@@ -89,11 +92,14 @@ fun Composer(
     maxAttachments: Int = 8,
     onVoice: (() -> Unit)? = null,
     onAttachFile: (() -> Unit)? = null,
-    onCamera: (() -> Unit)? = null
+    onCamera: (() -> Unit)? = null,
+    delivery: String = "steer",
+    onDeliveryChange: (String) -> Unit = {}
 ) {
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val primaryIsStop = busy && !hasContent
     val primaryIsMic = !busy && !hasContent && onVoice != null
+    val queueing = busy && delivery == "queue"
 
     val sendScale by animateFloatAsState(
         targetValue = if (hasContent || busy) 1f else 0.9f,
@@ -263,8 +269,11 @@ fun Composer(
                             if (value.isEmpty()) {
                                 Text(
                                     stringResource(
-                                        if (busy) R.string.chat_placeholder_busy
-                                        else R.string.chat_placeholder
+                                        when {
+                                            !busy -> R.string.chat_placeholder
+                                            queueing -> R.string.chat_placeholder_queue
+                                            else -> R.string.chat_placeholder_busy
+                                        }
                                     ),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -282,42 +291,107 @@ fun Composer(
 
                 Spacer(Modifier.width(6.dp))
 
-                FilledIconButton(
-                    onClick = {
-                        when {
-                            primaryIsStop -> onStop()
-                            primaryIsMic -> onVoice?.invoke()
-                            else -> onSend()
+                var deliveryMenu by remember { mutableStateOf(false) }
+                Box {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilledIconButton(
+                            onClick = {
+                                when {
+                                    primaryIsStop -> onStop()
+                                    primaryIsMic -> onVoice?.invoke()
+                                    else -> onSend()
+                                }
+                            },
+                            enabled = primaryIsStop || primaryIsMic || hasContent,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = actionColor,
+                                contentColor = actionContent,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
+                        ) {
+                            when {
+                                primaryIsStop -> Icon(
+                                    Icons.Rounded.Stop,
+                                    contentDescription = stringResource(R.string.action_stop),
+                                    modifier = Modifier.size(16.dp)
+                                )
+
+                                primaryIsMic -> Icon(
+                                    Icons.Rounded.Mic,
+                                    contentDescription = stringResource(R.string.chat_voice_input),
+                                    modifier = Modifier.size(20.dp)
+                                )
+
+                                queueing -> Icon(
+                                    Icons.Rounded.PlaylistAdd,
+                                    contentDescription = stringResource(R.string.chat_queue_add),
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                else -> Icon(
+                                    Icons.Rounded.Send,
+                                    contentDescription = if (busy) {
+                                        stringResource(R.string.chat_steer_now)
+                                    } else {
+                                        stringResource(R.string.action_send)
+                                    },
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
-                    },
-                    enabled = primaryIsStop || primaryIsMic || hasContent,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = actionColor,
-                        contentColor = actionContent,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    ),
-                    modifier = Modifier
-                        .size(44.dp)
-                        .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
-                ) {
-                    when {
-                        primaryIsStop -> Icon(
-                            Icons.Rounded.Stop,
-                            contentDescription = stringResource(R.string.action_stop),
-                            modifier = Modifier.size(16.dp)
+                        if (busy && hasContent) {
+                            IconButton(
+                                onClick = { deliveryMenu = true },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.ArrowDropDown,
+                                    contentDescription = stringResource(R.string.chat_delivery_busy),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = deliveryMenu,
+                        onDismissRequest = { deliveryMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_steer_now)) },
+                            trailingIcon = {
+                                if (!queueing) {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                deliveryMenu = false
+                                onDeliveryChange("steer")
+                            }
                         )
-
-                        primaryIsMic -> Icon(
-                            Icons.Rounded.Mic,
-                            contentDescription = stringResource(R.string.chat_voice_input),
-                            modifier = Modifier.size(20.dp)
-                        )
-
-                        else -> Icon(
-                            Icons.Rounded.Send,
-                            contentDescription = stringResource(R.string.action_send),
-                            modifier = Modifier.size(18.dp)
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_queue_add)) },
+                            trailingIcon = {
+                                if (queueing) {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                deliveryMenu = false
+                                onDeliveryChange("queue")
+                            }
                         )
                     }
                 }
