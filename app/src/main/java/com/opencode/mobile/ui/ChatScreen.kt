@@ -5325,6 +5325,7 @@ private fun ComposerStatus(
         tool.lowercase() in setOf("bash", "shell", "codemode", "code", "job")
 
     // A quiet one-line status inside the composer beats a floating pill above it.
+    // Background sits next to the label on the left, never in the stop button's corner.
     Row(
         Modifier
             .fillMaxWidth()
@@ -5343,21 +5344,23 @@ private fun ComposerStatus(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.widthIn(max = 178.dp)
         )
         // Detach only tools that can actually run in the background.
         if (canBackground) {
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 stringResource(R.string.chat_background),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .clickable(onClick = onBackground)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             )
         }
+        Spacer(Modifier.weight(1f))
     }
 }
 
