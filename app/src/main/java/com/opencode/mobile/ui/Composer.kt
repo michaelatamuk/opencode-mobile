@@ -146,6 +146,14 @@ fun Composer(
                 ) {
                     Box(
                         Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                    )
+                    Box(
+                        Modifier
                             .fillMaxWidth(contextFraction.coerceIn(0f, 1f))
                             .height(3.dp)
                             .background(fill)

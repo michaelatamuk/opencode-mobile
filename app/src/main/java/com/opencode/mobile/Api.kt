@@ -667,20 +667,23 @@ class Api(server: String, private val password: String, fallbackServer: String? 
 
         val data = getJson("/api/model").optJSONArray("data") ?: JSONArray()
         (0 until data.length()).mapNotNull { i ->
-            val o = data.getJSONObject(i)
-            if (!o.optBoolean("enabled", true)) return@mapNotNull null
-            val providerID = o.optString("providerID")
-            if (providerNames.isNotEmpty() && providerID !in providerNames) {
-                return@mapNotNull null
-            }
-            ModelOption(
-                id = o.optString("modelID").ifBlank { o.optString("id") },
-                providerID = providerID,
-                name = o.optString("name").ifBlank { o.optString("modelID") },
-                family = o.optString("family"),
-                contextLimit = o.optJSONObject("limit")?.optLong("context") ?: 0L,
-                providerName = providerNames[providerID].orEmpty()
-            )
+            // One malformed catalog entry must not blank the entire model list.
+            runCatching {
+                val o = data.getJSONObject(i)
+                if (!o.optBoolean("enabled", true)) return@runCatching null
+                val providerID = o.optString("providerID")
+                if (providerNames.isNotEmpty() && providerID !in providerNames) {
+                    return@runCatching null
+                }
+                ModelOption(
+                    id = o.optString("modelID").ifBlank { o.optString("id") },
+                    providerID = providerID,
+                    name = o.optString("name").ifBlank { o.optString("modelID") },
+                    family = o.optString("family"),
+                    contextLimit = o.optJSONObject("limit")?.optLong("context") ?: 0L,
+                    providerName = providerNames[providerID].orEmpty()
+                )
+            }.getOrNull()
         }
     }
 

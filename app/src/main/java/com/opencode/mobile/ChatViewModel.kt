@@ -60,8 +60,14 @@ data class ChatUiState(
             ?.let { it.tokensInput + it.tokensCacheRead } ?: 0L
 
     val contextLimit: Long
-        get() = models.firstOrNull { it.id == modelID && it.providerID == modelProviderID }
-            ?.contextLimit ?: 0L
+        get() {
+            val exact = models.firstOrNull {
+                it.id == modelID && it.providerID == modelProviderID
+            }?.contextLimit ?: 0L
+            if (exact > 0L) return exact
+            // Provider ids drift between server releases; the model id is the stable key.
+            return models.firstOrNull { it.id == modelID }?.contextLimit ?: 0L
+        }
 }
 
 class ChatViewModel(
@@ -161,6 +167,17 @@ class ChatViewModel(
         }
     }
 
+    private var lastOptionsTry = 0L
+
+    /** A failed model fetch left the context meter without a limit; retry while idle. */
+    private suspend fun ensureOptions() {
+        if (_state.value.models.isNotEmpty()) return
+        val now = System.currentTimeMillis()
+        if (now - lastOptionsTry < 15_000L) return
+        lastOptionsTry = now
+        loadOptions()
+    }
+
     fun selectAgent(agentID: String) {
         val id = activeID ?: return
         viewModelScope.launch {
@@ -203,6 +220,7 @@ class ChatViewModel(
 
     private suspend fun refreshNow() {
         val id = activeID ?: return
+        ensureOptions()
         var reached = false
         refreshMutex.withLock {
             try {
