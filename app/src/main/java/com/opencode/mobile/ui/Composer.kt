@@ -92,6 +92,7 @@ fun Composer(
     maxAttachments: Int = 8,
     status: (@Composable () -> Unit)? = null,
     contextFraction: Float = -1f,
+    contextLabel: String? = null,
     onContextClick: (() -> Unit)? = null,
     onVoice: (() -> Unit)? = null,
     onAttachFile: (() -> Unit)? = null,
@@ -172,6 +173,17 @@ fun Composer(
                             .clickable { onContextClick?.invoke() }
                     )
                 }
+            } else if (contextLabel != null) {
+                // No known window: show the absolute footprint rather than nothing.
+                Text(
+                    contextLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(start = 16.dp, top = 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onContextClick?.invoke() }
+                )
             }
             if (attachments.isNotEmpty()) {
                 Row(

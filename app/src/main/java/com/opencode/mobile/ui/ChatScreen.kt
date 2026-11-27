@@ -717,7 +717,7 @@ fun ChatScreen(
     val contextFraction = if (state.contextLimit > 0) {
         (state.contextUsed.toFloat() / state.contextLimit).coerceIn(0f, 1f)
     } else {
-        0f
+        -1f
     }
 
     LaunchedEffect(listState.firstVisibleItemIndex, state.olderCursor) {
@@ -1366,6 +1366,11 @@ fun ChatScreen(
                     }
                 },
                 contextFraction = contextFraction,
+                contextLabel = if (state.contextLimit > 0 || state.contextUsed <= 0L) {
+                    null
+                } else {
+                    compactTokens(state.contextUsed) + " ctx"
+                },
                 onContextClick = { showOverview = true },
                 onAttach = {
                     picker.launch(

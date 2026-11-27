@@ -288,6 +288,13 @@ fun SettingsScreen(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty()
     }
+    val versionLabel = if (version.isBlank()) {
+        "—"
+    } else if (version.startsWith("v")) {
+        version
+    } else {
+        "v$version"
+    }
 
     AnimatedContent(
         targetState = page,
@@ -322,7 +329,7 @@ fun SettingsScreen(
                 } else {
                     offText
                 },
-                aboutSummary = if (version.isNotBlank()) "v$version" else "",
+                aboutSummary = if (version.isNotBlank()) versionLabel else "",
                 onBack = onCancel,
                 onOpen = { page = it }
             )
@@ -2181,6 +2188,13 @@ private fun SecurityPage(
 private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val versionLabel = if (version.isBlank()) {
+        "—"
+    } else if (version.startsWith("v")) {
+        version
+    } else {
+        "v$version"
+    }
     val diagnosticsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
@@ -2219,7 +2233,7 @@ private fun AboutPage(version: String, server: String, onBack: () -> Unit) {
             SettingsRow(
                 icon = Icons.Rounded.Info,
                 title = stringResource(R.string.settings_version),
-                supporting = if (version.isBlank()) "—" else "v$version",
+                supporting = versionLabel,
                 onClick = {
                     if (version.isNotBlank()) {
                         clipboard.setText(AnnotatedString(version))

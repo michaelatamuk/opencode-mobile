@@ -87,6 +87,14 @@ class ChatViewModel(
     private var cachedSignature: String? = null
 
     init {
+        // Last known catalog first: the context meter and model name must work
+        // even if this session's catalog request fails.
+        if (appContext != null) {
+            val cachedModels = ModelCache.load(appContext)
+            if (cachedModels.isNotEmpty()) {
+                _state.update { it.copy(models = cachedModels) }
+            }
+        }
         // Seed the last-known transcript before the first network round-trip so
         // an offline open still shows the conversation.
         if (sessionID != null && appContext != null) {
@@ -158,6 +166,7 @@ class ChatViewModel(
         }
         runCatching { repo.models() }.getOrNull()?.let { list ->
             _state.update { it.copy(models = list) }
+            appContext?.let { ModelCache.save(it, list) }
         }
         runCatching { repo.commands() }.getOrNull()?.let { list ->
             _state.update { it.copy(commands = list) }
