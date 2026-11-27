@@ -205,13 +205,10 @@ fun SessionListScreen(
     var showCost by remember { mutableStateOf(false) }
     var showMission by remember { mutableStateOf(false) }
     var flashIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var finishedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var finishedMeta by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var showTemplates by remember { mutableStateOf(false) }
     var showMachines by remember { mutableStateOf(false) }
     var headerMenuOpen by remember { mutableStateOf(false) }
     var showAutomations by remember { mutableStateOf(false) }
-    var showFinished by remember { mutableStateOf(false) }
     var subagentsFor by remember { mutableStateOf<SessionItem?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -236,7 +233,6 @@ fun SessionListScreen(
         previousRunning = runningNow
         if (finished.isNotEmpty()) {
             flashIds = flashIds + finished
-            finishedIds = finishedIds + finished
             delay(1400)
             flashIds = flashIds - finished
         }
@@ -245,20 +241,6 @@ fun SessionListScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(finishedIds) {
-        finishedIds.take(5).forEach { id ->
-            if (finishedMeta[id] == null) {
-                val files = runCatching { repo.sessionDiff(id).size }.getOrDefault(0)
-                finishedMeta = finishedMeta + (
-                    id to if (files > 0) {
-                        "$files " + if (files == 1) "file" else "files"
-                    } else {
-                        "Finished"
-                    }
-                    )
-            }
-        }
-    }
     val sessionTitles = remember(state.sessions) {
         state.sessions.associate { it.id to it.title }
     }
@@ -331,13 +313,11 @@ fun SessionListScreen(
         state.sessions,
         projectFilter,
         showArchived,
-        state.pendingDelete,
-        finishedIds
+        state.pendingDelete
     ) {
         var base = state.sessions.filter {
             (if (showArchived) it.archived else !it.archived) &&
-                it.id != state.pendingDelete?.id &&
-                it.id !in finishedIds
+                it.id != state.pendingDelete?.id
         }
         base = base.filter { it.parentID.isBlank() }
         if (projectFilter == null) base
@@ -364,9 +344,6 @@ fun SessionListScreen(
     }
     val running = remember(filtered) { filtered.filter { it.running } }
     val history = remember(filtered) { filtered.filterNot { it.running } }
-    val finishedSessions = remember(state.sessions, finishedIds) {
-        state.sessions.filter { it.id in finishedIds && !it.archived }
-    }
     val failedSessions = remember(state.sessions) {
         state.sessions.filter { session ->
             !session.running && !session.archived &&
@@ -773,16 +750,6 @@ fun SessionListScreen(
                     }
                 }
 
-                if (finishedSessions.isNotEmpty()) {
-                    item(key = "finished-banner") {
-                        WhileAwayBanner(
-                            count = finishedSessions.size,
-                            onClick = { showFinished = true },
-                            onClear = { finishedIds = emptySet() }
-                        )
-                    }
-                }
-
                 if (!selectionMode && running.isNotEmpty()) {
                     item(key = "active-strip") {
                         ActiveCards(
@@ -1089,28 +1056,6 @@ fun SessionListScreen(
         )
     }
 
-    if (showFinished) {
-        FinishedSheet(
-            sessions = finishedSessions,
-            meta = finishedMeta,
-            onOpen = { session ->
-                finishedIds = finishedIds - session.id
-                showFinished = false
-                onOpen(session)
-            },
-            onReview = { session ->
-                finishedIds = finishedIds - session.id
-                showFinished = false
-                onReview(session)
-            },
-            onClear = {
-                finishedIds = emptySet()
-                showFinished = false
-            },
-            onDismiss = { showFinished = false }
-        )
-    }
-
     subagentsFor?.let { root ->
         SubagentsSheet(
             root = root,
@@ -1312,210 +1257,6 @@ private fun TemplatesDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     )
 }
 
-@Composable
-private fun WhileAwayBanner(
-    count: Int,
-    onClick: () -> Unit,
-    onClear: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Rounded.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                stringResource(R.string.sessions_finished_while, count),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onClear) {
-                Text(
-                    stringResource(R.string.sessions_clear),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-            Text(
-                stringResource(R.string.sessions_review),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
-}
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-@Composable
-private fun FinishedSheet(
-    sessions: List<SessionItem>,
-    meta: Map<String, String>,
-    onOpen: (SessionItem) -> Unit,
-    onReview: (SessionItem) -> Unit,
-    onClear: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
-    androidx.compose.material3.ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 620.dp)
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 20.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.sessions_finished_since),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = onClear) {
-                    Text(stringResource(R.string.sessions_clear))
-                }
-            }
-            if (sessions.isEmpty()) {
-                Text(
-                    "Nothing new.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                LazyColumn(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(sessions) { session ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpen(session) }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    session.title.ifBlank {
-                                        stringResource(R.string.session_untitled)
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    meta[session.id] ?: "Finished",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            TextButton(onClick = { onReview(session) }) {
-                                Text(stringResource(R.string.sessions_review))
-                            }
-                            TextButton(onClick = { onOpen(session) }) {
-                                Text(stringResource(R.string.sessions_needs_you_open))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FinishedStrip(
-    sessions: List<SessionItem>,
-    meta: Map<String, String>,
-    onOpen: (SessionItem) -> Unit,
-    onReview: (SessionItem) -> Unit,
-    onClear: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.sessions_finished_since),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = onClear) {
-                    Text(
-                        stringResource(R.string.sessions_clear),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-            sessions.take(3).forEach { session ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpen(session) }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            session.title.ifBlank { stringResource(R.string.session_untitled) },
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            meta[session.id] ?: "Finished",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { onReview(session) }) {
-                            Text(
-                                stringResource(R.string.sessions_review),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                        TextButton(onClick = { onOpen(session) }) {
-                            Text(
-                                stringResource(R.string.sessions_needs_you_open),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    }
-                }
-            }
-            if (sessions.size > 3) {
-                Text(
-                    stringResource(R.string.sessions_needs_you_more, sessions.size - 3),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun NeedsYouCard(
