@@ -714,11 +714,6 @@ fun ChatScreen(
             .firstNotNullOfOrNull { parseTodos(it.input) }
     }
     val planDone = planTodos?.count { it.status == "completed" } ?: 0
-    val contextFraction = if (state.contextLimit > 0) {
-        (state.contextUsed.toFloat() / state.contextLimit).coerceIn(0f, 1f)
-    } else {
-        -1f
-    }
 
     LaunchedEffect(listState.firstVisibleItemIndex, state.olderCursor) {
         if (state.messages.isNotEmpty() &&
@@ -805,16 +800,28 @@ fun ChatScreen(
                     val modelName = state.models.firstOrNull {
                         it.id == state.modelID && it.providerID == state.modelProviderID
                     }?.name.orEmpty()
-                    val subtitle = listOf(agentName, modelName)
+                    // Context is session metadata, so it belongs in the header with the
+                    // model and agent, not in the composer where it competes with typing.
+                    val contextText = when {
+                        state.contextLimit > 0 ->
+                            "${(state.contextUsed * 100 / state.contextLimit)}% ctx"
+                        state.contextUsed > 0 -> compactTokens(state.contextUsed) + " ctx"
+                        else -> ""
+                    }
+                    val contextCritical = state.contextLimit > 0 &&
+                        state.contextUsed.toFloat() / state.contextLimit >= 0.85f
+                    val subtitle = listOf(contextText, agentName, modelName)
                         .filter { it.isNotBlank() }
                         .joinToString(" · ")
                     if (subtitle.isNotBlank()) {
                         Text(
                             subtitle,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (contextCritical) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable { showOverview = true }
                         )
                     }
                 }
@@ -1365,13 +1372,6 @@ fun ChatScreen(
                         )
                     }
                 },
-                contextFraction = contextFraction,
-                contextLabel = if (state.contextLimit > 0 || state.contextUsed <= 0L) {
-                    null
-                } else {
-                    compactTokens(state.contextUsed) + " ctx"
-                },
-                onContextClick = { showOverview = true },
                 onAttach = {
                     picker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)

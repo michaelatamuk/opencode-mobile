@@ -91,9 +91,6 @@ fun Composer(
     modifier: Modifier = Modifier,
     maxAttachments: Int = 8,
     status: (@Composable () -> Unit)? = null,
-    contextFraction: Float = -1f,
-    contextLabel: String? = null,
-    onContextClick: (() -> Unit)? = null,
     onVoice: (() -> Unit)? = null,
     onAttachFile: (() -> Unit)? = null,
     onCamera: (() -> Unit)? = null,
@@ -130,61 +127,6 @@ fun Composer(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(Modifier.animateContentSize()) {
-            // Context is a meter, not a chip: a hairline along the top edge of the input.
-            if (contextFraction >= 0.5f) {
-                val critical = contextFraction >= 0.85f
-                val fill = (if (critical) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary).copy(alpha = 0.55f)
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clickable(
-                            enabled = onContextClick != null,
-                            onClick = { onContextClick?.invoke() }
-                        ),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            )
-                    )
-                    Box(
-                        Modifier
-                            .fillMaxWidth(contextFraction.coerceIn(0f, 1f))
-                            .height(3.dp)
-                            .background(fill)
-                    )
-                }
-                if (critical) {
-                    Text(
-                        stringResource(
-                            R.string.chat_context_low_space,
-                            (contextFraction * 100).toInt()
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .clickable { onContextClick?.invoke() }
-                    )
-                }
-            } else if (contextLabel != null) {
-                // No known window: show the absolute footprint rather than nothing.
-                Text(
-                    contextLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(start = 16.dp, top = 6.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { onContextClick?.invoke() }
-                )
-            }
             if (attachments.isNotEmpty()) {
                 Row(
                     Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
