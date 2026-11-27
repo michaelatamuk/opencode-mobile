@@ -211,6 +211,7 @@
     <string name="chat_background">Background</string>
     <string name="chat_new_since">%1$d new</string>
     <string name="chat_new_marker">New</string>
+    <string name="chat_context_low_space">Context %1$d%% · review</string>
     <string name="chat_quote_message">Quote</string>
     <string name="chat_offline_queued">%1$d queued · tap to retry</string>
     <string name="chat_edit_resend">Edit &amp; resend</string>

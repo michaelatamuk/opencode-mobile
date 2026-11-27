@@ -478,8 +478,25 @@ fun ChatScreen(
     val lastTools = remember(lastAssistant?.id) {
         lastAssistant?.parts?.filterIsInstance<Part.Tool>().orEmpty()
     }
-    val showRunSummary = sessionID != null && !state.busy && lastAssistant != null &&
-        lastTools.isNotEmpty() && dismissedRunId != lastAssistant.id
+    // A run card is only useful when the run actually changed something (or failed),
+    // and only once the server has stayed idle instead of flashing between runs.
+    val runChanged = remember(lastTools) { editedPaths(lastTools).isNotEmpty() }
+    val runFailed = remember(lastTools) {
+        lastTools.any { it.status == "error" || it.status == "failed" }
+    }
+    var settledRun by remember(sessionID) { mutableStateOf(false) }
+    LaunchedEffect(state.busy) {
+        if (state.busy) {
+            settledRun = false
+        } else {
+            delay(1200)
+            settledRun = true
+        }
+    }
+    val showRunSummary = sessionID != null && !state.busy && settledRun &&
+        lastAssistant != null && lastTools.isNotEmpty() &&
+        (runChanged || runFailed) &&
+        dismissedRunId != lastAssistant.id
 
     val lastId = state.messages.lastOrNull()?.id
     val screenshotOnlyText = stringResource(R.string.chat_screenshot_only)
@@ -1238,7 +1255,7 @@ fun ChatScreen(
                 }
             }
             val hasChips = runningShells.isNotEmpty() ||
-                runningJobs.isNotEmpty() || planTodos != null || contextFraction >= 0.6f
+                runningJobs.isNotEmpty() || planTodos != null
             if (hasChips) {
                 FlowRow(
                     Modifier.fillMaxWidth().padding(horizontal = 18.dp),
@@ -1322,12 +1339,6 @@ fun ChatScreen(
                             label = { Text("$planDone/${planTodos.size} steps") }
                         )
                     }
-                    if (contextFraction >= 0.6f) {
-                        AssistChip(
-                            onClick = { showOverview = true },
-                            label = { Text("${(contextFraction * 100).toInt()}% context") }
-                        )
-                    }
                 }
             }
             Composer(
@@ -1354,6 +1365,8 @@ fun ChatScreen(
                         )
                     }
                 },
+                contextFraction = contextFraction,
+                onContextClick = { showOverview = true },
                 onAttach = {
                     picker.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -5727,6 +5740,7 @@ private fun RunSummaryCard(
 ) {
     val files = remember(tools) { editedPaths(tools) }
     val errors = tools.count { it.status == "error" || it.status == "failed" }
+    var menuOpen by remember { mutableStateOf(false) }
     val duration = if (user != null && assistant.completed > user.created) {
         assistant.completed - user.created
     } else {
@@ -5786,10 +5800,7 @@ private fun RunSummaryCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (files.isNotEmpty()) {
                     Button(
                         onClick = onChanges,
@@ -5801,17 +5812,49 @@ private fun RunSummaryCard(
                 TextButton(onClick = onContinue) {
                     Text(stringResource(R.string.chat_run_continue))
                 }
-                TextButton(onClick = onKeep) {
-                    Text(stringResource(R.string.chat_run_keep))
-                }
-                TextButton(onClick = onRevert) {
-                    Text(
-                        stringResource(R.string.chat_run_revert),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                TextButton(onClick = onShare) {
-                    Text(stringResource(R.string.chat_share_card))
+                Spacer(Modifier.weight(1f))
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.MoreVert,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_run_keep)) },
+                            onClick = {
+                                menuOpen = false
+                                onKeep()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.chat_run_revert),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onRevert()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_share_card)) },
+                            onClick = {
+                                menuOpen = false
+                                onShare()
+                            }
+                        )
+                    }
                 }
             }
         }
